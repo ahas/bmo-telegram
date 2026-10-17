@@ -1,0 +1,20 @@
+# The reader's user unit (docs/reader.md): the bun process holding the owner's account, run from the release's
+# reader/ with the same environment as the service. Marked restart: restarted by every deployment just before
+# the service, so the session lock is let go before the service starts reading again.
+[Unit]
+Description=bmo-telegram: the owner's account reader
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/bmo-telegram/deploy
+EnvironmentFile=-%h/.local/share/bmo-telegram/deploy/telegram.env
+ExecStart=%h/.bun/bin/bun reader/src/main.ts
+Restart=always
+RestartSec=2
+# The reader lets go of the account and the session lock within the stop it is given.
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+# Linked, enabled and restarted before the bot service by every deployment.
+X-BMO-Deploy=restart

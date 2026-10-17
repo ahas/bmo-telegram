@@ -1,0 +1,23 @@
+# The service's user unit (docs/boundary-api.md): the Rust provider, running the release binary as
+# `bmo-telegram serve` in the release, with the environment the release's telegram.env links from the data
+# root's env file. Marked bot: the one service a deployment waits on for its health.
+[Unit]
+Description=bmo-telegram: the Telegram chat provider
+After=network-online.target
+# The provider does not stand where the deployment's env file is missing.
+ConditionPathExists=%h/.local/share/bmo/data/env/telegram.env
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/bmo-telegram/deploy
+EnvironmentFile=-%h/.local/share/bmo-telegram/deploy/telegram.env
+ExecStart=%h/.local/share/bmo-telegram/deploy/bin/bmo-telegram serve
+Restart=always
+RestartSec=2
+# A stop signals the service, which takes the reading down and ends; the wait bounds it.
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+# Linked, enabled, stopped, restarted and watched by every deployment.
+X-BMO-Deploy=bot

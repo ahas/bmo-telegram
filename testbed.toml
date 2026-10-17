@@ -32,3 +32,20 @@ id = "reader-types"
 command = "./node_modules/.bin/tsc --noEmit"
 dir = "reader"
 when = ["reader/**", "policy/**"]
+
+[build]
+# The service's binary; the reader is a bun package run from the release's reader/, which the setup steps
+# install, not a Cargo binary.
+binaries = ["bmo-telegram"]
+
+# The provider's deploy tree, and the data root it shares with the services that read its files. The env file
+# both processes read is linked into the release (docs/boundary-api.md, 「Configuration」); the service's unit
+# carries the bot mark and the reader's the restart mark.
+[deploy]
+root = "~/.local/share/bmo-telegram"
+link = "deploy"
+data_root = "~/.local/share/bmo/data"
+env_links = [{ link = "telegram.env", target = "env/telegram.env" }]
+units = ["deploy/*.service"]
+# Answers 0 once the service's own /health says ready, in the environment the release links.
+health = "set -a; . ~/.local/share/bmo-telegram/deploy/telegram.env; ~/.local/share/bmo-telegram/deploy/bin/bmo-telegram health"

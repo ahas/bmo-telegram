@@ -16,6 +16,7 @@ words, held by a separate process, the reader.
 | `reader/` | the reader, a bun package holding the owner's account over MTProto, with its tests in `reader/tests/` |
 | `policy/` | the provider's fixed numbers and English words: its limits, refusals and placeholders |
 | `tests/` | the checks that span the repository, and the service's tests |
+| `deploy/` | the two service units a deployment links: the Rust provider and the bun reader |
 | `docs/` | the canonical statements of what the provider does |
 
 At the root stand the Cargo workspace manifest, which is also the service's package, the version in
