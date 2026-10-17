@@ -1,0 +1,32 @@
+# The workspace: the Telegram provider service's own package at the root, and the crates it is built from, each
+# in a folder of its own and named as a member as it stands. The root package also holds the checks that span
+# the repository and the service's integration tests in `tests/`. The owner's reader in `reader/` is a bun
+# package, outside the workspace.
+[workspace]
+members = []
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+bmo-chat = { path = "../chat/provider" }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.138"
+toml = { version = "0.8.23", default-features = false, features = ["parse"] }
+
+[package]
+name = "bmo-telegram"
+description = "The Telegram chat provider: the bot account, the owner's reader behind it, and the telegram-html dialect."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+bmo-chat.workspace = true
+
+[dev-dependencies]
+# The repository checks read `cargo metadata`, the testbed's declaration and the reader's manifest.
+serde_json.workspace = true
+toml.workspace = true

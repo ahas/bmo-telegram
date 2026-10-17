@@ -1,0 +1,27 @@
+# How the testbed tests, checks, builds and deploys this repository, in the testbed's declaration format.
+# The Cargo suite is the workspace's; the bun suite is the owner's reader in `reader/`. No build or deploy is
+# declared until the service has its binary and its units.
+
+testbed = 0
+name = "telegram"
+
+[test]
+languages = ["cargo", "bun"]
+
+[check]
+quick = ["layout", "dependencies"]
+base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui"]
+
+[[check.step]]
+id = "check"
+command = "cargo check --workspace --all-targets"
+lane = "wide"
+
+[[check.step]]
+id = "clippy"
+command = "cargo clippy --workspace --all-targets -- -D warnings"
+lane = "wide"
+
+[[check.step]]
+id = "fmt"
+command = "cargo fmt --all --check"
