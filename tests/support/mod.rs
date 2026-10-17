@@ -1,7 +1,10 @@
 //! What the bot account's tests share: a stand-in of the Bot API that keeps what it was asked, a receiver that
-//! keeps every hand-over and says when one came, and a router served on the loopback.
+//! keeps every hand-over and says when one came, and a router served on the loopback. The sends' own stand-ins
+//! are in `speaking`.
 
 #![allow(dead_code)]
+
+pub mod speaking;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

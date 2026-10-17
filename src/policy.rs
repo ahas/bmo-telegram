@@ -21,6 +21,7 @@ pub struct Policy {
   pub telegram: Platform,
   pub refusals: Refusals,
   pub pictures: Pictures,
+  pub owner: Owner,
   pub gathering: Gathering,
   pub kinds: Kinds,
 }
@@ -46,6 +47,7 @@ pub struct Refusals {
   pub sticker_unset: String,
   pub mode_down: String,
   pub mode_missing: String,
+  pub owner_verb: String,
 }
 
 /// A picture's placeholder, why one did not go, and how one is redrawn.
@@ -60,6 +62,17 @@ pub struct Pictures {
   pub kept_threshold_bytes: usize,
   pub kept_max_dimension: u32,
   pub kept_quality: u8,
+}
+
+/// A send in the owner's own account: the largest file it carries, and why a file is left out before anything
+/// goes.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Owner {
+  pub largest_bytes: u64,
+  pub empty_file: String,
+  pub too_large: String,
+  pub megabytes: String,
 }
 
 /// What the provider gathers of a message: why a file was not kept, and the names a file with none is given.
@@ -148,6 +161,16 @@ impl Policy {
     let why = why.unwrap_or(&self.refusals.mode_missing);
 
     self.platform(fill(&self.refusals.mode_down, &[("mode", mode), ("why", why)]))
+  }
+
+  /// A send in the owner's own account of a verb it does not carry.
+  pub fn owner_verb(&self, verb: &str) -> ChatRefusal {
+    self.platform(fill(&self.refusals.owner_verb, &[("verb", verb)]))
+  }
+
+  /// A send Telegram refused, in Telegram's own description of it.
+  pub fn refused(&self, description: &str) -> ChatRefusal {
+    self.platform(description.to_owned())
   }
 
   /// Why a picture did not go: Telegram refused it without saying why, or the last try failed with `fault`.

@@ -16,6 +16,8 @@ avif-parse = "2.1.0"
 axum = { version = "0.8.4", default-features = false, features = ["http1", "json", "tokio"] }
 bmo-chat = { path = "../chat/provider" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp", "tiff", "avif"] }
+mime_guess = "2.0.5"
+rand = "0.9.2"
 rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
 regex = "1.11.1"
 # The Bot API is HTTPS, and a file goes up to it as a multipart form.
@@ -46,6 +48,10 @@ publish = false
 async-trait.workspace = true
 axum.workspace = true
 bmo-chat.workspace = true
+# A file's kind read off its name where none came with it, and the sticker picked among those of a feeling.
+mime_guess.workspace = true
+rand.workspace = true
+regex.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -53,12 +59,15 @@ thiserror.workspace = true
 sha2.workspace = true
 telegram-dialect.workspace = true
 telegram-picture.workspace = true
-tokio = { workspace = true, features = ["sync", "time", "rt"] }
+tokio = { workspace = true, features = ["fs", "sync", "time", "rt"] }
 toml.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 # The repository checks read `cargo metadata`, the testbed's declaration and the reader's manifest; the
-# policy's test counts bmo-chat's capabilities; the seam's tests serve fakes of the reader and the receiver.
+# policy's test counts bmo-chat's capabilities; the seam's tests serve fakes of the reader and the receiver;
+# the sends' stand-in of the Bot API reads the forms a file goes up in.
+axum = { workspace = true, features = ["multipart"] }
 image.workspace = true
 strum.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt", "sync"] }

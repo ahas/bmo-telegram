@@ -33,6 +33,8 @@ sticker_unset = "No sticker set is configured."
 # by.
 mode_down = "Telegram's {mode} mode is not running: {why}."
 mode_missing = "Telegram does not read by that mode"
+# A send in the owner's own account of a {verb} it does not carry: it takes words and albums alone.
+owner_verb = "The owner's own account sends only text and albums, not {verb}."
 
 # A picture: the placeholder a picture message with no caption is handed over as, why one did not go, and how
 # one is redrawn. A picture named by something that is neither a web address nor a file under the picture
@@ -51,6 +53,16 @@ upload_quality = 90
 kept_threshold_bytes = 4000000
 kept_max_dimension = 1568
 kept_quality = 80
+
+# A send in the owner's own account: the largest file it carries, which is what one hop of a send can carry
+# rather than what Telegram would take, and why a file is left out before anything goes — it holds nothing, or
+# it is past that ceiling, {size} its own size and {largest} the ceiling's, each written as `megabytes` writes
+# {megabytes}.
+[owner]
+largest_bytes = 52428800
+empty_file = "{name}: the file is empty, so it was not sent."
+too_large = "{name}: {size} is too large; one file can be at most {largest}."
+megabytes = "{megabytes} MB"
 
 # What the provider gathers of a message.
 [gathering]

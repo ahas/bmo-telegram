@@ -165,3 +165,6 @@ Statements this provider makes that a sibling's document does not yet match, eac
 - **bmo-chat** declares the `avatars` capability with no route that carries a profile picture; this provider
   serves `GET /avatars/{kind}/{id}` of its own meanwhile. The protocol's room question `owns` is answered from
   what this provider has seen, since a native-numbered platform cannot tell its rooms from another's numbers.
+  A send in the owner's own voice answers no message: `replyTo` carries the message's number alone, and the
+  owner's account finds a message by when it was said and what it says, which the seam's `reply` carries and
+  the protocol's send does not.

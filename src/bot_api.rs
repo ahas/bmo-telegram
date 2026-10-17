@@ -91,6 +91,24 @@ impl BotApi {
     serde_json::from_slice(&bytes).map_err(|why| why.to_string())
   }
 
+  /// A method asked with a multipart form, which is how a file goes up, answered as the Bot API answered it.
+  pub async fn answered_form(
+    &self,
+    method: &str,
+    form: reqwest::multipart::Form,
+  ) -> Result<Answered, String> {
+    let answer = self
+      .http
+      .post(self.method(method))
+      .multipart(form)
+      .send()
+      .await
+      .map_err(|why| why.without_url().to_string())?;
+    let bytes = answer.bytes().await.map_err(|why| why.without_url().to_string())?;
+
+    serde_json::from_slice(&bytes).map_err(|why| why.to_string())
+  }
+
   /// A method's result, or why it gave none and how long to wait before asking again.
   pub async fn call<T: DeserializeOwned>(&self, method: &str, body: &Value) -> Result<T, Unanswered> {
     let failed = |why: String| Unanswered { why, wait: AGAIN };

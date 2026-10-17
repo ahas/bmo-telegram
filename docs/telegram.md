@@ -73,28 +73,35 @@ part stands (`GET /status`).
 
 ## Sends
 
-Every send is one verb. A send of a verb Telegram does not take for that message is refused with the
-platform's own English reason; a send about a message Telegram no longer has, or will never let change again,
-is refused and marked `gone`.
+Every send is one verb, answered with the message it went out as or acted on. A send Telegram turns down for
+what it asked — any answer of its in the 400s but its flood limit — is refused with the platform's own English
+reason; a send about a message Telegram no longer has, or will never let change again, is refused and marked
+`gone`. A send Telegram could not answer at all — no answer, its flood limit past what is waited out, or its
+own fault — is the send's failure, in the protocol's error shape, and is never offered again.
 
 | Verb | What goes out |
 |---|---|
-| `text` | the markdown in the dialect's markup, in as many messages as it takes; folded where the send asks for a fold; without a notification where `silent`; plain text where Telegram refuses the markup |
-| `photo` | a picture by web address, or by a file path under the picture root, redrawn for upload where Telegram would not take it as it is; the caption in the dialect's markup |
-| `album` | up to ten pictures to an album, a longer list split evenly so that no album holds one; each picture that did not go is a `missed` picture with why |
+| `text` | the markdown in the dialect's markup, in as many messages as it takes, the first answering `replyTo`; folded where the send asks for a fold; without a notification where `silent`; plain text where Telegram refuses the markup. A part that does not go ends the send there |
+| `photo` | a picture by web address, or by a file path under the picture root, tried by address first and uploaded where Telegram would not fetch it, redrawn for upload where Telegram would not take it as it is; the caption in the dialect's markup, and plain where Telegram refuses the markup. A picture that does not go is refused as `no-picture-sent`, its caption and web address sent as text in its place |
+| `album` | pictures by address or handed over as files, up to ten to an album, a longer list split evenly so that no album holds one; the caption and `replyTo` with the first album; one picture left goes as a `photo`. Each picture that did not go is a `missed` picture with why, and an album none of which went is said as its caption and web addresses; where none of them went at all, the send is refused as `no-picture-sent` |
 | `document` | a file with its name |
-| `audio` | a sound file with its name |
-| `voice` | a voice note, its caption the reading; where Telegram refuses the caption, the voice goes again bare and the reading follows as messages under it |
-| `sticker` | the sticker of the configured set that carries the emoji; refused where the set carries none |
+| `audio` | a sound file with its name, under the type its first bytes read as |
+| `voice` | a voice note, the first part of the reading its caption as an expandable quote and the rest quiet replies under it, or its own caption where there is no reading; where Telegram refuses the caption, the voice goes again bare and the reading follows as messages under it. A reading that did not all go is the send's failure, naming the voice that went |
+| `sticker` | a sticker of the configured set that carries the emoji, picked at random among them; refused where the set carries none |
 | `reaction` | the emoji on the message; an empty emoji takes the reaction off |
 | `pin` | the message pinned, quietly where `silent`, or unpinned |
-| `typing` | the typing mark |
+| `typing` | the typing mark; taking it off asks Telegram nothing |
 | `edit` | the message's words; an edit to the words the message already says is no failure |
 | `delete` | the message |
 
-- **Flood limits** are waited out as Telegram asks, never past a minute.
+- **A file or a picture answering `replyTo`** still goes where Telegram no longer has the message it answers;
+  so does a text, unpinned.
+- **Flood limits** are waited out as Telegram asks, never past a minute: an album and each part of a voice's
+  reading are asked again twice at most.
 - **A picture named by anything but a web address or a file under the picture root** is not sent: it is
-  missed as `not-an-address`, `outside-data-root` or `missing-file`.
+  missed as `not-an-address`, `outside-data-root` or `missing-file`. With no picture root configured, no file
+  path is sent.
+- **What went is not kept here.** Keeping a copy of a send is the sender's, under the number the result gives.
 
 ### Refusals
 
@@ -107,6 +114,7 @@ English lines of `policy/telegram.toml`, each the detail of a `platform` refusal
 | a sticker the configured set does not carry | `platform` | `sticker_missing` |
 | a sticker where no set is configured | `platform` | `sticker_unset` |
 | a send asked to be spoken in a mode that is not running, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
+| a send in the owner's own voice of a verb other than `text` and `album` | `platform` | `owner_verb` |
 | any other refusal Telegram gives | `platform` | Telegram's own description |
 | every picture of a send missed | `no-picture-sent` | each picture with its reason, below |
 
@@ -117,13 +125,19 @@ failed and one left out of an album that went are `platform`, with the policy's 
 
 ### The owner's voice
 
-A send with `as` `human-reader` goes out in the owner's own account, through the reader:
+A send with `as` `human-reader` goes out in the owner's own account, through the reader. It takes two verbs:
 
-- **Words** are cut into the pieces Telegram takes, each after the last pause that fits, and a run with no
-  pause between whole characters.
-- **Files** go as the albums Telegram takes: pictures and videos together, documents together, sounds
-  together, a GIF alone, each album up to Telegram's ceiling, in the order their first file came.
-- **A voice the reader does not have connected** is refused with the reader's reason.
+- **`text`**: the owner's words as they stand, cut into the pieces Telegram takes, each after the last pause
+  that fits, and a run with no pause between whole characters.
+- **`album`**: files go as the albums Telegram takes: pictures and videos together, documents together,
+  sounds together, a GIF alone, each album up to Telegram's ceiling, in the order their first file came. An
+  item named by an address is read as a picture of the bot's is. The caption goes with the first album, its
+  line breaks each a single line feed and its ends trimmed. A file that holds nothing, or one past the
+  `[owner]` ceiling, is missed with the policy's `empty_file` or `too_large`; an album the account refuses is
+  missed by every file in it, and stops none after it.
+- **Neither answers `replyTo`:** the owner's account finds a message by when it was said and what it says,
+  which the protocol's send does not carry.
+- **While the reader does not have the account connected**, the send is refused with the reader's reason.
 
 ## The dialect: `telegram-html`
 

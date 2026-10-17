@@ -2,7 +2,7 @@
 //! is used, and each reason becomes its bmo-chat refusal code.
 
 use bmo_chat::{ChatCapability, ChatRefusal, ChatVoice, MissedPictureReason};
-use bmo_telegram::policy::{Gathering, Kinds, POLICY, Pictures, Platform, Policy, Refusals, fill};
+use bmo_telegram::policy::{Gathering, Kinds, Owner, POLICY, Pictures, Platform, Policy, Refusals, fill};
 use strum::VariantArray;
 
 #[test]
@@ -11,6 +11,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     telegram,
     refusals,
     pictures,
+    owner,
     gathering,
     kinds,
   } = &*POLICY;
@@ -28,6 +29,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     sticker_unset,
     mode_down,
     mode_missing,
+    owner_verb,
   } = refusals;
   let Pictures {
     mark,
@@ -39,6 +41,12 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     kept_max_dimension,
     kept_quality,
   } = pictures;
+  let Owner {
+    largest_bytes,
+    empty_file,
+    too_large,
+    megabytes,
+  } = owner;
   let Gathering {
     file_not_kept,
     voice_name,
@@ -90,10 +98,14 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     sticker_unset,
     mode_down,
     mode_missing,
+    owner_verb,
     mark,
     refused,
     failed,
     left_out,
+    empty_file,
+    too_large,
+    megabytes,
     file_not_kept,
     voice_name,
     sound_name,
@@ -141,6 +153,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
   assert_eq!(caption_refused_descriptions.len(), 2);
   assert_eq!((*upload_quality, *kept_quality), (90, 80));
   assert_eq!((*kept_threshold_bytes, *kept_max_dimension), (4_000_000, 1568));
+  assert_eq!(*largest_bytes, 52_428_800);
   assert_eq!(audio_extensions.len(), 10);
   assert_eq!(video_extensions.get("video/quicktime").map(String::as_str), Some(".mov"));
 }
