@@ -11,11 +11,14 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+async-trait = "0.1.92"
 avif-parse = "2.1.0"
+axum = { version = "0.8.4", default-features = false, features = ["http1", "json", "tokio"] }
 bmo-chat = { path = "../chat/provider" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp", "tiff", "avif"] }
 rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
 regex = "1.11.1"
+reqwest = { version = "0.13.5", default-features = false }
 resvg = "0.48.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.138"
@@ -23,6 +26,7 @@ strum = "0.28.0"
 telegram-dialect = { path = "dialect" }
 telegram-picture = { path = "picture" }
 thiserror = "2.0.18"
+tokio = "1.53.2"
 toml = { version = "0.8.23", default-features = false, features = ["parse"] }
 unicode-segmentation = "1.12.0"
 url = "2.5.8"
@@ -36,13 +40,18 @@ edition.workspace = true
 publish = false
 
 [dependencies]
+async-trait.workspace = true
+axum.workspace = true
 bmo-chat.workspace = true
+reqwest.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 toml.workspace = true
 
 [dev-dependencies]
 # The repository checks read `cargo metadata`, the testbed's declaration and the reader's manifest; the
-# policy's test counts bmo-chat's capabilities.
-serde_json.workspace = true
+# policy's test counts bmo-chat's capabilities; the seam's tests serve fakes of the reader and the receiver.
 strum.workspace = true
-toml.workspace = true
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync"] }

@@ -7,6 +7,7 @@ name = "telegram"
 
 [test]
 languages = ["cargo", "bun"]
+setup = ["cd reader && bun install --frozen-lockfile"]
 
 [check]
 quick = ["layout", "dependencies"]
@@ -25,3 +26,9 @@ lane = "wide"
 [[check.step]]
 id = "fmt"
 command = "cargo fmt --all --check"
+
+[[check.step]]
+id = "reader-types"
+command = "./node_modules/.bin/tsc --noEmit"
+dir = "reader"
+when = ["reader/**", "policy/**"]

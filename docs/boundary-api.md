@@ -90,7 +90,7 @@ it, and what it does while the receiver does not answer that route (404 `no-rout
 | Need | Route the provider calls | Body and answer | While unanswered |
 |---|---|---|---|
 | Whether the receiver listens to a room. A room nobody listens to has its words handed over and nothing gathered: no file, no picture, nothing of the reader's | `POST /rooms/listened` | `chatId`, `via`; `listened` (boolean) | the room counts as listened |
-| The rooms whose history the reader may walk back | `POST /rooms/of` | `via`; `rooms`, a list of room numbers | the history walk stands down, and `GET /status` says why under `history` |
+| The rooms whose history the reader may walk back, each with the oldest message the receiver holds of it | `POST /rooms/of` | `via`; `rooms`, each `chatId`, `oldestMessageId` and `oldestSentAt` (each number or null) | the history walk stands down, and `GET /status` says why under `history` |
 | A past message read back from a room's history, archived where the receiver lacks it and waking nobody | `POST /history` | the body of `POST /message`; `kept` (boolean: false where the message was already held) | the history walk stands down, as above |
 | Word that the profile pictures changed, for whatever shows them | `POST /avatars/updated` | `via`, `rooms` and `people`, each a list of numbers | the pictures are still kept current; no word is sent, and `GET /status` says why under `avatars` |
 
@@ -120,11 +120,15 @@ pieces and albums Telegram takes (`docs/telegram.md`, 「The owner's voice」).
 
 | Route | Body | Answer |
 |---|---|---|
-| `POST /reader/inbound` | `kind` (`message`, `attachment`, `edited` or `history`) and the hand-over's body as the protocol states it | `{}` once the service has handed it on; the receiver's failure in the error shape |
+| `POST /reader/inbound` | `kind` (`message`, `attachment`, `edited`, `gathered` or `history`) and the hand-over's body as the protocol states it | `{}` once the service has handed it on, and for `history` `kept`; the receiver's failure in the error shape, `history` 409 `not-ready` while the receiver does not take it |
 | `POST /reader/listened` | `chatId` | `listened` (boolean), the receiver's answer or its fallback |
-| `GET /reader/rooms` | | `rooms`, the rooms the history walk may read; 409 `not-ready` with the reason while the receiver does not say |
+| `GET /reader/rooms` | | `rooms`, as `POST /rooms/of` answers them; 409 `not-ready` with the reason while the receiver does not say |
 | `GET /reader/seen` | | `rooms` and `people`: every room and sender the provider has handed a message of over or sent into |
 | `POST /reader/avatars` | `rooms`, `people` | `{}` once word of the changed pictures has gone to the receiver, or stood down |
+
+A message, an attachment and a `history` line carry the room and the sender into the record of what the
+provider has seen. The reader opens the owner's account only once the service answers, so nothing it reads
+is handed to a service that is not up.
 
 ## Configuration
 
@@ -133,7 +137,7 @@ credentials have always been named:
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `BMO_BOT_TOKEN` | service | the bot account's token; the provider is not configured without it |
+| `BMO_BOT_TOKEN` | both | the bot account's token; the provider is not configured without it. The reader reads only the bot's number off it, the part before the colon |
 | `BMO_OWNER_ID` | both | the owner's Telegram number, which is also the number of the owner's one-to-one with the bot |
 | `BMO_TELEGRAM_API` | service | the Bot API's base address; `https://api.telegram.org` where unset |
 | `BMO_TG_API_ID` | reader | the owner's application id for MTProto |

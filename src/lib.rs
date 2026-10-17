@@ -3,3 +3,8 @@
 //! routes. The owner's account is the reader's, in `reader/`, reached over the seam on the loopback.
 
 pub mod policy;
+pub mod reader;
+pub mod receiver;
+pub mod seam;
+pub mod seen;
+pub mod wire;
