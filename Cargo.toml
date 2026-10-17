@@ -18,10 +18,13 @@ bmo-chat = { path = "../chat/provider" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp", "tiff", "avif"] }
 rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
 regex = "1.11.1"
-reqwest = { version = "0.13.5", default-features = false }
+# The Bot API is HTTPS, and a file goes up to it as a multipart form.
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "multipart"] }
 resvg = "0.48.1"
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.138"
+# Telegram's own payload crosses as metadata in the order Telegram wrote it.
+serde_json = { version = "1.0.138", features = ["preserve_order"] }
+sha2 = "0.10.9"
 strum = "0.28.0"
 telegram-dialect = { path = "dialect" }
 telegram-picture = { path = "picture" }
@@ -47,11 +50,15 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+sha2.workspace = true
+telegram-dialect.workspace = true
+telegram-picture.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
 toml.workspace = true
 
 [dev-dependencies]
 # The repository checks read `cargo metadata`, the testbed's declaration and the reader's manifest; the
 # policy's test counts bmo-chat's capabilities; the seam's tests serve fakes of the reader and the receiver.
+image.workspace = true
 strum.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt", "sync"] }

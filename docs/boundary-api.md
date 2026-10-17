@@ -89,7 +89,7 @@ it, and what it does while the receiver does not answer that route (404 `no-rout
 
 | Need | Route the provider calls | Body and answer | While unanswered |
 |---|---|---|---|
-| Whether the receiver listens to a room. A room nobody listens to has its words handed over and nothing gathered: no file, no picture, nothing of the reader's | `POST /rooms/listened` | `chatId`, `via`; `listened` (boolean) | the room counts as listened |
+| Whether the receiver listens to a room, which the reader asks before it reads another bot's message in. A room nobody listens to has nothing of the reader's handed over | `POST /rooms/listened` | `chatId`, `via`; `listened` (boolean) | the room counts as listened |
 | The rooms whose history the reader may walk back, each with the oldest message the receiver holds of it | `POST /rooms/of` | `via`; `rooms`, each `chatId`, `oldestMessageId` and `oldestSentAt` (each number or null) | the history walk stands down, and `GET /status` says why under `history` |
 | A past message read back from a room's history, archived where the receiver lacks it and waking nobody | `POST /history` | the body of `POST /message`; `kept` (boolean: false where the message was already held) | the history walk stands down, as above |
 | Word that the profile pictures changed, for whatever shows them | `POST /avatars/updated` | `via`, `rooms` and `people`, each a list of numbers | the pictures are still kept current; no word is sent, and `GET /status` says why under `avatars` |

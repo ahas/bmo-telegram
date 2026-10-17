@@ -40,27 +40,36 @@ part stands (`GET /status`).
 ## Reading a room
 
 - **The bot account long-polls the Bot API.** It first asks who it is, asking again until Telegram answers,
-  so a message of its own is known by its number; until then the number is read off its token.
-- **A message from a room the receiver does not listen to** has its words handed over and nothing else: no
-  file, no picture and no expression is gathered (`docs/boundary-api.md`, 「Needed from the receiver」).
+  so a message of its own is known by its number; until then the number is read off its token. Updates are
+  read one at a time, in order; one that fails is said and the next is read.
+- **The rooms the bot account listens to** are the owner's one-to-one and every room whose number the chat
+  protocol carries whole, within the integers JavaScript counts exactly. A message from any other room has its
+  words handed over and nothing else: no file, no picture and no expression is gathered.
 - **What a message carries beyond words** is handed over as a placeholder in the text, the platform's English
   name of the kind with its particulars (a photo, a location, a poll, a sticker with its emoji and set, a
   forwarded message's origin, a member joining or leaving, a pin, a call), with the words typed under it as
   the context's `spokenText`. The placeholders are this repository's policy (`policy/telegram.toml`).
-- **A file is gathered through the Bot API** and handed over as bytes: on the attachment where it is gathered
-  at once, or as `gathering` followed by `gathered`. A file past the Bot API's ceiling for a bot is fetched
-  through the reader. A file that could not be kept is handed over as `not-kept` with the reason.
-- **Pictures are kept as Telegram's largest size,** and a picture sent as a file is still a picture; an SVG is
-  a file. A picture past the keeping threshold, or one with transparency, is brought inside the keeping
-  dimension, laid on white and written as JPEG.
+- **Telegram's own payload** for a message of a listened room crosses as `metadata`: its words, their
+  formatting, its sticker and the file it carries, each as Telegram wrote it and in that order.
+- **A picture goes as a `message` carrying its bytes,** fetched before the message is handed over, as words do;
+  where the bytes could not be had, without them. Telegram's largest size is taken, and a picture sent as a
+  file is still a picture; an SVG is a file. A picture past the keeping threshold, or one with transparency,
+  is brought inside the keeping dimension, laid on white and written as JPEG.
+- **Any other file goes as an `attachment` saying `gathering`,** at once, its bytes following as `gathered`
+  under the file's own name, or `not-kept` with the policy's reason. A file with no name of its own is named
+  for what it is: a spoken note, a sound, a video, a round note or a GIF.
+- **A sticker and the custom emoji among a message's words** are gathered as the message's files: the message
+  says `gathering`, and the assets follow as `gathered`.
+- **A file past the Bot API's ceiling for a bot,** picture or other, is fetched through the reader; with no
+  reader standing, a picture goes without its bytes and another file is not kept.
 - **A send of several messages,** an album, is named by the first of its messages the provider read, in its
   own room, and every message of it carries that number as `album`.
-- **An edit** is handed over as `edited` with the words, the formatting and the file in the order Telegram
-  wrote them. Telegram's own payload crosses as `metadata`, its keys in Telegram's order.
-- **A group the bot leaves, or one that moves to a supergroup's number,** is handed over as the service
-  message Telegram sends for it, so the receiver keeps every record of the room under its numbers.
-- **The bot's own messages** are gathered only: the file is kept for the receiver, and the words are not read
-  back in as somebody else's.
+- **An edit** is handed over as `edited` with the words, their formatting and the files it carries that were
+  not gathered lately as the same files; a file that changed under its name is gathered again.
+- **A group the bot leaves** is handed over as the service message Telegram sends for it; a group moving to a
+  supergroup's number is no message, and the reading goes on.
+- **The bot's own messages** are not read back in: a file it sent is the sender's to keep, and a pin it made
+  is nobody's word.
 
 ## Sends
 

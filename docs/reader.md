@@ -19,8 +19,8 @@ reader」), and it reaches nothing but the service and Telegram.
 ## What it hands over
 
 - **A message with words only** goes as a `message`.
-- **A picture,** or an image sent as an uncompressed file, goes as an `attachment` carrying its bytes; where the
-  bytes could not be had, as a `message`.
+- **A picture,** or an image sent as an uncompressed file, goes as a `message` carrying its bytes, as words
+  do; where the bytes could not be had, without them.
 - **Any other file** — a document, a sound, a video, a sticker — goes at once, its bytes following as
   `gathered`, kept or not kept with the policy's reason. A document with no caption goes as an `attachment`;
   a sticker, or a file under words, as a `message`.

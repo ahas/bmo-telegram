@@ -155,14 +155,15 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
   };
   const handover: Handover = { message: handed, context, room: roomFacts(chatId, deps.peers.ownerId, deps.peers.botId) };
 
-  // A photo, or an image sent as an uncompressed file: handed over with its bytes where they could be had.
+  // A photo, or an image sent as an uncompressed file: handed over as words are, with its bytes where they
+  // could be had.
   if (carriesPhoto) {
     const picture = await pictureOf(client, message);
 
     if (picture === null) {
       await deps.service.inbound({ kind: "message", ...handover });
     } else {
-      await deps.service.inbound({ kind: "attachment", ...handover, context: { ...context, carriesFile: true }, files: [picture] });
+      await deps.service.inbound({ kind: "message", ...handover, context: { ...context, carriesFile: true }, files: [picture] });
     }
 
     return;
