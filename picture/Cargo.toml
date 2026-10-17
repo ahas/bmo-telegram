@@ -1,0 +1,14 @@
+[package]
+name = "telegram-picture"
+description = "A picture read and redrawn for Telegram: its type, its transparency, an upload Telegram takes as a photo, and a picture kept inside its size."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+avif-parse.workspace = true
+image.workspace = true
+rav1d.workspace = true
+resvg.workspace = true
+thiserror.workspace = true
+yuv.workspace = true
