@@ -3,7 +3,7 @@
 # the repository and the service's integration tests in `tests/`. The owner's reader in `reader/` is a bun
 # package, outside the workspace.
 [workspace]
-members = []
+members = ["dialect"]
 resolver = "3"
 
 [workspace.package]
@@ -12,9 +12,13 @@ edition = "2024"
 
 [workspace.dependencies]
 bmo-chat = { path = "../chat/provider" }
+regex = "1.11.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.138"
+telegram-dialect = { path = "dialect" }
 toml = { version = "0.8.23", default-features = false, features = ["parse"] }
+unicode-segmentation = "1.12.0"
+url = "2.5.8"
 
 [package]
 name = "bmo-telegram"

@@ -11,6 +11,7 @@ words, held by a separate process, the reader.
 | Folder | Holds |
 |---|---|
 | `src/` | the service's own package: the provider, its Bot API connection and its routes |
+| `dialect/` | `telegram-dialect`, the `telegram-html` dialect: markdown into Telegram's HTML, the structure check, the fold and the division into messages |
 | `reader/` | the reader, a bun package holding the owner's account over MTProto, with its tests in `reader/tests/` |
 | `policy/` | the provider's fixed numbers and English words: its limits, refusals and placeholders |
 | `tests/` | the checks that span the repository, and the service's tests |

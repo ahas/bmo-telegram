@@ -1,0 +1,12 @@
+[package]
+name = "telegram-dialect"
+description = "The telegram-html dialect: markdown read into Telegram's HTML, its structure check, the fold and the division into messages."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+bmo-chat.workspace = true
+regex.workspace = true
+unicode-segmentation.workspace = true
+url.workspace = true
