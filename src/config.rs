@@ -83,7 +83,7 @@ impl Config {
     let mut missing = vec![];
 
     for (name, given) in required {
-      if given {
+      if !given {
         missing.push(name.to_owned());
       }
     }

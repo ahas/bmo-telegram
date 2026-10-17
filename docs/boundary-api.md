@@ -139,7 +139,7 @@ credentials have always been named:
 | Variable | Read by | Meaning |
 |---|---|---|
 | `BMO_BOT_TOKEN` | both | the bot account's token; the provider is not configured without it. The reader reads only the bot's number off it, the part before the colon |
-| `BMO_OWNER_ID` | both | the owner's Telegram number, which is also the number of the owner's one-to-one with the bot |
+| `BMO_OWNER_ID` | both | the owner's Telegram number, which is also the number of the owner's one-to-one with the bot; required |
 | `BMO_TELEGRAM_API` | service | the Bot API's base address; `https://api.telegram.org` where unset |
 | `BMO_TG_API_ID` | reader | the owner's application id for MTProto |
 | `BMO_TG_API_HASH` | reader | the owner's application hash for MTProto |
