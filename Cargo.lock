@@ -299,7 +299,9 @@ name = "bmo-telegram"
 version = "0.1.0"
 dependencies = [
  "bmo-chat",
+ "serde",
  "serde_json",
+ "strum 0.28.0",
  "toml",
 ]
 

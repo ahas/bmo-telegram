@@ -87,6 +87,25 @@ is refused and marked `gone`.
 - **A picture named by anything but a web address or a file under the picture root** is not sent: it is
   missed as `not-an-address`, `outside-data-root` or `missing-file`.
 
+### Refusals
+
+Every refusal is one of bmo-chat's refusal codes under the label `Telegram`. The provider's own reasons are
+English lines of `policy/telegram.toml`, each the detail of a `platform` refusal:
+
+| When | Code | Detail |
+|---|---|---|
+| an act on a message Telegram no longer has, or will never let change again | `platform`, marked `gone` | `message_gone`, with Telegram's own description |
+| a sticker the configured set does not carry | `platform` | `sticker_missing` |
+| a sticker where no set is configured | `platform` | `sticker_unset` |
+| a send asked to be spoken in a mode that is not running, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
+| any other refusal Telegram gives | `platform` | Telegram's own description |
+| every picture of a send missed | `no-picture-sent` | each picture with its reason, below |
+
+A picture that did not go is missed with one of bmo-chat's reasons: `not-an-address`, `outside-data-root`,
+`missing-file` and `unfetched` carry the base's own sentences; a picture Telegram refused, one whose last try
+failed and one left out of an album that went are `platform`, with the policy's `refused`, `failed` or
+`left_out`. A provider that is not configured is answered `not-ready` by the base before it is asked.
+
 ### The owner's voice
 
 A send with `as` `human-reader` goes out in the owner's own account, through the reader:
