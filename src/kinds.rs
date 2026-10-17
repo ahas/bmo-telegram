@@ -267,7 +267,7 @@ pub fn describe(message: &Message) -> Option<String> {
     return Some(fill(&kinds().poll, &[("question", &poll.question), ("options", &options)]));
   }
   if let Some(dice) = &message.dice {
-    return Some(format!("[{} {}]", dice.emoji, dice.value));
+    return Some(fill(&kinds().dice, &[("emoji", &dice.emoji), ("value", &dice.value.to_string())]));
   }
   if let Some(sticker) = &message.sticker {
     let emoji = sticker.emoji.as_ref().map_or_else(String::new, |emoji| format!(" {emoji}"));

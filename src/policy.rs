@@ -103,6 +103,7 @@ pub struct Kinds {
   pub venue: String,
   pub contact: String,
   pub poll: String,
+  pub dice: String,
   pub sticker: String,
   pub sticker_set: String,
   pub video: String,

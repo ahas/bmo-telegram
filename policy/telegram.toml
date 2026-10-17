@@ -99,8 +99,8 @@ video_fallback_extension = ".mp4"
 # What a message that is not plain text is handed over as, by its kind, followed by its {caption} where it
 # has one: a forward {from} somebody or some chat, the {duration} of a sound or a video, a place by its
 # {latitude} and {longitude}, a contact's {name} and {phone}, a poll's {question} and {options}, a sticker's
-# {emoji} and {set}, an audio or a document by its {name}, who joined or left, and what was pinned or what the
-# room was renamed to.
+# {emoji} and {set}, a dice roll's {emoji} and its {value}, an audio or a document by its {name}, who joined or
+# left, and what was pinned or what the room was renamed to.
 [kinds]
 forwarded = "[Forwarded from {from}] "
 forwarded_bare = "[Forwarded] "
@@ -111,6 +111,7 @@ location_live = ", shared live"
 venue = "[Venue] {title}, {address} https://maps.google.com/?q={latitude},{longitude}"
 contact = "[Contact] {name} {phone}"
 poll = "[Poll] {question} ({options})"
+dice = "[{emoji} {value}]"
 sticker = "[Sticker{emoji}{set}]"
 sticker_set = " ({set})"
 video = "[Video{duration}]{caption}"

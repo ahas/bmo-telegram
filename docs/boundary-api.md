@@ -20,7 +20,7 @@ flowchart LR
   S -->|needed routes| Rx
   S -->|Bot API| TG[Telegram]
   S -->|seam: health, picture, file, owner sends| R[reader]
-  R -->|seam: inbound, seen| S
+  R -->|seam: hand-overs, room questions, seen record| S
   R -->|MTProto| TG
 ```
 
@@ -54,7 +54,7 @@ Beside the protocol, under the same token and the protocol's conventions and err
 
 | Route | Answer |
 |---|---|
-| `GET /avatars/{kind}/{id}` | the profile picture the reader keeps for a room (`kind` `room`) or a person (`kind` `person`), as `image/jpeg` bytes; 404 `not-found` where none is kept |
+| `GET /avatars/{kind}/{id}` | the profile picture the reader keeps for a room (`kind` `room`) or a person (`kind` `person`), as `image/jpeg` bytes; 404 `no-route` where none is kept |
 | `GET /status` | what stands of each part, each a `standing` (`active` or `inactive`) and a `reason` (an English sentence, or null): `bot`, `reader`, `history`, `avatars` |
 
 The protocol declares `avatars` as a capability and carries no route for a profile picture. This route is how
@@ -76,7 +76,8 @@ token, as the protocol states it:
 
 What the provider hands over:
 
-- **Telegram's own payload** for a message, as Telegram wrote it, crosses as the context's `metadata`.
+- **Telegram's own payload** for a message of a listened room, as Telegram wrote it, crosses as the context's
+  `metadata`.
 - **A file crosses as bytes.** Where it is kept is the receiver's. The provider keeps no copy of a file it
   hands over.
 - **The room's title** crosses as the context's `roomTitle`, and the room facts (`kind`, `identity`,
@@ -126,9 +127,9 @@ pieces and albums Telegram takes (`docs/telegram.md`, 「The owner's voice」).
 | `GET /reader/seen` | | `rooms` and `people`: every room and sender the provider has handed a message of over or sent into |
 | `POST /reader/avatars` | `rooms`, `people` | `{}` once word of the changed pictures has gone to the receiver, or stood down |
 
-A message, an attachment and a `history` line carry the room and the sender into the record of what the
-provider has seen. The reader opens the owner's account only once the service answers, so nothing it reads
-is handed to a service that is not up.
+A message and an attachment carry the room and the sender into the record of what the provider has seen; a
+line out of a room's history adds nothing to it. The reader opens the owner's account only once the service
+answers, so nothing it reads is handed to a service that is not up.
 
 ## Configuration
 
@@ -163,8 +164,10 @@ Statements this provider makes that a sibling's document does not yet match, eac
 
 - **The receiver** states none of the four routes under 「Needed from the receiver」.
 - **bmo-chat** declares the `avatars` capability with no route that carries a profile picture; this provider
-  serves `GET /avatars/{kind}/{id}` of its own meanwhile. The protocol's room question `owns` is answered from
-  what this provider has seen, since a native-numbered platform cannot tell its rooms from another's numbers.
+  serves `GET /avatars/{kind}/{id}` of its own meanwhile. Its error codes carry no code for nothing held at an
+  address, so that route answers `no-route` where no picture is kept. The protocol's room question `owns` is
+  answered from what this provider has seen, since a native-numbered platform cannot tell its rooms from
+  another's numbers.
   A send in the owner's own voice answers no message: `replyTo` carries the message's number alone, and the
   owner's account finds a message by when it was said and what it says, which the seam's `reply` carries and
   the protocol's send does not.

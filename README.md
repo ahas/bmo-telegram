@@ -41,13 +41,14 @@ deployed), `rustfmt.toml` and `CLAUDE.md`.
 
 ## Build and test
 
-Cargo runs through the testbed's Cargo verb, which builds in the one shared build directory:
+Cargo runs through the testbed's Cargo verb, which builds in the one shared build directory; where the
+installed testbed has no Cargo verb of its own, `bmo cargo` carries the same verb:
 
 ```sh
-bmo-testbed cargo check --workspace --all-targets
-bmo-testbed cargo test --workspace
-bmo-testbed cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all --check
+bmo cargo check --workspace --all-targets
+bmo cargo test --workspace
+bmo cargo clippy --workspace --all-targets -- -D warnings
+bmo cargo fmt --all --check
 ```
 
 The reader's tests run in `reader/`:
