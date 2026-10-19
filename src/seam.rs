@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use axum::Router;
 use axum::extract::{Request, State};
-use axum::http::StatusCode;
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
@@ -80,9 +79,7 @@ pub fn seam_router(seam: Arc<Seam>) -> Router {
 }
 
 fn failure(code: ErrorCode, error: impl Into<String>) -> Response {
-  let status = StatusCode::from_u16(code.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-
-  (status, Json(WireError::new(code, error))).into_response()
+  WireError::new(code, error).into_response()
 }
 
 async fn authorized(State(seam): State<Arc<Seam>>, request: Request, next: Next) -> Response {

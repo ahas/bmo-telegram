@@ -415,7 +415,12 @@ async fn the_service_s_own_routes_report_the_parts_and_serve_the_pictures() {
   let (status, missing) = asked_get(&served.base, "/avatars/room/9").await;
 
   assert_eq!(status, 404);
-  assert_eq!(missing["code"], "no-route");
+  assert_eq!(missing["code"], "nothing-held");
+
+  let (status, astray) = asked_get(&served.base, "/avatars/sticker/9").await;
+
+  assert_eq!(status, 404);
+  assert_eq!(astray["code"], "no-route");
 
   let stranger = Wire::new(served.base.as_str(), "other");
 

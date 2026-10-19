@@ -1,6 +1,6 @@
 {
   "name": "telegram-reader",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "The Telegram provider's reader: the owner's own account over MTProto, read only, behind the service.",

@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::{Path, Request, State};
-use axum::http::StatusCode;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Json, Response};
@@ -65,9 +64,7 @@ pub fn keep_reader_current(provider: Arc<TelegramProvider>, every: std::time::Du
 }
 
 fn failure(code: ErrorCode, error: impl Into<String>) -> Response {
-  let status = StatusCode::from_u16(code.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-
-  (status, Json(WireError::new(code, error))).into_response()
+  WireError::new(code, error).into_response()
 }
 
 async fn authorized(State(served): State<Arc<Served>>, request: Request, next: Next) -> Response {
@@ -110,17 +107,14 @@ async fn status(State(served): State<Arc<Served>>) -> Response {
 async fn avatar(State(served): State<Arc<Served>>, Path((kind, id)): Path<(String, String)>) -> Response {
   let numbered = id.parse::<i64>().ok();
 
-  let kept = format!("no profile picture is kept for {kind} {id}");
+  let Some(number) = numbered.filter(|_| matches!(kind.as_str(), "room" | "person")) else {
+    return failure(ErrorCode::NoRoute, format!("no route GET /avatars/{kind}/{id}"));
+  };
 
-  if !matches!(kind.as_str(), "room" | "person") || numbered.is_none() {
-    return failure(ErrorCode::NoRoute, kept);
-  }
-
-  let number = numbered.unwrap();
-  let file = served.avatars.join(kind).join(format!("{number}.jpg"));
+  let file = served.avatars.join(&kind).join(format!("{number}.jpg"));
 
   match std::fs::read(&file) {
     Ok(bytes) => ([(CONTENT_TYPE, "image/jpeg".to_owned())], bytes).into_response(),
-    Err(_why) => failure(ErrorCode::NoRoute, kept),
+    Err(_why) => failure(ErrorCode::NothingHeld, format!("no profile picture is kept for {kind} {number}")),
   }
 }
