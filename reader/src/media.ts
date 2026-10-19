@@ -6,7 +6,7 @@ import { mtproto } from "./mtproto";
 import { POLICY } from "./policy";
 
 import type { Api, TelegramClient } from "telegram";
-import type { FileItem } from "./service";
+import type { MessageFile } from "./service";
 
 // Who is asked about a room: the account sees the owner's one-to-one with the bot from its own side,
 // as the chat with the bot; every other room is its own peer.
@@ -52,6 +52,17 @@ function documentFileName(document: Api.Document): string | undefined {
   }
 
   return undefined;
+}
+
+/** The id the file a message carries crosses with: Telegram's own number for its photo or its document. */
+export function fileIdOf(message: Api.Message): string {
+  const photo = message.photo;
+
+  if (photo !== undefined && photo !== null) return `photo-${String(photo.id)}`;
+
+  const document = message.document;
+
+  return document !== undefined && document !== null ? `document-${String(document.id)}` : "file";
 }
 
 // A photo, or an image sent as a file: either counts as the picture a message carries.
@@ -104,7 +115,7 @@ export async function readerMessageFor(
 
 // What a fetch through the account came to: the file, a reason it could not be had, or no account to ask.
 export type Fetched =
-  | ({ outcome: "fetched" } & FileItem)
+  | ({ outcome: "fetched" } & MessageFile)
   | { outcome: "unavailable"; reason: string }
   | { outcome: "no-reader"; reason: string };
 
@@ -121,9 +132,9 @@ async function downloaded(client: TelegramClient, message: Api.Message): Promise
 }
 
 /** The picture a message the account read carries, or null where its bytes could not be had. */
-export async function pictureOf(client: TelegramClient, message: Api.Message): Promise<FileItem | null> {
+export async function pictureOf(client: TelegramClient, message: Api.Message): Promise<MessageFile | null> {
   try {
-    return { name: `${message.id}.jpg`, mime: "image/jpeg", bytes: Buffer.from(await downloaded(client, message)).toString("base64") };
+    return { id: fileIdOf(message), name: `${message.id}.jpg`, mime: "image/jpeg", bytes: Buffer.from(await downloaded(client, message)).toString("base64") };
   } catch (error) {
     console.error(`reader photo download for message ${message.id} failed:`, error);
 
@@ -149,7 +160,7 @@ export async function fetchPicture(
 
     const bytes = await downloaded(client, message);
 
-    return { outcome: "fetched", name: `${asked.messageId}.jpg`, mime: "image/jpeg", bytes: Buffer.from(bytes).toString("base64") };
+    return { outcome: "fetched", id: fileIdOf(message), name: `${asked.messageId}.jpg`, mime: "image/jpeg", bytes: Buffer.from(bytes).toString("base64") };
   } catch (error) {
     return { outcome: "unavailable", reason: error instanceof Error ? error.message : String(error) };
   }
@@ -175,7 +186,7 @@ export async function fetchFile(
     const document = message.document!;
     const bytes = await downloaded(client, message);
 
-    return { outcome: "fetched", name: readerFileOf(document).name, mime: document.mimeType, bytes: Buffer.from(bytes).toString("base64") };
+    return { outcome: "fetched", id: fileIdOf(message), name: readerFileOf(document).name, mime: document.mimeType, bytes: Buffer.from(bytes).toString("base64") };
   } catch (error) {
     return { outcome: "unavailable", reason: error instanceof Error ? error.message : String(error) };
   }

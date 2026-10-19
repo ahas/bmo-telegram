@@ -11,6 +11,7 @@ use axum::http::header::CONTENT_TYPE;
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use bmo_chat::{ChatProvider, ChatReceiver, ChatReceiverLink};
+use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::provider::TelegramProvider;
 use bmo_telegram::reader::ReaderClient;
 use bmo_telegram::receiver::ReceiverNeeds;
@@ -106,7 +107,7 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
     .route(
       "/reader/picture",
       post(|| async {
-        Json(json!({ "outcome": "fetched", "name": "picture.jpg", "mime": "image/jpeg", "bytes": "AQID" }))
+        Json(json!({ "outcome": "fetched", "id": "photo-9", "name": "picture.jpg", "mime": "image/jpeg", "bytes": "AQID" }))
       }),
     )
     .route(
@@ -125,6 +126,7 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
 struct Served {
   base: String,
   provider: Arc<TelegramProvider>,
+  file_ids: Arc<FileIds>,
   kept: Arc<Kept>,
   asked: Arc<Mutex<Vec<Value>>>,
   _pictures: TempDir,
@@ -146,7 +148,15 @@ async fn stood(reader_standing: bool) -> Served {
   let seen = Arc::new(Seen::in_memory());
   let standing = Arc::new(Standing::default());
   let reader = ReaderClient::new(Wire::loopback(reader_port, TOKEN));
-  let telegram = Arc::new(Telegram::new(BOT_TOKEN, &bot, OWNER, Some(reader.clone()), seen.clone()));
+  let file_ids = Arc::new(FileIds::in_memory());
+  let telegram = Arc::new(Telegram::new(
+    BOT_TOKEN,
+    &bot,
+    OWNER,
+    Some(reader.clone()),
+    seen.clone(),
+    file_ids.clone(),
+  ));
   let link = ChatReceiverLink::new(receiver_base.as_str(), RECEIVER_TOKEN);
   let receiver: Arc<dyn ChatReceiver> = Arc::new(link);
   let seam = Arc::new(Seam {
@@ -185,6 +195,7 @@ async fn stood(reader_standing: bool) -> Served {
   Served {
     base: format!("http://127.0.0.1:{}", serve(app).await),
     provider,
+    file_ids,
     kept: handed,
     asked,
     _pictures: pictures,
@@ -334,9 +345,10 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
 }
 
 /// A message's picture fetched again through the reader seam: the bytes the owner's account hands over, under
-/// the file's own name. Where no reader stands, the capability is not declared and the fetch is refused.
+/// the file's own name and the owner's account's id, or the id the bot account handed it over with. Where no
+/// reader stands, the capability is not declared and the fetch is refused.
 #[tokio::test]
-async fn a_picture_is_fetched_again_through_the_reader_seam() {
+async fn a_picture_is_fetched_again_through_the_reader_seam_under_the_id_it_crossed_with() {
   let served = stood(true).await;
   let request = json!({ "chatId": ROOM, "messageId": 6, "sentAt": SENT_AT });
 
@@ -345,8 +357,14 @@ async fn a_picture_is_fetched_again_through_the_reader_seam() {
   assert_eq!(status, 200);
   assert_eq!(
     answer,
-    json!({ "outcome": "fetched", "name": "picture.jpg", "mime": "image/jpeg", "bytes": "AQID" })
+    json!({ "outcome": "fetched", "id": "photo-9", "name": "picture.jpg", "mime": "image/jpeg", "bytes": "AQID" })
   );
+
+  served.file_ids.keep(ROOM, 6, "photo-unique");
+
+  let (_status, again) = asked(&served.base, "/media", request.clone()).await;
+
+  assert_eq!(again["id"], "photo-unique");
 
   let down = stood(false).await;
   let (_status, refused) = asked(&down.base, "/media", request.clone()).await;

@@ -16,6 +16,7 @@ pub const SAFE_INTEGER: i64 = (1 << 53) - 1;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Picture {
   pub file_id: String,
+  pub file_unique_id: Option<String>,
   pub file_size: Option<i64>,
 }
 
@@ -139,6 +140,7 @@ pub fn read(message: &Message, me: i64, listened: bool) -> Reading {
   if let Some(photos) = &message.photo {
     let largest = photos.last().map(|photo| Picture {
       file_id: photo.file_id.clone(),
+      file_unique_id: photo.file_unique_id.clone(),
       file_size: photo.file_size,
     });
 
@@ -156,6 +158,7 @@ pub fn read(message: &Message, me: i64, listened: bool) -> Reading {
           message,
           Some(Picture {
             file_id: document.file_id.clone(),
+            file_unique_id: document.file_unique_id.clone(),
             file_size: document.file_size,
           }),
         );

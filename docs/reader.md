@@ -27,6 +27,8 @@ reader」), and it reaches nothing but the service and Telegram.
 - **A wordless message** is handed over under the placeholder of its kind, from `policy/telegram.toml`, the
   same words the bot account's reading uses; the words a message carried go as `spokenText`.
 - **Telegram's own words and the custom emoji among their marks** go as the context's `metadata`.
+- **Every file it hands over or fetches carries its id,** Telegram's own number for it: `photo-` and the
+  photo's number, or `document-` and the document's, so the same file crosses under the same id each time.
 - **A file with no name of its own** is named for what it is: a sticker by its document, a video, a round note
   or a GIF by which it was, a sound by whether it was a spoken note, each with the extension its type implies.
 

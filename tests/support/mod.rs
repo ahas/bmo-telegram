@@ -15,7 +15,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::Request;
 use axum::response::{IntoResponse, Json, Response};
-use bmo_chat::{ChatFailure, ChatGathered, ChatHandover, ChatReceiver, FileItem};
+use bmo_chat::{ChatFailure, ChatGathered, ChatHandover, ChatReceiver, MessageFile};
 use serde_json::{Value, json};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
@@ -195,7 +195,7 @@ pub async fn next(heard: &mut UnboundedReceiver<(String, Value)>) -> (String, Va
     .expect("the receiver stands")
 }
 
-/// A file item as it crossed the wire, its bytes read back.
-pub fn file_of(item: &Value) -> FileItem {
-  serde_json::from_value(item.clone()).expect("a file item")
+/// A message file as it crossed the wire, its bytes read back.
+pub fn file_of(item: &Value) -> MessageFile {
+  serde_json::from_value(item.clone()).expect("a message file")
 }

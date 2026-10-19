@@ -38,15 +38,20 @@ export interface FileItem {
   bytes: string;
 }
 
+// A file a message carried, as it crosses: a file item and the id the same file crosses under each time.
+export interface MessageFile extends FileItem {
+  id: string;
+}
+
 export interface Handover {
   message: HandedMessage;
   context?: HandedContext;
   room?: RoomFacts;
-  files?: FileItem[];
+  files?: MessageFile[];
 }
 
 export type Gathered =
-  | { chatId: number; messageId: number; via: string; outcome: "kept"; files: FileItem[] }
+  | { chatId: number; messageId: number; via: string; outcome: "kept"; files: MessageFile[] }
   | { chatId: number; messageId: number; via: string; outcome: "not-kept"; reason: string };
 
 export type Inbound =

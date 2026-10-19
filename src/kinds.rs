@@ -65,12 +65,14 @@ pub enum Origin {
 #[derive(Clone, Debug, Deserialize)]
 pub struct PhotoSize {
   pub file_id: String,
+  pub file_unique_id: Option<String>,
   pub file_size: Option<i64>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Document {
   pub file_id: String,
+  pub file_unique_id: Option<String>,
   pub file_name: Option<String>,
   pub mime_type: Option<String>,
   pub file_size: Option<i64>,

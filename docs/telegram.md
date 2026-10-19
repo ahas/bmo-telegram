@@ -62,6 +62,13 @@ part stands (`GET /status`).
   says `gathering`, and the assets follow as `gathered`.
 - **A file past the Bot API's ceiling for a bot,** picture or other, is fetched through the reader; with no
   reader standing, a picture goes without its bytes and another file is not kept.
+- **Every file a message carried crosses with its id,** the same each time the same file crosses. The bot
+  account names a file by Telegram's `file_unique_id` for it (a picture's by its largest size's), and where a
+  file comes with none, by its place in the message: `picture`, `file`, `sticker`, or `emoji-` and the custom
+  emoji's number. The owner's account names a file by Telegram's own number for it, `photo-` or `document-`
+  and the photo's or the document's number. A picture or a file the bot account handed over is fetched again
+  under the id it crossed with, which the provider keeps in its data folder; one it never handed over is
+  fetched under the owner's account's id.
 - **A send of several messages,** an album, is named by the first of its messages the provider read, in its
   own room, and every message of it carries that number as `album`.
 - **An edit** is handed over as `edited` with the words, their formatting and the files it carries that were

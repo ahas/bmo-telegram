@@ -10,6 +10,7 @@ use axum::Router;
 use axum::response::Json;
 use axum::routing::{get, post};
 use bmo_chat::{ChatProvider, ChatSend, ChatSendRequest, ChatSendResult, ChatVoice};
+use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::owner::{albums, caption_of, kind_of, megabytes, refusal};
 use bmo_telegram::policy::{POLICY, fill};
 use bmo_telegram::provider::TelegramProvider;
@@ -47,7 +48,14 @@ fn fake_reader(connected: bool, said: Arc<Mutex<Vec<Value>>>) -> Router {
 async fn provider(connected: bool, said: Arc<Mutex<Vec<Value>>>) -> TelegramProvider {
   let port = serve(fake_reader(connected, said)).await;
   let seen = Arc::new(Seen::in_memory());
-  let telegram = Arc::new(Telegram::new(TOKEN, "http://127.0.0.1:9", OWNER, None, seen.clone()));
+  let telegram = Arc::new(Telegram::new(
+    TOKEN,
+    "http://127.0.0.1:9",
+    OWNER,
+    None,
+    seen.clone(),
+    Arc::new(FileIds::in_memory()),
+  ));
   let reader = ReaderClient::new(Wire::loopback(port, "seam-token"));
 
   TelegramProvider::new(telegram, Sending::default(), Some(reader), seen, Arc::default())

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use bmo_chat::{ChatMessage, ChatVoice};
 use bmo_telegram::albums::{AlbumNames, KEPT};
+use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::files::audio_type;
 use bmo_telegram::gather::{bot_file, media_file_name};
 use bmo_telegram::kinds::Message;
@@ -88,6 +89,7 @@ fn a_photo_asks_for_its_largest_size_and_goes_under_its_caption_or_the_placehold
     picture,
     Some(Picture {
       file_id: "large".into(),
+      file_unique_id: Some("l".into()),
       file_size: Some(9000)
     })
   );
@@ -243,9 +245,16 @@ fn an_edit_carries_the_platforms_own_words_formatting_and_file_in_order() {
 #[test]
 fn the_bots_number_is_read_off_its_token_until_the_platform_says_it() {
   let seen = Arc::new(Seen::in_memory());
+  let file_ids = Arc::new(FileIds::in_memory());
 
-  assert_eq!(Telegram::new("123456:secret", "", 42, None, seen.clone()).me(), 123_456);
-  assert_eq!(Telegram::new("", "", 42, None, seen).configured(), Some(TOKEN_MISSING.to_owned()));
+  assert_eq!(
+    Telegram::new("123456:secret", "", 42, None, seen.clone(), file_ids.clone()).me(),
+    123_456
+  );
+  assert_eq!(
+    Telegram::new("", "", 42, None, seen, file_ids).configured(),
+    Some(TOKEN_MISSING.to_owned())
+  );
 }
 
 #[test]

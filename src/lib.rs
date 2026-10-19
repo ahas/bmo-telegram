@@ -7,6 +7,7 @@ pub mod albums;
 pub mod bot_api;
 pub mod compose;
 pub mod config;
+pub mod file_ids;
 pub mod files;
 pub mod gather;
 pub mod kinds;

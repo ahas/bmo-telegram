@@ -10,7 +10,8 @@ use std::sync::Arc;
 use axum::Router;
 use axum::response::Json;
 use axum::routing::post;
-use bmo_chat::{ChatReceiver, FileItem};
+use bmo_chat::{ChatReceiver, MessageFile};
+use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::policy::POLICY;
 use bmo_telegram::reader::ReaderClient;
 use bmo_telegram::seen::Seen;
@@ -70,7 +71,14 @@ async fn account(reader: Option<ReaderClient>) -> Account {
   let (receiver, heard) = KeptReceiver::new();
 
   Account {
-    telegram: Telegram::new(TOKEN, &address, OWNER, reader, Arc::new(Seen::in_memory())),
+    telegram: Telegram::new(
+      TOKEN,
+      &address,
+      OWNER,
+      reader,
+      Arc::new(Seen::in_memory()),
+      Arc::new(FileIds::in_memory()),
+    ),
     receiver,
     heard,
     api,
@@ -80,7 +88,8 @@ async fn account(reader: Option<ReaderClient>) -> Account {
 // A reader whose owner's account hands over the bytes it is asked for.
 async fn reader_handing(bytes: &'static [u8]) -> ReaderClient {
   let fetched = |name: &str| {
-    let mut answer = serde_json::to_value(FileItem {
+    let mut answer = serde_json::to_value(MessageFile {
+      id: "document-9".to_owned(),
       name: name.to_owned(),
       mime: "application/octet-stream".to_owned(),
       bytes: bytes.to_vec(),
@@ -119,14 +128,22 @@ async fn expressions_are_handed_over_as_telegram_wrote_them_with_their_assets_an
   assert_eq!(handed["context"]["metadata"]["attachment"], Value::Null);
 
   let (route, gathered) = next(&mut account.heard).await;
-  let mut names: Vec<String> =
-    gathered["files"].as_array().unwrap().iter().map(|file| file_of(file).name).collect();
+  let mut names: Vec<(String, String)> = gathered["files"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|file| {
+      let file = file_of(file);
+      (file.name, file.id)
+    })
+    .collect();
 
   names.sort();
   assert_eq!(route, "gathered");
   assert_eq!(account.api.methods(), ["getFile", "getCustomEmojiStickers", "getFile"]);
-  assert_eq!(names[0], "emoji-e-1.webp");
-  assert!(names[1].starts_with("sticker-") && names[1].ends_with(".webm"), "{names:?}");
+  assert_eq!(names[0], ("emoji-e-1.webp".to_owned(), "emoji-unique-e-1".to_owned()));
+  assert!(names[1].0.starts_with("sticker-") && names[1].0.ends_with(".webm"), "{names:?}");
+  assert_eq!(names[1].1, "sticker-unique");
 
   account.api.forget();
   account.telegram.edited(account.receiver(), said).await.unwrap();
@@ -159,6 +176,8 @@ async fn a_document_is_fetched_through_the_bot_api_and_handed_over_under_its_own
   assert_eq!(account.api.methods(), ["getFile"]);
   assert_eq!(gathered["outcome"], "kept");
   assert_eq!((file.name.as_str(), file.mime.as_str()), ("report v1.pdf", "application/pdf"));
+  assert_eq!(file.id, "doc-unique");
+  assert_eq!(account.telegram.file_id_of(ROOM, 40).as_deref(), Some("doc-unique"));
   assert_eq!(file.bytes, b"bytes of files/doc-1");
 }
 
@@ -179,12 +198,11 @@ async fn a_long_name_crosses_whole_and_the_receiver_names_what_it_keeps() {
 }
 
 #[tokio::test]
-async fn a_spoken_note_and_a_gif_are_named_for_what_they_are() {
+async fn a_spoken_note_and_a_gif_are_named_for_what_they_are_and_one_telegram_names_no_unique_id_by_its_place()
+ {
   let mut account = account(None).await;
-  let voice = message(
-    json!({ "voice": { "file_id": "voice-1", "file_unique_id": "voice-unique", "mime_type": "audio/ogg",
-    "duration": 2, "file_size": 20 } }),
-  );
+  let voice = message(json!({ "voice": { "file_id": "voice-1", "mime_type": "audio/ogg",
+    "duration": 2, "file_size": 20 } }));
   let gif = message(
     json!({ "message_id": 41, "animation": { "file_id": "gif-1", "file_unique_id": "gif-unique", "mime_type": "video/mp4",
     "width": 1, "height": 1, "duration": 1 }, "document": { "file_id": "gif-1", "file_unique_id": "gif-unique", "mime_type": "video/mp4" } }),
@@ -198,14 +216,14 @@ async fn a_spoken_note_and_a_gif_are_named_for_what_they_are() {
     let (_, gathered) = next(&mut account.heard).await;
     let file = file_of(&gathered["files"][0]);
 
-    named.push((file.name, file.mime));
+    named.push((file.name, file.mime, file.id));
   }
 
   assert_eq!(
     named,
     [
-      ("voice.ogg".to_owned(), "audio/ogg".to_owned()),
-      ("gif.mp4".to_owned(), "video/mp4".to_owned())
+      ("voice.ogg".to_owned(), "audio/ogg".to_owned(), "file".to_owned()),
+      ("gif.mp4".to_owned(), "video/mp4".to_owned(), "gif-unique".to_owned())
     ]
   );
 }
@@ -235,8 +253,13 @@ async fn a_file_past_the_bot_api_s_ceiling_is_asked_of_the_reader_and_with_none_
 
   let (_, gathered) = next(&mut read.heard).await;
 
+  let file = file_of(&gathered["files"][0]);
+
   assert_eq!(read.api.methods(), Vec::<String>::new());
-  assert_eq!(file_of(&gathered["files"][0]).bytes, b"read by the owner's account");
+  assert_eq!(
+    (file.id.as_str(), file.bytes.as_slice()),
+    ("big-2", b"read by the owner's account".as_slice())
+  );
 }
 
 #[tokio::test]
@@ -280,6 +303,8 @@ async fn a_picture_is_fetched_through_the_bot_api_and_handed_over_with_its_messa
   assert_eq!(route, "message");
   assert_eq!(handed["context"]["carriesFile"], true);
   assert_eq!((picture.name.as_str(), picture.mime.as_str()), ("40.jpg", "image/jpeg"));
+  assert_eq!(picture.id, "photo-unique");
+  assert_eq!(account.telegram.file_id_of(ROOM, 40).as_deref(), Some("photo-unique"));
 }
 
 #[tokio::test]

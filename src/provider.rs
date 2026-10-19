@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use bmo_chat::{
   ChatCapability, ChatDialect, ChatFailure, ChatHealth, ChatMediaRequest, ChatMediaResult,
   ChatModeStanding, ChatNumberSpace, ChatNumbering, ChatProvider, ChatReach, ChatReadMode, ChatReceiver,
-  ChatSend, ChatSendRequest, ChatSendResult, ChatVoice, RoomKind,
+  ChatSend, ChatSendRequest, ChatSendResult, ChatVoice, MessageFile, RoomKind,
 };
 use serde::Serialize;
 use telegram_dialect::TelegramHtml;
@@ -246,7 +246,11 @@ impl ChatProvider for TelegramProvider {
     };
 
     Ok(match fetched {
-      ReaderFetch::Fetched(file) => ChatMediaResult::Fetched(file),
+      // A file the bot account handed over is fetched again under the id it crossed with.
+      ReaderFetch::Fetched(file) => ChatMediaResult::Fetched(MessageFile {
+        id: self.telegram.file_id_of(chat_id, message_id).unwrap_or(file.id),
+        ..file
+      }),
       ReaderFetch::Unavailable(reason) => ChatMediaResult::Unavailable { reason },
       ReaderFetch::NoReader(reason) => ChatMediaResult::Refused {
         refusal: POLICY.mode_down(&wire_name(&ChatVoice::HumanReader), Some(&reason)),

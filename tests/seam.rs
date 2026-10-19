@@ -9,7 +9,7 @@ use axum::Router;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
 use axum::routing::{get, post};
-use bmo_chat::{ChatFailure, ChatGathered, ChatHandover, ChatReceiver, FileItem};
+use bmo_chat::{ChatFailure, ChatGathered, ChatHandover, ChatReceiver, FileItem, MessageFile};
 use bmo_telegram::reader::{AsOwner, OwnerReply, ReaderClient, ReaderFetch};
 use bmo_telegram::receiver::ReceiverNeeds;
 use bmo_telegram::seam::{Seam, Standing, seam_router};
@@ -48,7 +48,7 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
       "/reader/picture",
       post(|Json(body): Json<Value>| async move {
         if body["messageId"] == 6 {
-          Json(json!({ "outcome": "fetched", "name": "6.jpg", "mime": "image/jpeg", "bytes": "AQID" }))
+          Json(json!({ "outcome": "fetched", "id": "photo-6", "name": "6.jpg", "mime": "image/jpeg", "bytes": "AQID" }))
         } else {
           Json(json!({ "outcome": "unavailable", "reason": "the message carries no picture" }))
         }
@@ -102,7 +102,8 @@ async fn the_reader_is_asked_for_its_health_its_fetches_and_the_owner_s_sends() 
   assert!(reader.health().await.connected);
   assert_eq!(
     reader.picture(5, 6, Some(1)).await,
-    ReaderFetch::Fetched(FileItem {
+    ReaderFetch::Fetched(MessageFile {
+      id: "photo-6".to_owned(),
       name: "6.jpg".to_owned(),
       mime: "image/jpeg".to_owned(),
       bytes: vec![1, 2, 3]

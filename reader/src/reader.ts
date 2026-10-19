@@ -3,7 +3,7 @@
 // room. This reads every new message another bot writes in a room the receiver listens to and hands it to
 // the service, which hands it to the receiver as read in the `human-reader` mode.
 
-import { messageHasPhoto, pictureOf, readerFileOf, seconds } from "./media";
+import { fileIdOf, messageHasPhoto, pictureOf, readerFileOf, seconds } from "./media";
 import { mtproto, mtprotoEvents, mtprotoSessions } from "./mtproto";
 import { fill, POLICY } from "./policy";
 import { base64Of, roomFacts, via } from "./service";
@@ -87,7 +87,7 @@ async function gather(deps: ReaderDeps, client: Client, message: Api.Message, ch
       kind: "gathered",
       ...base,
       outcome: "kept",
-      files: [{ name: file.name, mime: document.mimeType, bytes: base64Of(data) }],
+      files: [{ id: fileIdOf(message), name: file.name, mime: document.mimeType, bytes: base64Of(data) }],
     });
   } catch (error) {
     console.error(`reader keeping ${file.name} from chat ${chatId} failed:`, error);

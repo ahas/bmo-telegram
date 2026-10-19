@@ -2,7 +2,7 @@
 //! the service」): whether the owner's account is connected, a picture or a file the Bot API will not hand the
 //! bot, and a send in the owner's own voice.
 
-use bmo_chat::FileItem;
+use bmo_chat::{FileItem, MessageFile};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -25,7 +25,7 @@ pub struct ReaderHealth {
 /// connected to ask, each with the reader's English reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReaderFetch {
-  Fetched(FileItem),
+  Fetched(MessageFile),
   Unavailable(String),
   NoReader(String),
 }

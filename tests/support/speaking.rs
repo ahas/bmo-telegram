@@ -11,6 +11,7 @@ use axum::http::header::CONTENT_TYPE;
 use axum::response::{IntoResponse, Json, Response};
 use bmo_chat::{ChatProvider, ChatSend, ChatSendResult, provider_router};
 use bmo_telegram::bot_api::BotApi;
+use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::provider::TelegramProvider;
 use bmo_telegram::seen::Seen;
 use bmo_telegram::send::{Sending, Speaker};
@@ -274,7 +275,14 @@ pub const ROUTES_TOKEN: &str = "routes-token";
 /// The provider over the stand-in, started and ready, its routes served: where they are, and the provider.
 pub async fn provider_served(stand_in: Arc<BotSends>, sending: Sending) -> (String, Arc<TelegramProvider>) {
   let seen = Arc::new(Seen::in_memory());
-  let telegram = Arc::new(Telegram::new(TOKEN, &bot_sends(stand_in).await, OWNER, None, seen.clone()));
+  let telegram = Arc::new(Telegram::new(
+    TOKEN,
+    &bot_sends(stand_in).await,
+    OWNER,
+    None,
+    seen.clone(),
+    Arc::new(FileIds::in_memory()),
+  ));
   let provider = Arc::new(TelegramProvider::new(telegram, sending, None, seen, Arc::default()));
   let (receiver, _heard) = KeptReceiver::new();
 

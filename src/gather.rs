@@ -1,18 +1,20 @@
 //! What a message carries, gathered for the receiver (docs/telegram.md, 「Reading a room」): its picture, its
 //! file, and the sticker and custom emoji assets among its expressions, each fetched through the Bot API, or
 //! past the Bot API's ceiling for a bot through the reader. What is gathered crosses as bytes under the file's
-//! own name; where the receiver keeps it is the receiver's. A picture is kept as `telegram-picture` keeps one.
+//! own name and its id; where the receiver keeps it is the receiver's. A picture is kept as `telegram-picture`
+//! keeps one.
 
 use std::collections::VecDeque;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
-use bmo_chat::FileItem;
+use bmo_chat::MessageFile;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use telegram_dialect::FILE_LIMIT;
 use telegram_picture::{Keeping, kept, raster_type};
 
 use crate::bot_api::BotApi;
+use crate::file_ids::FileIds;
 use crate::policy::POLICY;
 use crate::reader::{ReaderClient, ReaderFetch};
 use crate::reading::Picture;
@@ -155,19 +157,28 @@ impl Remembered {
   }
 }
 
-/// The gathering: the Bot API, the reader for what is past its ceiling, and the files gathered lately.
+// The id a file crosses with: Telegram's name for it that does not change, or its place in the message where
+// Telegram gives none.
+fn file_id_of(unique: Option<&str>, place: &str) -> String {
+  unique.filter(|unique| !unique.is_empty()).unwrap_or(place).to_owned()
+}
+
+/// The gathering: the Bot API, the reader for what is past its ceiling, the files gathered lately, and the
+/// record of the id each message's picture or file crossed with.
 pub struct Gatherer {
   api: BotApi,
   reader: Option<ReaderClient>,
   remembered: Mutex<Remembered>,
+  file_ids: Arc<FileIds>,
 }
 
 impl Gatherer {
-  pub fn new(api: BotApi, reader: Option<ReaderClient>) -> Self {
+  pub fn new(api: BotApi, reader: Option<ReaderClient>, file_ids: Arc<FileIds>) -> Self {
     Self {
       api,
       reader,
       remembered: Mutex::default(),
+      file_ids,
     }
   }
 
@@ -180,20 +191,25 @@ impl Gatherer {
   }
 
   // A file's bytes past the Bot API's ceiling, through the reader.
-  async fn through_reader(&self, chat_id: i64, message_id: i64, sent_at: i64) -> Result<FileItem, String> {
+  async fn through_reader(&self, chat_id: i64, message_id: i64, sent_at: i64) -> Result<Vec<u8>, String> {
     let Some(reader) = &self.reader else {
       return Err("the file exceeds the Bot API's ceiling and no reader stands".to_owned());
     };
 
     match reader.file(chat_id, message_id, sent_at).await {
-      ReaderFetch::Fetched(file) => Ok(file),
+      ReaderFetch::Fetched(file) => Ok(file.bytes),
       ReaderFetch::Unavailable(why) | ReaderFetch::NoReader(why) => Err(why),
     }
   }
 
   /// The file a message carries, gathered: none where it carries none or it was gathered lately as the same
   /// file, or why it could not be had.
-  pub async fn file(&self, chat_id: i64, message_id: i64, raw: &Value) -> Result<Option<FileItem>, String> {
+  pub async fn file(
+    &self,
+    chat_id: i64,
+    message_id: i64,
+    raw: &Value,
+  ) -> Result<Option<MessageFile>, String> {
     let Some(file) = bot_file(raw) else {
       return Ok(None);
     };
@@ -209,25 +225,22 @@ impl Gatherer {
 
     let mime = file.mime_type.clone().unwrap_or_else(|| "application/octet-stream".to_owned());
     let sent_at = raw.get("date").and_then(Value::as_i64).unwrap_or_default();
-    let item = if oversized(file.file_size) {
-      let fetched = self.through_reader(chat_id, message_id, sent_at).await?;
-
-      FileItem {
-        name: name.clone(),
-        mime,
-        bytes: fetched.bytes,
-      }
+    let bytes = if oversized(file.file_size) {
+      self.through_reader(chat_id, message_id, sent_at).await?
     } else {
-      FileItem {
-        name: name.clone(),
-        mime,
-        bytes: self.api.file_bytes(&file.file_id).await?,
-      }
+      self.api.file_bytes(&file.file_id).await?
     };
+    let id = file_id_of(file.file_unique_id.as_deref(), "file");
 
     self.keep(key, file.file_unique_id);
+    self.file_ids.keep(chat_id, message_id, &id);
 
-    Ok(Some(item))
+    Ok(Some(MessageFile {
+      id,
+      name,
+      mime,
+      bytes,
+    }))
   }
 
   /// The picture a message carries, kept as a picture is kept: fetched through the Bot API, or past its ceiling
@@ -238,7 +251,7 @@ impl Gatherer {
     message_id: i64,
     sent_at: i64,
     picture: &Picture,
-  ) -> Option<FileItem> {
+  ) -> Option<MessageFile> {
     let bytes = if oversized(picture.file_size) {
       match &self.reader {
         Some(reader) => match reader.picture(chat_id, message_id, Some(sent_at)).await {
@@ -265,22 +278,28 @@ impl Gatherer {
       },
     );
     let mime = raster_type(&kept).unwrap_or("image/jpeg").to_owned();
+    let id = file_id_of(picture.file_unique_id.as_deref(), "picture");
 
-    Some(FileItem {
+    self.file_ids.keep(chat_id, message_id, &id);
+
+    Some(MessageFile {
+      id,
       name: format!("{message_id}.{}", picture_extension(&mime)),
       mime,
       bytes: kept,
     })
   }
 
-  // A sticker's asset as a file of the message: an animated one as the thumbnail Telegram makes of it.
+  // A sticker's asset as a file of the message, at its place there: an animated one as the thumbnail Telegram
+  // makes of it.
   async fn sticker_asset(
     &self,
     chat_id: i64,
     message_id: i64,
     sticker: &Value,
     name: &str,
-  ) -> Option<FileItem> {
+    place: &str,
+  ) -> Option<MessageFile> {
     let animated = sticker.get("is_animated").and_then(Value::as_bool) == Some(true);
     let video = sticker.get("is_video").and_then(Value::as_bool) == Some(true);
     let file =
@@ -307,9 +326,12 @@ impl Gatherer {
       .inspect_err(|why| eprintln!("telegram: the asset {name} of chat {chat_id} was not had: {why}"))
       .ok()?;
 
+    let id = file_id_of(unique.as_deref(), place);
+
     self.keep(key, unique);
 
-    Some(FileItem {
+    Some(MessageFile {
+      id,
       name,
       mime: mime.to_owned(),
       bytes,
@@ -323,7 +345,7 @@ impl Gatherer {
 
   /// The sticker a message is and the custom emoji among its words, each asset as a file of the message. An
   /// asset Telegram cannot supply is left out; its characters stand as they are.
-  pub async fn assets(&self, chat_id: i64, message_id: i64, raw: &Value) -> Vec<FileItem> {
+  pub async fn assets(&self, chat_id: i64, message_id: i64, raw: &Value) -> Vec<MessageFile> {
     let mut files = Vec::new();
 
     if let Some(sticker) = raw.get("sticker").filter(|sticker| !sticker.is_null()) {
@@ -332,7 +354,7 @@ impl Gatherer {
 
       files.extend(
         self
-          .sticker_asset(chat_id, message_id, sticker, &format!("sticker-{}", &digest[..12]))
+          .sticker_asset(chat_id, message_id, sticker, &format!("sticker-{}", &digest[..12]), "sticker")
           .await,
       );
     }
@@ -349,7 +371,9 @@ impl Gatherer {
 
       for sticker in &stickers {
         if let Some(id) = text(sticker, "custom_emoji_id") {
-          files.extend(self.sticker_asset(chat_id, message_id, sticker, &format!("emoji-{id}")).await);
+          let name = format!("emoji-{id}");
+
+          files.extend(self.sticker_asset(chat_id, message_id, sticker, &name, &name).await);
         }
       }
     }

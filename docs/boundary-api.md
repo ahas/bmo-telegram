@@ -36,7 +36,7 @@ protocol and its `openapi.json` state them, under the service's token:
 | `GET /declaration` | the provider's declaration (`docs/telegram.md`, 「The declaration」) |
 | `GET /health` | `ready` once the bot account's connection is open; the reason while it is not |
 | `POST /send` | one send, any of the twelve verbs (`docs/telegram.md`, 「Sends」) |
-| `POST /media` | a picture or a file a message carried, fetched again through the reader |
+| `POST /media` | a picture or a file a message carried, fetched again through the reader under the id it crossed with |
 | `POST /dialect/read` | the `telegram-html` dialect reading markdown |
 | `POST /dialect/check` | the `telegram-html` dialect checking markup it built |
 | `POST /room/owns` | whether the room is one this provider has handed a message from or sent into |
@@ -80,6 +80,8 @@ What the provider hands over:
   `metadata`.
 - **A file crosses as bytes.** Where it is kept is the receiver's. The provider keeps no copy of a file it
   hands over.
+- **A file a message carried crosses as a message file,** with its id, the same each time the same file
+  crosses, `POST /media` included (`docs/telegram.md`, 「Reading a room」).
 - **The room's title** crosses as the context's `roomTitle`, and the room facts (`kind`, `identity`,
   `privateTo`) with every hand-over.
 
@@ -108,7 +110,7 @@ protocol's error shape.
 | Route | Body | Answer |
 |---|---|---|
 | `GET /health` | | `connected` (boolean), `reason` (string or null): whether the owner's account is connected, and why not |
-| `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null) | `outcome`: `fetched` with `name`, `mime`, `bytes`; `unavailable` with `reason`; `no-reader` with `reason` |
+| `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null) | `outcome`: `fetched` with `id`, `name`, `mime`, `bytes`, a message file under the owner's account's id; `unavailable` with `reason`; `no-reader` with `reason` |
 | `POST /reader/file` | `chatId`, `messageId`, `sentAt` | the same outcomes |
 | `POST /owner/say` | `chatId`, `text`, `reply` (`messageId`, `sentAt`, `text`, or null) | `messageId`; or `refused` (`unavailable` or `unreachable`) with `error` |
 | `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption`, `reply` | `ids`, the message numbers in the order the files went; or `refused` with `error` |
@@ -154,7 +156,7 @@ This provider's own:
 | `BMO_TELEGRAM_RECEIVER_URL` | service | the receiver's base address; required |
 | `BMO_TELEGRAM_RECEIVER_TOKEN` | service | the token the receiver's routes take; required |
 | `BMO_TELEGRAM_READER_PORT` | both | the loopback port the reader listens on; 3221 where unset |
-| `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen, and the lock that keeps the owner's session to one process |
+| `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen, the id each picture and file the bot account handed over crossed with, and the lock that keeps the owner's session to one process |
 | `BMO_TELEGRAM_PICTURE_ROOT` | service | the folder a picture or an album item named by a file path may be read from; where unset, only a web address or an inline file is sent |
 | `BMO_TELEGRAM_STICKER_SET` | service | the Telegram sticker set a `sticker` send picks from by its emoji; where unset, a sticker send is refused saying no set is configured |
 

@@ -53,7 +53,7 @@ describe("videos", () => {
 
     expect(fetched.outcome).toBe("fetched");
     expect(fetched.outcome === "fetched" ? Buffer.from(fetched.bytes, "base64").toString() : null).toBe("video bytes");
-    expect(fetched.outcome === "fetched" ? [fetched.name, fetched.mime] : null).toEqual(["video.mp4", "video/mp4"]);
+    expect(fetched.outcome === "fetched" ? [fetched.id, fetched.name, fetched.mime] : null).toEqual(["document-760", "video.mp4", "video/mp4"]);
     expect(reader.asked).toEqual([60]);
     expect(await fetchFile(null, peers, { chatId: -10, messageId: 61, sentAt: 1_788_487_000 })).toEqual({
       outcome: "no-reader",

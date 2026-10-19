@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use bmo_chat::{
-  ChatGathered, ChatHandover, ChatMessage, ChatReceiver, FileItem, GatheredOutcome, InboundChatContext,
+  ChatGathered, ChatHandover, ChatMessage, ChatReceiver, GatheredOutcome, InboundChatContext, MessageFile,
   RoomFacts, RoomKind,
 };
 use serde::Deserialize;
@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 
 use crate::albums::AlbumNames;
 use crate::bot_api::BotApi;
+use crate::file_ids::FileIds;
 use crate::gather::Gatherer;
 use crate::kinds::Message;
 use crate::policy::POLICY;
@@ -31,6 +32,7 @@ pub struct Telegram {
   albums: Mutex<AlbumNames>,
   gatherer: Arc<Gatherer>,
   seen: Arc<Seen>,
+  file_ids: Arc<FileIds>,
   // Why the bot account is not reading yet, or null once it is.
   standing: Mutex<Option<String>>,
 }
@@ -54,13 +56,21 @@ pub const TOKEN_MISSING: &str = "BMO_BOT_TOKEN not set";
 
 impl Telegram {
   /// The bot account with its token, asking the Bot API at `api`, the owner's number, the reader where one
-  /// stands behind it, and the record of what it has seen.
-  pub fn new(token: &str, api: &str, owner_id: i64, reader: Option<ReaderClient>, seen: Arc<Seen>) -> Self {
+  /// stands behind it, the record of what it has seen and that of the ids its files crossed with.
+  pub fn new(
+    token: &str,
+    api: &str,
+    owner_id: i64,
+    reader: Option<ReaderClient>,
+    seen: Arc<Seen>,
+    file_ids: Arc<FileIds>,
+  ) -> Self {
     let api = BotApi::new(api, token);
     let me = api.token_identity().unwrap_or_default();
 
     Self {
-      gatherer: Arc::new(Gatherer::new(api.clone(), reader)),
+      gatherer: Arc::new(Gatherer::new(api.clone(), reader, file_ids.clone())),
+      file_ids,
       api,
       token_set: !token.trim().is_empty(),
       owner_id,
@@ -133,12 +143,17 @@ impl Telegram {
     &self.api
   }
 
+  /// The id a message's picture or file crossed with, where this account handed one over.
+  pub fn file_id_of(&self, chat_id: i64, message_id: i64) -> Option<String> {
+    self.file_ids.of(chat_id, message_id)
+  }
+
   // The files gathered for a message, handed over as what its promise came to.
   async fn hand_gathered(
     receiver: &dyn ChatReceiver,
     chat_id: i64,
     message_id: i64,
-    gathered: Result<Vec<FileItem>, String>,
+    gathered: Result<Vec<MessageFile>, String>,
   ) {
     let outcome = match gathered {
       Ok(files) if !files.is_empty() => GatheredOutcome::Kept { files },
@@ -189,7 +204,7 @@ impl Telegram {
     &self,
     message: ChatMessage,
     context: InboundChatContext,
-    files: Vec<FileItem>,
+    files: Vec<MessageFile>,
   ) -> ChatHandover {
     self.seen.message(&message);
 

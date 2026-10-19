@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 
 use bmo_chat::{ChatProvider, ChatReceiver, ChatReceiverLink};
 use bmo_telegram::config::Config;
+use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::provider::TelegramProvider;
 use bmo_telegram::reader::ReaderClient;
 use bmo_telegram::receiver::ReceiverNeeds;
@@ -83,6 +84,7 @@ async fn serve() -> Result<(), String> {
     config.owner_id,
     Some(reader.clone()),
     seen.clone(),
+    Arc::new(FileIds::kept_in(config.data.join("file-ids.jsonl"))),
   ));
   let link = ChatReceiverLink::new(config.receiver_url.as_str(), config.receiver_token.as_str());
   let receiver: Arc<dyn ChatReceiver> = Arc::new(link);
