@@ -15,7 +15,7 @@ async-trait = "0.1.92"
 avif-parse = "2.1.0"
 clap = { version = "4.5.40", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 axum = { version = "0.8.4", default-features = false, features = ["http1", "json", "tokio"] }
-bmo-chat = { path = "../chat/provider" }
+bmo-chat = { path = "../../base/chat/provider" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp", "tiff", "avif"] }
 mime_guess = "2.0.5"
 rand = "0.9.2"
