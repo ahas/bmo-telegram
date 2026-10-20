@@ -1,0 +1,23 @@
+[
+  {
+    "id": "provider/declaration",
+    "title": "Provider declaration",
+    "what": "The Telegram provider as bmo-chat's contract states one: its read modes, capabilities, dialect, numbering and speakers, and where the bot and reader parts stand.",
+    "files": [
+      "src/provider.rs",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "TelegramProvider",
+      "NO_READER"
+    ],
+    "aliases": [],
+    "needs": [
+      "dialect/declaration",
+      "policy/settings",
+      "reader/process"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437201
+  }
+]

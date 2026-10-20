@@ -1,0 +1,19 @@
+[
+  {
+    "id": "repository/checks",
+    "title": "Repository checks",
+    "what": "The checks that read the tree: dependencies, manifests, layout, version, the testbed declaration, Hangul, home paths and private addresses, and the names list held outside the checkout.",
+    "files": [
+      "docs/checks.md",
+      "tests/repository.rs",
+      "testbed.toml",
+      "VERSION",
+      "README.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437422
+  }
+]

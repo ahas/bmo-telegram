@@ -1,0 +1,50 @@
+[
+  {
+    "id": "seam/reader-client",
+    "title": "Reader client",
+    "what": "The service's client for the reader over the loopback: whether the owner's account is connected, a picture or file fetched past the Bot API's ceiling, and a send in the owner's voice.",
+    "files": [
+      "src/reader.rs",
+      "src/wire.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "ReaderClient",
+      "ReaderHealth",
+      "ReaderFetch",
+      "AsOwner",
+      "NotCarried",
+      "Wire"
+    ],
+    "aliases": [],
+    "needs": [
+      "service/configuration"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437311
+  },
+  {
+    "id": "seam/service-routes",
+    "title": "Seam service routes",
+    "what": "The service's routes the reader calls over the loopback: a message or gathered patch handed on to the receiver, a room question, the seen record and word of changed pictures.",
+    "files": [
+      "src/seam.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "Seam",
+      "seam_router",
+      "Inbound",
+      "Standing"
+    ],
+    "aliases": [],
+    "needs": [
+      "reading/bot-account",
+      "store/seen",
+      "calls/receiver",
+      "reader/avatars"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437317
+  }
+]

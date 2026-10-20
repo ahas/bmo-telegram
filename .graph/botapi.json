@@ -1,0 +1,24 @@
+[
+  {
+    "id": "botapi/connection",
+    "title": "Bot API connection",
+    "what": "The bot account's calls to Telegram's Bot API: a method with JSON parameters and a file's bytes by its file id, against Telegram's address or a stand-in.",
+    "files": [
+      "src/bot_api.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "BotApi",
+      "Answered",
+      "Parameters",
+      "Unanswered",
+      "TELEGRAM"
+    ],
+    "aliases": [],
+    "needs": [
+      "service/configuration"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437207
+  }
+]

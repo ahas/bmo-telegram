@@ -1,0 +1,85 @@
+[
+  {
+    "id": "api/command",
+    "title": "Unit command",
+    "what": "The bmo-telegram binary's words: serve answers the provider's routes and reads the bot account's rooms until the unit stops it, and health ends 0 only where the served service is ready.",
+    "files": [
+      "src/bin/bmo-telegram.rs",
+      "deploy/bmo-telegram.service",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "service/binary"
+    ],
+    "base": "d30fffd40c61f8a3994192f143fbb89d93639885",
+    "changed": 1792500487090,
+    "boundary": {
+      "side": "exposes"
+    }
+  },
+  {
+    "id": "api/provider",
+    "title": "Provider API",
+    "what": "Every route this provider serves another unit: the chat protocol's provider routes for declaration, health, sends, rooms, owner, message files, dialect and avatars, and the status route.",
+    "files": [
+      "src/routes.rs",
+      "src/provider.rs",
+      "docs/api.md",
+      "docs/openapi.json",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "service",
+      "TelegramProvider"
+    ],
+    "aliases": [],
+    "needs": [
+      "provider/declaration",
+      "sends/bot-account",
+      "sends/pictures",
+      "sends/owner-voice",
+      "reading/bot-account",
+      "reading/gathering",
+      "seam/reader-client",
+      "policy/settings",
+      "dialect/declaration"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437428,
+    "boundary": {
+      "side": "exposes"
+    }
+  },
+  {
+    "id": "api/seam",
+    "title": "Seam API",
+    "what": "The loopback seam between the service and the reader in both directions: the reader's routes for health, pictures, files and owner sends, and the service's routes for messages, rooms and pictures.",
+    "files": [
+      "src/seam.rs",
+      "src/reader.rs",
+      "reader/src/routes.ts",
+      "reader/src/service.ts",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "seam_router",
+      "Seam",
+      "readerHandler",
+      "serviceAt"
+    ],
+    "aliases": [],
+    "needs": [
+      "seam/service-routes",
+      "seam/reader-client",
+      "reader/routes",
+      "reader/service-client"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437434,
+    "boundary": {
+      "side": "exposes"
+    }
+  }
+]

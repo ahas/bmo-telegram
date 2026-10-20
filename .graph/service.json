@@ -1,0 +1,62 @@
+[
+  {
+    "id": "service/binary",
+    "title": "Service binary",
+    "what": "The bmo-telegram binary: it reads the configuration, builds the provider, mounts the routes and serves them, with the repository's two units and testbed declaration beside it.",
+    "files": [
+      "src/bin/bmo-telegram.rs",
+      "deploy/bmo-telegram.service",
+      "deploy/bmo-telegram-reader.service",
+      "testbed.toml",
+      "README.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "service/routes",
+      "service/configuration",
+      "seam/reader-client",
+      "provider/declaration"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437415
+  },
+  {
+    "id": "service/configuration",
+    "title": "Service configuration",
+    "what": "The service's configuration read from the environment: the loopback ports, the Bot API address, the receiver and reader addresses and tokens, the data folder, picture root and sticker set.",
+    "files": [
+      "src/config.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "Config"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437230
+  },
+  {
+    "id": "service/routes",
+    "title": "Service router",
+    "what": "The service as one router: bmo-chat's provider routes, the seam's routes the reader calls and the repository's own status, all under the one token, with the reader's health kept current.",
+    "files": [
+      "src/routes.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "service",
+      "Served",
+      "keep_reader_current"
+    ],
+    "aliases": [],
+    "needs": [
+      "api/provider",
+      "seam/service-routes",
+      "provider/declaration"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437410
+  }
+]

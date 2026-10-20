@@ -1,0 +1,35 @@
+[
+  {
+    "id": "store/file-ids",
+    "title": "Message file ids",
+    "what": "The id each picture and file the bot account handed over crossed with, kept by its message in the provider's data folder so a fetch through the reader crosses under the same id.",
+    "files": [
+      "src/file_ids.rs",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "FileIds"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437219
+  },
+  {
+    "id": "store/seen",
+    "title": "Seen rooms and senders",
+    "what": "The rooms and senders the provider has handed a message of or sent into, kept in the provider's data folder, naming whose pictures the reader keeps and which rooms are its own.",
+    "files": [
+      "src/seen.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "Seen",
+      "Sighted"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437225
+  }
+]

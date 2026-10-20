@@ -1,0 +1,60 @@
+[
+  {
+    "id": "picture/avif",
+    "title": "AVIF decoding",
+    "what": "An AVIF picture decoded into pixels: its container parsed, its colour and alpha items decoded as AV1 frames, and the YUV frame turned into RGB at the depth the header names.",
+    "files": [
+      "picture/src/avif.rs"
+    ],
+    "symbols": [
+      "decode"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437257
+  },
+  {
+    "id": "picture/redrawing",
+    "title": "Picture reading and redrawing",
+    "what": "A picture read and redrawn for Telegram: its type, whether any pixel is transparent, laid on white as JPEG for upload, and brought inside the keeping size.",
+    "files": [
+      "picture/src/lib.rs",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "for_upload",
+      "kept",
+      "is_transparent",
+      "raster_type",
+      "is_jpeg",
+      "jpeg_on_white",
+      "Keeping",
+      "inside",
+      "NotAPicture"
+    ],
+    "aliases": [],
+    "needs": [
+      "picture/avif",
+      "picture/svg"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437268
+  },
+  {
+    "id": "picture/svg",
+    "title": "SVG drawing",
+    "what": "An SVG picture drawn into pixels at its own size, with the machine's fonts for its text, as a default-density draw.",
+    "files": [
+      "picture/src/svg.rs"
+    ],
+    "symbols": [
+      "is_svg",
+      "decode"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437262
+  }
+]

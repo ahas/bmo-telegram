@@ -1,0 +1,48 @@
+[
+  {
+    "id": "calls/chat",
+    "title": "bmo-chat provider library",
+    "what": "The provider library bmo-chat publishes, which this service stands on: the provider contract, the receiver link, the dialect trait and the wire types every hand-over is built from.",
+    "files": [
+      "src/provider.rs",
+      "src/send.rs",
+      "src/telegram.rs",
+      "src/gather.rs",
+      "src/reading.rs",
+      "src/seam.rs",
+      "src/owner.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437440,
+    "boundary": {
+      "side": "calls",
+      "repository": "bmo-chat",
+      "api": "api/provider"
+    }
+  },
+  {
+    "id": "calls/receiver",
+    "title": "Receiver hand-over",
+    "what": "Every call this repository makes on the receiver: a message, edit or history handed on, a gathered patch, a room's listened state and its rooms, and word of changed profile pictures.",
+    "files": [
+      "src/telegram.rs",
+      "src/provider.rs",
+      "src/seam.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437447,
+    "boundary": {
+      "side": "calls",
+      "repository": "bmo-receiver",
+      "api": "api/http"
+    }
+  }
+]

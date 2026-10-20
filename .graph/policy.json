@@ -1,0 +1,28 @@
+[
+  {
+    "id": "policy/settings",
+    "title": "Provider policy",
+    "what": "The provider's fixed numbers and English words read from policy/telegram.toml on both sides of the seam: its refusals, picture handling, file names and message placeholders.",
+    "files": [
+      "policy/telegram.toml",
+      "src/policy.rs",
+      "reader/src/policy.ts",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "POLICY",
+      "Policy",
+      "Refusals",
+      "Pictures",
+      "Owner",
+      "Gathering",
+      "Kinds",
+      "fill",
+      "ReaderPolicy"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437213
+  }
+]

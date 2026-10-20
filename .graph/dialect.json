@@ -1,0 +1,134 @@
+[
+  {
+    "id": "dialect/declaration",
+    "title": "telegram-html dialect declaration",
+    "what": "The dialect as the receiver reads it: its limits, writing instruction, markdown conversion, parts, fault, fold and visible text, carried by the TelegramHtml type.",
+    "files": [
+      "dialect/src/lib.rs",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "TelegramHtml",
+      "ALBUM_LIMIT",
+      "FILE_LIMIT",
+      "WRITING"
+    ],
+    "aliases": [],
+    "needs": [
+      "dialect/markdown",
+      "dialect/format",
+      "dialect/limits"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437253
+  },
+  {
+    "id": "dialect/format",
+    "title": "Telegram HTML check",
+    "what": "Telegram's HTML parse mode as the dialect writes it: the escapes, the expandable quote a fold uses, and the structure check every markup passes before it is sent.",
+    "files": [
+      "dialect/src/format.rs",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "markup_fault",
+      "MarkupFault",
+      "fault_reason",
+      "escape_html",
+      "escape_attribute",
+      "is_linkable",
+      "visible_text",
+      "expandable_markup",
+      "expandable",
+      "LONG_TEXT_LENGTH"
+    ],
+    "aliases": [],
+    "needs": [
+      "dialect/limits"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437239
+  },
+  {
+    "id": "dialect/limits",
+    "title": "Message length counting",
+    "what": "A text counted and cut the way Telegram counts it, in UTF-16 units and JavaScript's character classes, with one message's ceiling and a long text divided as a client divides a paste.",
+    "files": [
+      "dialect/src/telegram.rs",
+      "dialect/src/js.rs",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "TEXT_LIMIT",
+      "CAPTION_LIMIT",
+      "plain_parts",
+      "transcript_parts",
+      "units",
+      "chars",
+      "trim",
+      "trim_end",
+      "within",
+      "SPACE"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437234
+  },
+  {
+    "id": "dialect/markdown",
+    "title": "Markdown reading",
+    "what": "The agent's markdown read line for line into Telegram's HTML and plain text, with the blocks a fold and a division work on and the fold itself.",
+    "files": [
+      "dialect/src/markdown.rs",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "convert_markdown",
+      "parse_markdown",
+      "Converted",
+      "Document",
+      "markdown_parts",
+      "telegram_parts",
+      "folded_markup",
+      "fold_blocks",
+      "code_markup",
+      "sent_length",
+      "render_inline",
+      "plain_inline"
+    ],
+    "aliases": [],
+    "needs": [
+      "dialect/format",
+      "dialect/limits",
+      "dialect/web-addresses"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437248
+  },
+  {
+    "id": "dialect/web-addresses",
+    "title": "Web address finding",
+    "what": "The web addresses a text names, found as a chat app finds them: markdown links, bare http and https addresses, brackets inside a wiki name, and what the sentence put after it.",
+    "files": [
+      "dialect/src/web_address.rs",
+      "docs/telegram.md"
+    ],
+    "symbols": [
+      "web_addresses",
+      "web_addresses_in",
+      "is_web_address",
+      "markdown_link_at",
+      "bare_address_at",
+      "FoundAddress",
+      "MarkdownLink",
+      "glued_after_address"
+    ],
+    "aliases": [],
+    "needs": [
+      "dialect/limits"
+    ],
+    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
+    "changed": 1792500437244
+  }
+]
