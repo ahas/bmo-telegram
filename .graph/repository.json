@@ -13,8 +13,8 @@
     "symbols": [],
     "aliases": [],
     "needs": [],
-    "base": "770aef8a8398a57a233eca5dc376ed4eef574164",
-    "changed": 1792533522179
+    "base": "a5a7f012bc1f54edb149c280d9231fb0ee87b596",
+    "changed": 1792533831581
   },
   {
     "id": "repository/personal-data",
@@ -25,11 +25,9 @@
       "tests/personal_data.rs"
     ],
     "symbols": [],
-    "aliases": [
-      "개인정보"
-    ],
+    "aliases": [],
     "needs": [],
     "base": "770aef8a8398a57a233eca5dc376ed4eef574164",
-    "changed": 1792533520594
+    "changed": 1792533768639
   }
 ]

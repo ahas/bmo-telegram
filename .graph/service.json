@@ -18,8 +18,8 @@
       "seam/reader-client",
       "provider/declaration"
     ],
-    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
-    "changed": 1792519858914
+    "base": "a5a7f012bc1f54edb149c280d9231fb0ee87b596",
+    "changed": 1792533831570
   },
   {
     "id": "service/configuration",
