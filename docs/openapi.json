@@ -2179,7 +2179,7 @@
   "x-harness": {
     "entry": "A harness building or testing a chat provider reads its declaration with chat_declaration, sends through it with chat_send and checks its dialect with chat_dialect_check, with no receiving side running.",
     "mcp": "bmo-chat mcp --provider <url>",
-    "plugin": "ahas-chat"
+    "plugin": "bmo-chat"
   },
   "x-layer": "upstream",
   "x-stage": 1,
