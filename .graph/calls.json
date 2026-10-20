@@ -16,12 +16,13 @@
     "symbols": [],
     "aliases": [],
     "needs": [],
-    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
-    "changed": 1792519858580,
+    "base": "d27fe9692c561ce14e70fa954dd2125b2c567e03",
+    "changed": 1792533953880,
     "boundary": {
       "side": "calls",
       "repository": "bmo-chat",
-      "api": "api/provider"
+      "api": "api/provider",
+      "build": true
     }
   },
   {
