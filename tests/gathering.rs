@@ -93,6 +93,7 @@ async fn reader_handing(bytes: &'static [u8]) -> ReaderClient {
       name: name.to_owned(),
       mime: "application/octet-stream".to_owned(),
       bytes: bytes.to_vec(),
+      kind: None,
     })
     .unwrap();
 
@@ -122,7 +123,7 @@ async fn expressions_are_handed_over_as_telegram_wrote_them_with_their_assets_an
   let (route, handed) = next(&mut account.heard).await;
 
   assert_eq!(route, "message");
-  assert_eq!(handed["context"]["gathering"], true);
+  assert_eq!(handed["gathering"], true);
   assert_eq!(handed["context"]["metadata"]["text"], "well done 🎉");
   assert_eq!(handed["context"]["metadata"]["sticker"]["file_id"], "sticker-file");
   assert_eq!(handed["context"]["metadata"]["attachment"], Value::Null);
@@ -150,7 +151,8 @@ async fn expressions_are_handed_over_as_telegram_wrote_them_with_their_assets_an
 
   let (route, edited) = next(&mut account.heard).await;
 
-  assert_eq!((route.as_str(), edited.get("files")), ("edited", None));
+  assert_eq!((route.as_str(), &edited["files"]), ("message", &json!([])));
+  assert_eq!(edited["origin"], "edit");
   assert_eq!(account.api.methods(), ["getCustomEmojiStickers"]);
 }
 
@@ -166,15 +168,15 @@ async fn a_document_is_fetched_through_the_bot_api_and_handed_over_under_its_own
 
   let (route, attachment) = next(&mut account.heard).await;
 
-  assert_eq!(route, "attachment");
-  assert_eq!(attachment["message"]["senderName"], "Test Er");
-  assert_eq!(attachment["context"]["gathering"], true);
+  assert_eq!(route, "message");
+  assert_eq!(attachment["senderName"], "Test Er");
+  assert_eq!(attachment["gathering"], true);
 
   let (_, gathered) = next(&mut account.heard).await;
   let file = file_of(&gathered["files"][0]);
 
   assert_eq!(account.api.methods(), ["getFile"]);
-  assert_eq!(gathered["outcome"], "kept");
+  assert!(gathered.get("gatherFailure").is_none_or(Value::is_null));
   assert_eq!((file.name.as_str(), file.mime.as_str()), ("report v1.pdf", "application/pdf"));
   assert_eq!(file.id, "doc-unique");
   assert_eq!(account.telegram.file_id_of(ROOM, 40).as_deref(), Some("doc-unique"));
@@ -243,8 +245,8 @@ async fn a_file_past_the_bot_api_s_ceiling_is_asked_of_the_reader_and_with_none_
   let (_, gathered) = next(&mut alone.heard).await;
 
   assert_eq!(alone.api.methods(), Vec::<String>::new());
-  assert_eq!(gathered["outcome"], "not-kept");
-  assert_eq!(gathered["reason"], POLICY.gathering.file_not_kept.as_str());
+  assert_eq!(gathered["files"], json!([]));
+  assert_eq!(gathered["gatherFailure"], POLICY.gathering.file_not_kept.as_str());
 
   let mut read = account(Some(reader_handing(b"read by the owner's account").await)).await;
 
@@ -277,7 +279,7 @@ async fn a_file_gathered_already_is_left_as_it_stands_and_one_changed_under_its_
 
   account.api.forget();
   account.telegram.edited(account.receiver(), edit("doc-unique")).await.unwrap();
-  assert_eq!(next(&mut account.heard).await.1.get("files"), None);
+  assert_eq!(next(&mut account.heard).await.1["files"], json!([]));
   assert_eq!(account.api.methods(), Vec::<String>::new());
 
   account.telegram.edited(account.receiver(), edit("newer-unique")).await.unwrap();
@@ -302,6 +304,7 @@ async fn a_picture_is_fetched_through_the_bot_api_and_handed_over_with_its_messa
   assert_eq!(account.api.methods(), ["getFile"]);
   assert_eq!(route, "message");
   assert_eq!(handed["context"]["carriesFile"], true);
+  assert_eq!(picture.kind, Some(bmo_chat::ChatFileKind::Photo));
   assert_eq!((picture.name.as_str(), picture.mime.as_str()), ("40.jpg", "image/jpeg"));
   assert_eq!(picture.id, "photo-unique");
   assert_eq!(account.telegram.file_id_of(ROOM, 40).as_deref(), Some("photo-unique"));
@@ -361,7 +364,7 @@ async fn a_picture_past_the_bot_api_s_ceiling_is_asked_of_the_reader_and_with_no
   let (route, handed) = next(&mut account.heard).await;
 
   assert_eq!(account.api.methods(), Vec::<String>::new());
-  assert_eq!((route.as_str(), handed.get("files")), ("message", None));
+  assert_eq!((route.as_str(), &handed["files"]), ("message", &json!([])));
   assert_eq!(handed["context"].get("carriesFile"), None);
 }
 
@@ -385,11 +388,8 @@ async fn the_long_poll_reads_an_update_and_hands_its_words_and_its_picture_to_th
 
   reading.abort();
 
-  assert_eq!(
-    (words["message"]["messageId"].clone(), words["message"]["via"].clone()),
-    (json!(3), json!("telegram"))
-  );
-  assert_eq!(picture["message"]["messageId"], 4);
+  assert_eq!((words["messageId"].clone(), words["via"].clone()), (json!(3), json!("telegram")));
+  assert_eq!(picture["messageId"], 4);
   assert_eq!(file_of(&picture["files"][0]).name, "4.jpg");
   assert!(account.api.methods().contains(&"getFile".to_owned()));
   assert_eq!(telegram.me(), 7_000_000_001);
@@ -424,13 +424,7 @@ async fn a_group_the_bot_leaves_or_that_moves_hands_over_the_leaving_and_reads_o
 
   reading.abort();
 
-  assert_eq!(
-    (left["message"]["chatId"].clone(), left["message"]["text"].clone()),
-    (json!(room), json!("[Left] Helper"))
-  );
-  assert_eq!(
-    (word["message"]["chatId"].clone(), word["message"]["text"].clone()),
-    (json!(after), json!("are you there"))
-  );
+  assert_eq!((left["roomId"].clone(), left["text"].clone()), (json!(room), json!("[Left] Helper")));
+  assert_eq!((word["roomId"].clone(), word["text"].clone()), (json!(after), json!("are you there")));
   assert_eq!(account.receiver.handed.lock().unwrap().len(), 2);
 }

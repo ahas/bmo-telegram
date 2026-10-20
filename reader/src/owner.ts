@@ -3,7 +3,7 @@
 // one. The service divides a send into the pieces and albums Telegram takes before it asks; this is what
 // the account is told for each.
 
-import { historyMessageId, isHistoryAligned, resolveEntity } from "./history";
+import { accountMessageId, resolveEntity } from "./history";
 import { peerOf } from "./media";
 import { mtproto, mtprotoUploads } from "./mtproto";
 
@@ -107,76 +107,6 @@ export function albumSendOptions(kinds: readonly AttachmentKind[]): AttachmentSe
   };
 }
 
-// The message a reply answers, as the receiver holds it: its number, when it was said and what it says.
-export interface ReplyTarget {
-  messageId: number;
-  sentAt: number;
-  text: string;
-}
-
-// What of the account's history a reply needs: messages by number, or the newest ones before an instant.
-export interface HistoryReader {
-  byIds: (ids: number[]) => Promise<HistoryLine[]>;
-  before: (date: number, limit: number) => Promise<HistoryLine[]>;
-}
-
-export interface HistoryLine {
-  id: number;
-  date: number;
-  message: string;
-}
-
-// How far apart the two clocks may be and still name one message. Both are Telegram's own, so the slack is
-// only for a second's rounding.
-const DATE_SLACK_SECONDS = 2;
-
-// How many lines around the instant are read looking for it. Messages said in the same few seconds are few;
-// a room that says more than this in two seconds is one where the words decide.
-const AROUND_LIMIT = 30;
-
-// Where the offset of the account's numbering starts, as the history walk hands it over.
-const FOREIGN_FLOOR = historyMessageId(-1, 0);
-
-function near(left: number, right: number): boolean {
-  return Math.abs(left - right) <= DATE_SLACK_SECONDS;
-}
-
-// The owner's account names a message by its own number, and in most rooms that is not the number the
-// receiver holds it under. A supergroup numbers its messages once for everyone, so there the two agree. A
-// basic group and a private chat number them per account: a line out of the account's own history is held
-// under that number with an offset, and a line the bot received carries the bot's number, which the account
-// has never seen. So a reply is named here by the account's number, found by the one thing both sides
-// share: when the message was said, and what it says.
-export async function accountReplyId(chatId: number, target: ReplyTarget, history: HistoryReader): Promise<number | null> {
-  if (isHistoryAligned(chatId)) {
-    return target.messageId > 0 ? target.messageId : null;
-  }
-
-  if (target.messageId < 0) {
-    const own = target.messageId - FOREIGN_FLOOR;
-
-    if (own <= 0) {
-      return null;
-    }
-
-    const [line] = await history.byIds([own]);
-
-    return line !== undefined && near(line.date, target.sentAt) ? own : null;
-  }
-
-  const around = (await history.before(target.sentAt + DATE_SLACK_SECONDS + 1, AROUND_LIMIT)).filter((line) => near(line.date, target.sentAt));
-
-  if (around.length === 1) {
-    return around[0]!.id;
-  }
-
-  // The receiver may hold a mark in front of the words — a photo's, a forward's — so the account's words are
-  // looked for at the end of what the receiver holds.
-  const said = around.filter((line) => line.message !== "" && target.text.endsWith(line.message));
-
-  return said.length === 1 ? said[0]!.id : null;
-}
-
 // One file sent in the owner's voice.
 export interface OwnerFile {
   name: string;
@@ -189,7 +119,7 @@ export interface OwnerAlbum {
   chatId: number;
   files: OwnerFile[];
   caption: string;
-  reply: ReplyTarget | null;
+  replyToMessageId: number | null;
 }
 
 export class ReaderUnavailable extends Error {
@@ -206,45 +136,51 @@ export class ReplyUnreachable extends Error {
 
 /** What is sent in the owner's voice: one piece of words, and one album of files. */
 export interface OwnerAccount {
-  say(chatId: number, text: string, reply: ReplyTarget | null): Promise<number>;
+  say(chatId: number, text: string, replyToMessageId: number | null): Promise<number>;
   album(album: OwnerAlbum): Promise<(number | null)[]>;
 }
 
-function historyLines(found: ({ id: number; date: number; message?: string } | undefined)[]): HistoryLine[] {
-  return found.flatMap((line) => (line === undefined ? [] : [{ id: line.id, date: line.date, message: line.message ?? "" }]));
-}
-
-// Where the account sends into a room: the account, the peer and the number of the message it answers.
-// A reply that cannot be named to Telegram is refused rather than sent as an ordinary message: the owner
-// asked for the reference, and a message without it would read as something else.
-async function readerTarget(client: TelegramClient | null, peers: Peers, chatId: number, reply: ReplyTarget | null) {
+// Where the account sends into a room: the account, the peer and the number of the message it answers. The
+// number the provider holds is turned into the account's own number where the room numbers messages per
+// account, and the line is read back from the account to make sure it is there. A reply that cannot be named
+// to Telegram is refused rather than sent as an ordinary message: the owner asked for the reference, and a
+// message without it would read as something else.
+async function readerTarget(
+  client: TelegramClient | null,
+  peers: Peers,
+  chatId: number,
+  replyToMessageId: number | null,
+) {
   if (client === null) {
     throw new ReaderUnavailable();
   }
 
   const entity = await resolveEntity(client, peerOf(chatId, peers));
 
-  if (reply === null) {
+  if (replyToMessageId === null) {
     return { client, entity, replyTo: undefined };
   }
 
-  const replyTo = await accountReplyId(chatId, reply, {
-    byIds: async (ids) => historyLines(await client.getMessages(entity, { ids })),
-    before: async (date, limit) => historyLines(await client.getMessages(entity, { offsetDate: date, limit })),
-  });
+  const own = accountMessageId(chatId, replyToMessageId);
 
-  if (replyTo === null) {
+  if (own <= 0) {
     throw new ReplyUnreachable();
   }
 
-  return { client, entity, replyTo };
+  const [line] = await client.getMessages(entity, { ids: [own] });
+
+  if (line === undefined || line.id !== own) {
+    throw new ReplyUnreachable();
+  }
+
+  return { client, entity, replyTo: own };
 }
 
 /** The owner's account as this process's own connection to it, asked for at each send. */
 export function heldOwnerAccount(client: () => TelegramClient | null, peers: Peers): OwnerAccount {
   return {
-    say: async (chatId, text, reply) => {
-      const target = await readerTarget(client(), peers, chatId, reply);
+    say: async (chatId, text, replyToMessageId) => {
+      const target = await readerTarget(client(), peers, chatId, replyToMessageId);
       const sent = await target.client.sendMessage(target.entity, { message: text, replyTo: target.replyTo });
 
       return sent.id;
@@ -252,7 +188,7 @@ export function heldOwnerAccount(client: () => TelegramClient | null, peers: Pee
 
     // An album of one is a file sent alone, which alone may be an animation.
     album: async (album) => {
-      const { client: account, entity, replyTo } = await readerTarget(client(), peers, album.chatId, album.reply);
+      const { client: account, entity, replyTo } = await readerTarget(client(), peers, album.chatId, album.replyToMessageId);
       const kinds = album.files.map((file) => attachmentKind(file.mime, file.name));
       const uploads = album.files.map(
         (file, at) => new (mtprotoUploads().CustomFile)(attachmentName(kinds[at]!, file.name, file.mime), file.bytes.length, "", Buffer.from(file.bytes)),

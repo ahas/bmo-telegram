@@ -22,9 +22,10 @@ fn a_message_telegram_no_longer_has_is_read_as_gone() {
 #[test]
 fn each_verb_reads_as_the_chat_protocol_hands_it_over() {
   let pin: ChatSendRequest =
-    serde_json::from_value(json!({ "verb": "pin", "chatId": 7, "messageId": 9, "on": true })).unwrap();
+    serde_json::from_value(json!({ "roomId": 7, "kind": "pin", "fields": { "messageId": 9, "on": true } }))
+      .unwrap();
 
-  assert_eq!(pin.chat_id, 7);
+  assert_eq!(pin.room_id, 7);
   assert_eq!(
     pin.send,
     ChatSend::Pin {
@@ -33,7 +34,7 @@ fn each_verb_reads_as_the_chat_protocol_hands_it_over() {
       silent: false
     }
   );
-  assert!(serde_json::from_value::<ChatSendRequest>(json!({ "verb": "poll", "chatId": 7 })).is_err());
+  assert!(serde_json::from_value::<ChatSendRequest>(json!({ "roomId": 7, "kind": "poll" })).is_err());
 }
 
 #[test]
@@ -89,4 +90,27 @@ fn only_a_web_address_or_a_file_under_the_picture_root_may_go() {
   assert!(!is_kept(Some(&root.join("sub")), &format!("{}/sub/../picture.png", root.display())));
 
   std::fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symbolic_link_inside_the_picture_root_cannot_reach_a_file_outside_it() {
+  use std::os::unix::fs::symlink;
+
+  let root = std::env::temp_dir().join(format!("telegram-links-{}", std::process::id()));
+  let outside = std::env::temp_dir().join(format!("telegram-outside-{}.png", std::process::id()));
+  let link = root.join("escape.png");
+
+  std::fs::create_dir_all(&root).unwrap();
+  std::fs::write(&outside, b"x").unwrap();
+  symlink(&outside, &link).unwrap();
+
+  assert!(!is_kept(Some(&root), link.to_str().unwrap()));
+  assert_eq!(
+    unsendable(Some(&root), link.to_str().unwrap()),
+    Some(MissedPictureReason::OutsideDataRoot)
+  );
+
+  std::fs::remove_dir_all(root).unwrap();
+  std::fs::remove_file(outside).unwrap();
 }

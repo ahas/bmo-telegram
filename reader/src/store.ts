@@ -7,14 +7,21 @@ import { Database } from "bun:sqlite";
 export type AvatarKind = "room" | "person";
 
 // One subject's profile picture: which picture Telegram is showing for it, where the file is, and
-// when it was taken. A subject Telegram shows no picture for keeps a row all the same, so nothing
-// is asked for twice.
+// when it was taken, in epoch milliseconds. A subject Telegram shows no picture for keeps a row all
+// the same, so nothing is asked for twice.
 export interface AvatarRecord {
   kind: AvatarKind;
   subjectId: number;
   photoId: string | null;
   path: string | null;
   updatedAt: number;
+}
+
+// One kept picture as the service lists it.
+export interface KeptAvatar {
+  kind: AvatarKind;
+  id: number;
+  takenAt: number;
 }
 
 // How far one room's history walk came: the lowest number reached, and when the top was.
@@ -71,6 +78,21 @@ export class ReaderStore {
     return row === null
       ? null
       : { kind: row.kind as AvatarKind, subjectId: row.subject_id, photoId: row.photo_id, path: row.path, updatedAt: row.updated_at };
+  }
+
+  /** Every picture with a file standing behind it, as the service lists them. */
+  keptAvatars(): KeptAvatar[] {
+    const rows = this.db
+      .query("SELECT kind, subject_id, updated_at FROM avatars WHERE photo_id IS NOT NULL AND path IS NOT NULL")
+      .all() as { kind: string; subject_id: number; updated_at: number }[];
+
+    // A record written before times crossed in milliseconds holds seconds; it is read as the millisecond it
+    // names.
+    return rows.map((row) => ({
+      kind: row.kind as AvatarKind,
+      id: row.subject_id,
+      takenAt: row.updated_at < 1_000_000_000_000 ? row.updated_at * 1000 : row.updated_at,
+    }));
   }
 
   saveAvatar(record: AvatarRecord): void {

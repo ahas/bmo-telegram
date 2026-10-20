@@ -15,7 +15,10 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::Request;
 use axum::response::{IntoResponse, Json, Response};
-use bmo_chat::{ChatFailure, ChatGathered, ChatHandover, ChatReceiver, MessageFile};
+use bmo_chat::{
+  AvatarChange, ChatFailure, ChatReceiver, GatheredPatch, HandedMessage, HeldMessage, MessageFile, Page,
+  ReceiverRoom, RoomQuery, RoomsQuery,
+};
 use serde_json::{Value, json};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
@@ -139,9 +142,17 @@ pub async fn bot_api(stand_in: Arc<BotApiStandIn>) -> String {
   format!("http://127.0.0.1:{}", serve(router).await)
 }
 
-/// A receiver that keeps every hand-over by the route it came on, and says when each came.
+/// A receiver that keeps every hand-over by the route it came on, and says when each came. Its rooms and its
+/// refusals are set by the test that needs them.
 pub struct KeptReceiver {
   pub handed: Mutex<Vec<(String, Value)>>,
+  pub held: Mutex<HashMap<(i64, i64), HandedMessage>>,
+  pub rooms: Mutex<Vec<ReceiverRoom>>,
+  pub avatar_changes: Mutex<Vec<AvatarChange>>,
+  pub hand_over_failure: Mutex<Option<String>>,
+  pub room_failure: Mutex<Option<String>>,
+  pub rooms_failure: Mutex<Option<String>>,
+  pub avatars_failure: Mutex<Option<String>>,
   came: UnboundedSender<(String, Value)>,
 }
 
@@ -152,6 +163,13 @@ impl KeptReceiver {
     (
       Arc::new(Self {
         handed: Mutex::default(),
+        held: Mutex::default(),
+        rooms: Mutex::default(),
+        avatar_changes: Mutex::default(),
+        hand_over_failure: Mutex::default(),
+        room_failure: Mutex::default(),
+        rooms_failure: Mutex::default(),
+        avatars_failure: Mutex::default(),
         came,
       }),
       heard,
@@ -170,20 +188,67 @@ impl KeptReceiver {
 
 #[async_trait]
 impl ChatReceiver for KeptReceiver {
-  async fn message(&self, handover: ChatHandover) -> Result<(), ChatFailure> {
-    self.keep("message", &handover)
+  async fn hand_over(
+    &self,
+    room_id: i64,
+    message_id: i64,
+    message: HandedMessage,
+  ) -> Result<HeldMessage, ChatFailure> {
+    if let Some(why) = self.hand_over_failure.lock().unwrap().clone() {
+      return Err(why.into());
+    }
+
+    let mut kept = serde_json::to_value(&message)?;
+    kept["roomId"] = json!(room_id);
+    kept["messageId"] = json!(message_id);
+
+    self.keep("message", &kept)?;
+    let created = self.held.lock().unwrap().insert((room_id, message_id), message.clone()).is_none();
+
+    Ok(HeldMessage { created, message })
   }
 
-  async fn attachment(&self, handover: ChatHandover) -> Result<(), ChatFailure> {
-    self.keep("attachment", &handover)
+  async fn gathered(
+    &self,
+    room_id: i64,
+    message_id: i64,
+    patch: GatheredPatch,
+  ) -> Result<HandedMessage, ChatFailure> {
+    self.keep("gathered", &patch)?;
+    let mut held = self.held.lock().unwrap();
+    let message = held.get_mut(&(room_id, message_id)).ok_or("the receiver holds no such message")?;
+
+    message.files = patch.files;
+    message.gather_failure = patch.gather_failure;
+    message.gathering = false;
+
+    Ok(message.clone())
   }
 
-  async fn edited(&self, handover: ChatHandover) -> Result<(), ChatFailure> {
-    self.keep("edited", &handover)
+  async fn avatars_changed(&self, change: AvatarChange) -> Result<(), ChatFailure> {
+    if let Some(why) = self.avatars_failure.lock().unwrap().clone() {
+      return Err(why.into());
+    }
+
+    self.avatar_changes.lock().unwrap().push(change);
+
+    Ok(())
   }
 
-  async fn gathered(&self, gathered: ChatGathered) -> Result<(), ChatFailure> {
-    self.keep("gathered", &gathered)
+  async fn room(&self, room_id: i64, _query: RoomQuery) -> Result<Option<ReceiverRoom>, ChatFailure> {
+    if let Some(why) = self.room_failure.lock().unwrap().clone() {
+      return Err(why.into());
+    }
+
+    Ok(self.rooms.lock().unwrap().iter().find(|room| room.id == room_id).copied())
+  }
+
+  async fn rooms(&self, _query: RoomsQuery) -> Result<Page<ReceiverRoom>, ChatFailure> {
+    if let Some(why) = self.rooms_failure.lock().unwrap().clone() {
+      return Err(why.into());
+    }
+
+    Ok(Page::whole(self.rooms.lock().unwrap().clone()))
   }
 }
 

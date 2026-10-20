@@ -1,12 +1,11 @@
-// The service as the reader reaches it over the seam (docs/boundary-api.md, 「The seam between the
-// service and the reader」): what the owner's account read handed on to the receiver, and what the
-// receiver says of its rooms, asked through the service, which is the only process that talks to
-// another unit.
+// The service as the reader reaches it over the seam (docs/boundary-api.md, 「The seam between the service
+// and the reader」): what the owner's account read handed on to the receiver, and what the receiver says of
+// its rooms, asked through the service, which is the only process that talks to another unit.
 
-// A message as it crosses the chat protocol (bmo-chat's `docs/contract.md`, 「Messages」).
+// A message as it crosses the chat protocol (bmo-chat's `docs/contract.md`, 「Messages」). Its time is an
+// integer of epoch milliseconds.
 export interface HandedMessage {
-  chatId: number;
-  messageId: number;
+  origin: "live" | "edit" | "history";
   senderId: number | null;
   senderName: string;
   sentAt: number;
@@ -15,14 +14,21 @@ export interface HandedMessage {
   via: string;
   album: number | null;
   mode: "human-reader";
+  context: HandedContext;
+  room: RoomFacts;
+  files: MessageFile[];
+  gathering: boolean;
+  gatherFailure?: string | null;
 }
 
 export interface HandedContext {
   roomTitle?: string;
+  senderUsername?: string;
+  replyToSenderId?: number;
   spokenText?: string;
   metadata?: unknown;
   carriesFile?: boolean;
-  gathering?: boolean;
+  tag?: string;
 }
 
 export interface RoomFacts {
@@ -41,22 +47,18 @@ export interface FileItem {
 // A file a message carried, as it crosses: a file item and the id the same file crosses under each time.
 export interface MessageFile extends FileItem {
   id: string;
+  kind?: "photo" | "video" | "round-video" | "animation" | "audio" | "voice-note" | "sticker" | "document";
 }
 
-export interface Handover {
-  message: HandedMessage;
-  context?: HandedContext;
-  room?: RoomFacts;
-  files?: MessageFile[];
+// The files a message's gathering promised, or why they could not be kept.
+export interface GatheredPatch {
+  files: MessageFile[];
+  gatherFailure?: string;
 }
-
-export type Gathered =
-  | { chatId: number; messageId: number; via: string; outcome: "kept"; files: MessageFile[] }
-  | { chatId: number; messageId: number; via: string; outcome: "not-kept"; reason: string };
 
 export type Inbound =
-  | ({ kind: "message" | "attachment" | "edited" | "history" } & Handover)
-  | ({ kind: "gathered" } & Gathered);
+  | { kind: "message"; roomId: number; messageId: number; message: HandedMessage }
+  | { kind: "gathered"; roomId: number; messageId: number; patch: GatheredPatch };
 
 // A room whose history the reader may walk, with the oldest message the receiver holds of it.
 export interface HistoryRoom {
@@ -92,7 +94,7 @@ export function serviceAt(port: number, token: string): Service {
   const call = async (method: "GET" | "POST", path: string, body?: unknown, notReadyAnswers = false): Promise<Response> => {
     const response = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
 
-    if (!response.ok && !(notReadyAnswers && response.status === 409)) {
+    if (!response.ok && !(notReadyAnswers && response.status === 503)) {
       throw new Error(`the service answered ${path} with ${response.status}: ${await response.text()}`);
     }
 
@@ -117,7 +119,7 @@ export function serviceAt(port: number, token: string): Service {
       const response = await call("GET", "/reader/rooms", undefined, true);
       const answer = await response.json() as { rooms?: HistoryRoom[]; error?: string };
 
-      return response.status === 409 || answer.rooms === undefined
+      return response.status === 503 || answer.rooms === undefined
         ? { unanswered: answer.error ?? "the service did not say which rooms" }
         : { rooms: answer.rooms };
     },
@@ -140,4 +142,37 @@ export function roomFacts(chatId: number, ownerId: number, botId: number | null)
 /** Bytes as they cross the wire. */
 export function base64Of(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
+}
+
+/** The message a hand-over carries, with what the reader knows of it. `sentAt` is Telegram's own second; the
+ * message crosses in epoch milliseconds. */
+export function handedMessage(input: {
+  chatId: number;
+  messageId: number;
+  origin: "live" | "edit" | "history";
+  senderId: number | null;
+  senderName: string;
+  sentAt: number;
+  text: string;
+  replyToMessageId: number | null;
+  context?: HandedContext;
+  room: RoomFacts;
+  files?: MessageFile[];
+  gathering?: boolean;
+}): HandedMessage {
+  return {
+    origin: input.origin,
+    senderId: input.senderId,
+    senderName: input.senderName,
+    sentAt: input.sentAt * 1000,
+    text: input.text,
+    replyToMessageId: input.replyToMessageId,
+    via,
+    album: null,
+    mode: "human-reader",
+    context: input.context ?? {},
+    room: input.room,
+    files: input.files ?? [],
+    gathering: input.gathering ?? false,
+  };
 }

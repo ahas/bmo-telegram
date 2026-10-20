@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::path::PathBuf;
 
-use bmo_chat::{AlbumItem, ChatRefusal, ChatSend, ChatSendResult, MissedPicture, MissedPictureReason};
+use bmo_chat::{
+  AlbumItem, ChatRefusal, ChatSend, ChatSendResult, ChatSent, MissedPicture, MissedPictureReason,
+};
 use bmo_telegram::policy::POLICY;
 use bmo_telegram::send::Sending;
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage, Rgba, RgbaImage};
@@ -105,7 +107,6 @@ fn photo(address: &str, caption: Option<&str>) -> ChatSend {
   ChatSend::Photo {
     image_url: address.to_owned(),
     caption: caption.map(str::to_owned),
-    reply_to: None,
   }
 }
 
@@ -118,18 +119,14 @@ fn album(addresses: &[String], caption: Option<&str>) -> ChatSend {
       })
       .collect(),
     caption: caption.map(str::to_owned),
-    reply_to: None,
   }
 }
 
 fn none_went(missed: Vec<MissedPicture>) -> ChatSendResult {
-  ChatSendResult::Refused {
-    refusal: ChatRefusal::NoPictureSent {
-      label: "Telegram".to_owned(),
-      missed,
-    },
-    gone: false,
-  }
+  ChatSendResult::Refused(ChatRefusal::NoPictureSent {
+    label: "Telegram".to_owned(),
+    missed,
+  })
 }
 
 fn missed(address: &str, reason: MissedPictureReason) -> MissedPicture {
@@ -147,11 +144,11 @@ async fn a_picture_goes_by_its_address_with_its_caption_as_html() {
   let red = web.at("/pics/red.jpg");
 
   assert_eq!(
-    send(&speaker, photo(&red, Some("**red** photo"))).await,
-    Ok(ChatSendResult::Sent {
+    send(&speaker, None, photo(&red, Some("**red** photo"))).await,
+    Ok(ChatSendResult::Sent(ChatSent {
       message_id: Some(500),
       missed: Vec::new()
-    })
+    }))
   );
   assert_eq!(
     bot.bodies(),
@@ -180,7 +177,7 @@ async fn one_telegram_cannot_fetch_goes_up_redrawn_on_white_and_a_file_under_the
   .await;
 
   bot.answering(hidden);
-  send(&speaker, photo(&web.at("/hidden/clear.png"), None)).await.unwrap();
+  send(&speaker, None, photo(&web.at("/hidden/clear.png"), None)).await.unwrap();
   assert_eq!(bot.methods(), ["sendPhoto", "sendPhoto"]);
 
   let upload = bot.bodies()[1]["photo"].clone();
@@ -188,7 +185,7 @@ async fn one_telegram_cannot_fetch_goes_up_redrawn_on_white_and_a_file_under_the
   assert_eq!(upload["type"], "image/jpeg");
 
   bot.answering(hidden);
-  send(&speaker, photo(kept.to_str().unwrap(), Some("drawing"))).await.unwrap();
+  send(&speaker, None, photo(kept.to_str().unwrap(), Some("drawing"))).await.unwrap();
   assert_eq!(
     bot.bodies(),
     [json!({ "chat_id": ROOM.to_string(), "caption": "drawing", "photo": upload })]
@@ -205,7 +202,7 @@ async fn every_kind_of_picture_a_page_serves_goes_up_a_png_with_no_transparency_
 
   for name in kinds().keys() {
     bot.answering(hidden);
-    send(&speaker, photo(&web.at(&format!("/hidden/{name}")), None)).await.unwrap();
+    send(&speaker, None, photo(&web.at(&format!("/hidden/{name}")), None)).await.unwrap();
     assert_eq!(bot.methods(), ["sendPhoto", "sendPhoto"], "{name}");
 
     let up = bot.asked()[1].files["photo"].clone();
@@ -238,7 +235,10 @@ async fn a_name_no_room_can_be_sent_is_refused_before_anything_goes_and_one_refu
     ("picture.png", MissedPictureReason::NotAnAddress),
     ("/nowhere/picture.png", MissedPictureReason::MissingFile),
   ] {
-    assert_eq!(send(&speaker, photo(address, None)).await, Ok(none_went(vec![missed(address, reason)])));
+    assert_eq!(
+      send(&speaker, None, photo(address, None)).await,
+      Ok(none_went(vec![missed(address, reason)]))
+    );
   }
 
   assert!(bot.methods().is_empty());
@@ -249,7 +249,7 @@ async fn a_name_no_room_can_be_sent_is_refused_before_anything_goes_and_one_refu
     (asked.method != "sendMessage").then(|| refusal(400, "Bad Request: PHOTO_INVALID_DIMENSIONS"))
   });
 
-  let refused = send(&speaker, photo(&red, Some("photo"))).await;
+  let refused = send(&speaker, None, photo(&red, Some("photo"))).await;
 
   assert_eq!(bot.methods(), ["sendPhoto", "sendPhoto", "sendMessage"]);
   assert_eq!(bot.bodies()[2]["text"], format!("photo\n{red}"));
@@ -270,11 +270,11 @@ async fn an_album_goes_by_address_as_one_album_its_caption_on_its_first_picture(
   let addresses = [web.at("/pics/red.jpg"), web.at("/pics/clear.png"), web.at("/pics/red.jpg?2")];
 
   assert_eq!(
-    send(&speaker, album(&addresses, Some("three"))).await,
-    Ok(ChatSendResult::Sent {
+    send(&speaker, None, album(&addresses, Some("three"))).await,
+    Ok(ChatSendResult::Sent(ChatSent {
       message_id: Some(500),
       missed: Vec::new()
-    })
+    }))
   );
   assert_eq!(bot.methods(), ["sendMediaGroup"]);
   assert_eq!(
@@ -299,28 +299,28 @@ async fn an_album_goes_up_where_telegram_cannot_fetch_it_leaving_out_what_is_no_
   bot.answering(hidden);
 
   assert_eq!(
-    send(&speaker, album(&addresses, Some("**upload**"))).await,
-    Ok(ChatSendResult::Sent {
+    send(&speaker, None, album(&addresses, Some("**upload**"))).await,
+    Ok(ChatSendResult::Sent(ChatSent {
       message_id: Some(500),
       missed: addresses[2..]
         .iter()
         .map(|address| missed(address, POLICY.picture_left_out()))
         .collect()
-    })
+    }))
   );
   assert_eq!(bot.methods(), ["sendMediaGroup", "sendMediaGroup"]);
   assert_eq!(bot.bodies()[1]["media"][0]["caption"], "<b>upload</b>");
 
   bot.answering(hidden);
 
-  let alone = send(&speaker, album(&["picture.png".to_owned(), web.at("/pics/red.jpg")], None)).await;
+  let alone = send(&speaker, None, album(&["picture.png".to_owned(), web.at("/pics/red.jpg")], None)).await;
 
   assert_eq!(bot.methods(), ["sendPhoto"]);
   assert_eq!(
     alone,
-    Ok(ChatSendResult::Sent {
+    Ok(ChatSendResult::Sent(ChatSent {
       message_id: Some(500),
       missed: vec![missed("picture.png", MissedPictureReason::NotAnAddress)]
-    })
+    }))
   );
 }

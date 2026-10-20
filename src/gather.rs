@@ -7,7 +7,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use bmo_chat::MessageFile;
+use bmo_chat::{ChatFileKind, MessageFile};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use telegram_dialect::FILE_LIMIT;
@@ -29,7 +29,7 @@ pub struct BotFile {
   pub file_size: Option<i64>,
   pub mime_type: Option<String>,
   pub voice: bool,
-  pub kind: &'static str,
+  pub kind: ChatFileKind,
 }
 
 // The custom emoji Telegram is asked for at once.
@@ -108,12 +108,18 @@ pub fn bot_file(message: &Value) -> Option<BotFile> {
     file_name: text(file, "file_name")
       .or_else(|| video.map(|_| video_file_name(mime_type.as_deref(), what))),
     file_size: file.get("file_size").and_then(Value::as_i64),
-    kind: if video.is_some() || mime_type.as_deref().is_some_and(|mime| mime.starts_with("video/")) {
-      "video"
+    kind: if present("animation").is_some() {
+      ChatFileKind::Animation
+    } else if present("video_note").is_some() {
+      ChatFileKind::RoundVideo
+    } else if video.is_some() || mime_type.as_deref().is_some_and(|mime| mime.starts_with("video/")) {
+      ChatFileKind::Video
+    } else if present("voice").is_some() {
+      ChatFileKind::VoiceNote
     } else if present("document").is_some() && !audio {
-      "document"
+      ChatFileKind::Document
     } else {
-      "audio"
+      ChatFileKind::Audio
     },
     voice: present("voice").is_some(),
     mime_type,
@@ -240,6 +246,7 @@ impl Gatherer {
       name,
       mime,
       bytes,
+      kind: Some(file.kind),
     }))
   }
 
@@ -287,6 +294,7 @@ impl Gatherer {
       name: format!("{message_id}.{}", picture_extension(&mime)),
       mime,
       bytes: kept,
+      kind: Some(ChatFileKind::Photo),
     })
   }
 
@@ -335,6 +343,7 @@ impl Gatherer {
       name,
       mime: mime.to_owned(),
       bytes,
+      kind: Some(ChatFileKind::Sticker),
     })
   }
 

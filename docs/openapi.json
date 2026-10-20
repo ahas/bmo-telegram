@@ -1,0 +1,2374 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`bad-request`: the body is not JSON, or the body or the query is not the shape the route takes; the sentence names what is wrong."
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`conflict`: the member's state does not allow the change, or the key is taken."
+      },
+      "Failed": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`failed`: the service failed while answering; the sentence is the failure."
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`forbidden`: the token is right, but the caller may not do this."
+      },
+      "Gone": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`gone`: the member stood once and never will again; as a refusal, the message is one the platform no longer has, or will never let change again, so the caller lets go of it instead of asking again."
+      },
+      "NoPictureSent": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`no-picture-sent`: refused: none of the pictures of the send went; the sentence names each with why."
+      },
+      "NoRoute": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`no-route`: no route answers this method and path, a path key that is not a number among them."
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`not-found`: the route is right, but nothing stands at the key the path names."
+      },
+      "NotReady": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`not-ready`: the service is up but cannot answer yet, such as a provider whose platform connection is not open yet; `Retry-After` says when to ask again.",
+        "headers": {
+          "Retry-After": {
+            "description": "When to ask again, in seconds.",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "Platform": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`platform`: refused by the platform; the sentence is the provider's own English reason."
+      },
+      "SpeakerNotAllowed": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`speaker-not-allowed`: refused: the provider speaks as the room's own account alone, so it takes no other speaker."
+      },
+      "SpeakerUnnumbered": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`speaker-unnumbered`: refused: the provider has no number in the room for the speaker the send names."
+      },
+      "TooLarge": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`too-large`: the body or a file is over the route's ceiling."
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`unauthorized`: the bearer token is missing or wrong."
+      },
+      "Unavailable": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`unavailable`: the platform would not give the files asked for; the sentence says why."
+      },
+      "UnsupportedCapability": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`unsupported-capability`: refused: the provider does not declare the capability the call needs."
+      },
+      "UpstreamFailed": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/WireError"
+            }
+          }
+        },
+        "description": "`upstream-failed`: a service this one called failed; the sentence names it."
+      }
+    },
+    "schemas": {
+      "AlbumItem": {
+        "anyOf": [
+          {
+            "description": "A web address or a file path the provider can read.",
+            "properties": {
+              "address": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "address"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/FileItem"
+          }
+        ],
+        "description": "One picture of an album: an address the provider can read, or the file itself."
+      },
+      "ChatAvatar": {
+        "description": "One picture a provider keeps: its subject, and when the picture kept now was taken.",
+        "properties": {
+          "id": {
+            "description": "The room's or the person's number.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ChatAvatarKind"
+          },
+          "takenAt": {
+            "description": "When the picture was taken, in epoch milliseconds.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "takenAt"
+        ],
+        "type": "object"
+      },
+      "ChatAvatarKind": {
+        "description": "Whose picture one is: a room's or a person's.",
+        "enum": [
+          "room",
+          "person"
+        ],
+        "type": "string"
+      },
+      "ChatAvatarPage": {
+        "description": "One page of a list: its items, and whether anything stands past the last of them.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatAvatar"
+            },
+            "type": "array"
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "type": "object"
+      },
+      "ChatCapability": {
+        "description": "What a provider can do: the twelve verbs, and four answers that are not verbs.",
+        "oneOf": [
+          {
+            "enum": [
+              "text",
+              "photo",
+              "album",
+              "document",
+              "audio",
+              "voice",
+              "sticker",
+              "reaction",
+              "pin",
+              "typing",
+              "edit",
+              "delete"
+            ],
+            "type": "string"
+          },
+          {
+            "const": "replyTo",
+            "description": "An answer can be aimed at a particular message.",
+            "type": "string"
+          },
+          {
+            "const": "fetchMedia",
+            "description": "A picture or a file can still be fetched after its message arrived.",
+            "type": "string"
+          },
+          {
+            "const": "avatars",
+            "description": "The provider supplies profile pictures.",
+            "type": "string"
+          },
+          {
+            "const": "history",
+            "description": "The provider can read a room's past messages back.",
+            "type": "string"
+          }
+        ]
+      },
+      "ChatDeclaration": {
+        "description": "What a provider declares of itself. The base holds no record of a provider anywhere else.",
+        "properties": {
+          "can": {
+            "description": "Its capabilities.",
+            "items": {
+              "$ref": "#/components/schemas/ChatCapability"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "configured": {
+            "description": "Null when the provider can run, else the reason it cannot.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dialect": {
+            "$ref": "#/components/schemas/ChatDialectDeclaration"
+          },
+          "key": {
+            "description": "Short, ASCII and stable; written onto every message the provider hands over.",
+            "type": "string"
+          },
+          "label": {
+            "description": "What the platform is called where a person reads it.",
+            "type": "string"
+          },
+          "modes": {
+            "description": "Every mode it supports, each with its standing.",
+            "items": {
+              "$ref": "#/components/schemas/ChatReadMode"
+            },
+            "type": "array"
+          },
+          "numbering": {
+            "$ref": "#/components/schemas/ChatNumbering"
+          },
+          "shows": {
+            "description": "What a person reading this provider's rooms sees beyond what the provider sends; null where it shows\nonly what it carries.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "speakers": {
+            "description": "Whether a send may name a speaker other than the one the room is answered by.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "configured",
+          "modes",
+          "can",
+          "dialect",
+          "shows",
+          "numbering",
+          "speakers"
+        ],
+        "type": "object"
+      },
+      "ChatDialectDeclaration": {
+        "description": "A dialect as a provider's declaration states it. Its readings are asked of the provider over the\ndialect routes.",
+        "properties": {
+          "foldable": {
+            "description": "Whether this dialect can fold a long answer.",
+            "type": "boolean"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ChatDialectLimits"
+          },
+          "name": {
+            "type": "string"
+          },
+          "writing": {
+            "description": "The sentence telling a writer in such a room what its marks become.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "limits",
+          "writing",
+          "foldable"
+        ],
+        "type": "object"
+      },
+      "ChatDialectLimits": {
+        "description": "What one message of a dialect holds. Null where the platform sets no limit of that kind.",
+        "properties": {
+          "albumPhotos": {
+            "description": "The most pictures one album carries.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "caption": {
+            "description": "The longest caption under a picture or a file.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "fileBytes": {
+            "description": "The largest file, in bytes.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "text": {
+            "description": "The longest message, in the units the platform counts by.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "caption",
+          "albumPhotos",
+          "fileBytes"
+        ],
+        "type": "object"
+      },
+      "ChatFileKind": {
+        "description": "What a file a message carried is, as the platform showed it.",
+        "oneOf": [
+          {
+            "enum": [
+              "photo",
+              "video",
+              "sticker"
+            ],
+            "type": "string"
+          },
+          {
+            "const": "round-video",
+            "description": "A short video the platform shows in a circle.",
+            "type": "string"
+          },
+          {
+            "const": "animation",
+            "description": "A short looping video without sound, or an animated image.",
+            "type": "string"
+          },
+          {
+            "const": "audio",
+            "description": "A sound file.",
+            "type": "string"
+          },
+          {
+            "const": "voice-note",
+            "description": "A recording made in the room to be heard as speech.",
+            "type": "string"
+          },
+          {
+            "const": "document",
+            "description": "Any other file.",
+            "type": "string"
+          }
+        ]
+      },
+      "ChatHealth": {
+        "description": "Whether a provider is ready, where it is not, why, and the provider service's own version.",
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ready",
+          "reason",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ChatModeStanding": {
+        "description": "Where a mode stands.",
+        "oneOf": [
+          {
+            "const": "active",
+            "description": "Running.",
+            "type": "string"
+          },
+          {
+            "const": "inactive",
+            "description": "Supported, waiting on something it is missing.",
+            "type": "string"
+          },
+          {
+            "const": "unsupported",
+            "description": "Refused by the platform's own terms; no configuration makes it active.",
+            "type": "string"
+          }
+        ]
+      },
+      "ChatNumberRange": {
+        "description": "The numbers a provider assigns in one space: from `first` to `last`, both included.",
+        "properties": {
+          "first": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "first",
+          "last"
+        ],
+        "type": "object"
+      },
+      "ChatNumberRanges": {
+        "description": "The range of each space a provider assigns numbers in; null for a space it does not assign. Messages carry\nnone, since a message is numbered within its room.",
+        "properties": {
+          "people": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatNumberRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rooms": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatNumberRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "rooms",
+          "people"
+        ],
+        "type": "object"
+      },
+      "ChatNumberSpace": {
+        "description": "Whose numbers one kind of thing carries on a provider.",
+        "oneOf": [
+          {
+            "const": "native",
+            "description": "The platform's own numbers, used as they are.",
+            "type": "string"
+          },
+          {
+            "const": "assigned",
+            "description": "Numbers the provider gave out because the platform's cannot be used.",
+            "type": "string"
+          },
+          {
+            "const": "none",
+            "description": "None of its own: the provider speaks into rooms and people another provider numbers.",
+            "type": "string"
+          }
+        ]
+      },
+      "ChatNumbering": {
+        "description": "One number space for each of rooms, people and messages, and the ranges of the spaces assigned.",
+        "properties": {
+          "messages": {
+            "$ref": "#/components/schemas/ChatNumberSpace"
+          },
+          "people": {
+            "$ref": "#/components/schemas/ChatNumberSpace"
+          },
+          "ranges": {
+            "$ref": "#/components/schemas/ChatNumberRanges"
+          },
+          "rooms": {
+            "$ref": "#/components/schemas/ChatNumberSpace"
+          }
+        },
+        "required": [
+          "rooms",
+          "people",
+          "messages",
+          "ranges"
+        ],
+        "type": "object"
+      },
+      "ChatReach": {
+        "description": "What a mode's account receives. A property of the mode on that platform, not of the platform.",
+        "enum": [
+          "all-messages",
+          "mentions-only"
+        ],
+        "type": "string"
+      },
+      "ChatReadMode": {
+        "description": "One way a provider's rooms are read.",
+        "properties": {
+          "canReplyTo": {
+            "description": "Whether an answer can be pinned to a message this mode delivered.",
+            "type": "boolean"
+          },
+          "reach": {
+            "$ref": "#/components/schemas/ChatReach"
+          },
+          "reason": {
+            "description": "What is missing for an inactive mode, or the platform's own words for an unsupported one; null for\nan active one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "standing": {
+            "$ref": "#/components/schemas/ChatModeStanding"
+          },
+          "voice": {
+            "$ref": "#/components/schemas/ChatVoice"
+          }
+        },
+        "required": [
+          "voice",
+          "reach",
+          "standing",
+          "reason",
+          "canReplyTo"
+        ],
+        "type": "object"
+      },
+      "ChatSendRequest": {
+        "description": "A send into one room.",
+        "oneOf": [
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "fold": {
+                    "description": "Fold where the dialect can; whether to fold is the sender's decision.",
+                    "type": "boolean"
+                  },
+                  "silent": {
+                    "description": "A notice that must not buzz a phone.",
+                    "type": "boolean"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "caption": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "imageUrl": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "imageUrl"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "photo",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "caption": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "items": {
+                    "items": {
+                      "$ref": "#/components/schemas/AlbumItem"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "items"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "album",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "bytes": {
+                    "contentEncoding": "base64",
+                    "type": "string"
+                  },
+                  "fileName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "bytes",
+                  "fileName"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "document",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "audio": {
+                    "contentEncoding": "base64",
+                    "type": "string"
+                  },
+                  "fileName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "audio",
+                  "fileName"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "audio",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "audio": {
+                    "contentEncoding": "base64",
+                    "type": "string"
+                  },
+                  "caption": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "said": {
+                    "description": "What the line said.",
+                    "type": "string"
+                  },
+                  "transcript": {
+                    "description": "What was actually read out.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "audio",
+                  "said"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "voice",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "emoji": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "emoji"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "sticker",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "An empty emoji takes the account's own reaction off.",
+            "properties": {
+              "fields": {
+                "properties": {
+                  "emoji": {
+                    "type": "string"
+                  },
+                  "messageId": {
+                    "format": "int64",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "messageId",
+                  "emoji"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "reaction",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "messageId": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "on": {
+                    "type": "boolean"
+                  },
+                  "silent": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "messageId",
+                  "on"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "on": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "on"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "typing",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "messageId": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "messageId",
+                  "text"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "edit",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fields": {
+                "properties": {
+                  "messageId": {
+                    "format": "int64",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "messageId"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "delete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "type": "object"
+          }
+        ],
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatVoice"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The voice to speak with; unnamed, the provider speaks with the voice it answers the room by."
+          },
+          "prefix": {
+            "description": "The words the answers carry before them in the `human-avatar` voice; ignored in any other voice.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replyToMessageId": {
+            "description": "The message the send answers. Ignored by a provider that does not declare `replyTo`, and by every kind\nthat answers no message.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "roomId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "speaker": {
+            "description": "Who speaks, where it is not the one the room is answered by, as the caller's opaque string. Taken only\nby a provider that declares `speakers`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag": {
+            "description": "Returned on the inbound message that is the platform's echo of this send.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "roomId"
+        ],
+        "type": "object"
+      },
+      "ChatSent": {
+        "description": "A send the provider performed: the answer of `POST /sends`.",
+        "properties": {
+          "messageId": {
+            "description": "Null where the platform hands none back.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "missed": {
+            "default": [],
+            "description": "The pictures of an album that did not go; empty where everything went.",
+            "items": {
+              "$ref": "#/components/schemas/MissedPicture"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "messageId",
+          "missed"
+        ],
+        "type": "object"
+      },
+      "ChatVoice": {
+        "description": "Whose account speaks on a provider. One axis of a read mode; `ChatReach` is the other.",
+        "oneOf": [
+          {
+            "const": "bot-account",
+            "description": "The platform's official bot interface.",
+            "type": "string"
+          },
+          {
+            "const": "human-reader",
+            "description": "A person's account, read only; a send in the owner's own words goes out in it.",
+            "type": "string"
+          },
+          {
+            "const": "human-avatar",
+            "description": "A person's account, answered in behind a prefix the caller supplies.",
+            "type": "string"
+          },
+          {
+            "const": "own-account",
+            "description": "An ordinary account of the provider's own, held by no person.",
+            "type": "string"
+          },
+          {
+            "const": "direct",
+            "description": "No platform: the owner typing into the machine.",
+            "type": "string"
+          }
+        ]
+      },
+      "DialectCheck": {
+        "description": "The body of `POST /dialect/checks`: markup the dialect built.",
+        "properties": {
+          "markup": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "markup"
+        ],
+        "type": "object"
+      },
+      "DialectChecked": {
+        "description": "The answer of `POST /dialect/checks`.",
+        "properties": {
+          "fault": {
+            "description": "Null when the markup is sound, else the reason.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visible": {
+            "description": "What a reader sees of it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fault",
+          "visible"
+        ],
+        "type": "object"
+      },
+      "DialectRead": {
+        "description": "The body of `POST /dialect/readings`: the markdown to read.",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "DialectReading": {
+        "description": "The answer of `POST /dialect/readings`.",
+        "properties": {
+          "fold": {
+            "description": "The folded markup, or null where the dialect does not fold or there is nothing worth folding.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "formatted": {
+            "description": "Whether the markup says anything the plain text does not.",
+            "type": "boolean"
+          },
+          "markup": {
+            "description": "What goes out.",
+            "type": "string"
+          },
+          "parts": {
+            "description": "The markdown divided into pieces that each fit one message.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "plain": {
+            "description": "The same words with the marks stripped.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "markup",
+          "plain",
+          "formatted",
+          "parts",
+          "fold"
+        ],
+        "type": "object"
+      },
+      "ErrorCode": {
+        "description": "Why a request was not answered with success: it could not be answered at all, or it was refused. Every\ncode of the common wire format is here, beside the protocol's own.",
+        "oneOf": [
+          {
+            "const": "bad-request",
+            "description": "The body or the query is not the shape the route takes.",
+            "type": "string"
+          },
+          {
+            "const": "unauthorized",
+            "description": "The token is missing or wrong.",
+            "type": "string"
+          },
+          {
+            "const": "forbidden",
+            "description": "The token is right but the caller may not do this.",
+            "type": "string"
+          },
+          {
+            "const": "no-route",
+            "description": "No route answers this method and path.",
+            "type": "string"
+          },
+          {
+            "const": "not-found",
+            "description": "The route is right, but nothing stands at the key the path names.",
+            "type": "string"
+          },
+          {
+            "const": "conflict",
+            "description": "The member's state does not allow the change, or the key is taken.",
+            "type": "string"
+          },
+          {
+            "const": "gone",
+            "description": "The member stood once and never will again, so the caller lets go of it. As a refusal: the message is\none the platform no longer has, or will never let change again.",
+            "type": "string"
+          },
+          {
+            "const": "too-large",
+            "description": "The body or a file is over the route's ceiling.",
+            "type": "string"
+          },
+          {
+            "const": "failed",
+            "description": "The service failed while answering.",
+            "type": "string"
+          },
+          {
+            "const": "upstream-failed",
+            "description": "A service this one called failed.",
+            "type": "string"
+          },
+          {
+            "const": "not-ready",
+            "description": "The service is up but cannot answer yet.",
+            "type": "string"
+          },
+          {
+            "const": "unavailable",
+            "description": "The platform would not give the files asked for.",
+            "type": "string"
+          },
+          {
+            "const": "unsupported-capability",
+            "description": "Refused: the provider does not declare the capability the call needs.",
+            "type": "string"
+          },
+          {
+            "const": "no-picture-sent",
+            "description": "Refused: none of the pictures of the send went.",
+            "type": "string"
+          },
+          {
+            "const": "speaker-not-allowed",
+            "description": "Refused: the provider speaks as the room's own account alone, so it takes no other speaker.",
+            "type": "string"
+          },
+          {
+            "const": "speaker-unnumbered",
+            "description": "Refused: the provider has no number in the room for the speaker the send names.",
+            "type": "string"
+          },
+          {
+            "const": "platform",
+            "description": "Refused by the platform, for the provider's own English reason.",
+            "type": "string"
+          }
+        ]
+      },
+      "FileItem": {
+        "description": "A file as it crosses the wire with no identifier of its own, as a send carries it inline.",
+        "properties": {
+          "bytes": {
+            "contentEncoding": "base64",
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "mime",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "MessageFile": {
+        "description": "A file a message carried, as a provider hands it over or fetches it again.",
+        "properties": {
+          "bytes": {
+            "contentEncoding": "base64",
+            "type": "string"
+          },
+          "id": {
+            "description": "The provider's identifier of the file among its message's files: the same each time the same file\ncrosses, and never shared by two files of one message.",
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatFileKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the file is, as far as the platform tells; left out where the provider cannot tell."
+          },
+          "mime": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mime",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "MessageFilePage": {
+        "description": "One page of a list: its items, and whether anything stands past the last of them.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MessageFile"
+            },
+            "type": "array"
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "type": "object"
+      },
+      "MissedPicture": {
+        "description": "A picture a send did not carry, by the address it was given as, with why.",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/MissedPictureReason"
+          }
+        },
+        "required": [
+          "address",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "MissedPictureReason": {
+        "description": "Why one picture did not go.",
+        "oneOf": [
+          {
+            "properties": {
+              "code": {
+                "const": "not-an-address",
+                "type": "string"
+              },
+              "message": {
+                "description": "The English sentence, as the sender rendered it from the code and the fields.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "outside-data-root",
+                "type": "string"
+              },
+              "message": {
+                "description": "The English sentence, as the sender rendered it from the code and the fields.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "missing-file",
+                "type": "string"
+              },
+              "message": {
+                "description": "The English sentence, as the sender rendered it from the code and the fields.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "code": {
+                "const": "unfetched",
+                "type": "string"
+              },
+              "message": {
+                "description": "The English sentence, as the sender rendered it from the code and the fields.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "The provider's own English reason.",
+            "properties": {
+              "code": {
+                "const": "platform",
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "message": {
+                "description": "The English sentence, as the sender rendered it from the code and the fields.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "detail",
+              "message"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ProviderOwner": {
+        "description": "The answer of `GET /owner`.",
+        "properties": {
+          "roomId": {
+            "description": "The room to speak into to reach the owner unprompted, or null.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "roomId"
+        ],
+        "type": "object"
+      },
+      "ProviderRoom": {
+        "description": "What a provider knows of one room.",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "identity": {
+            "description": "The sender number the account's own words carry in the room.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RoomKind",
+            "description": "`owner` when the room is the owner's private chat on this platform, else `group`."
+          },
+          "owns": {
+            "description": "Whether the room is one of this provider's.",
+            "type": "boolean"
+          },
+          "privateTo": {
+            "description": "The sender number of the one person in a one-to-one with the account.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "What the platform calls the room, or null where it cannot or will not say.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "owns",
+          "identity",
+          "kind",
+          "privateTo",
+          "title"
+        ],
+        "type": "object"
+      },
+      "RoomKind": {
+        "description": "Which kind of room one chat is.",
+        "oneOf": [
+          {
+            "const": "owner",
+            "description": "The owner's private chat on this platform.",
+            "type": "string"
+          },
+          {
+            "const": "group",
+            "description": "Any other room.",
+            "type": "string"
+          }
+        ]
+      },
+      "WireError": {
+        "description": "The error shape: a code to match on and an English sentence saying what went wrong.",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "error"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "description": "The token of the service called, from the caller's own configuration.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "The routes a chat provider serves and the receiving side calls, as the chat protocol defines them: the declaration, health, sends, a room, the account owner's room, a message's files fetched again, the dialect's readings and checks, and kept profile pictures. Paths are relative to the base address the caller is configured with, and a service may mount them under a prefix of its own. Bodies are JSON, except a profile picture, which is answered as its own bytes; bytes inside JSON are base64. Times are integers of epoch milliseconds. Every failure, a refusal among them, is answered in the error shape with its status, so a 2xx answer is always the route's success. The sends, a room, the owner and a message's files answer 503 `not-ready` while the provider is not ready. A caller offers a request again only when the connection was refused, so a request that reached a listener is never made twice. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`.",
+    "title": "bmo-chat provider routes",
+    "version": "0.1.0-rev.5"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/avatars": {
+      "get": {
+        "operationId": "listAvatars",
+        "parameters": [
+          {
+            "description": "A time, in epoch milliseconds.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "description": "A time, in epoch milliseconds.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAvatarPage"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          }
+        },
+        "summary": "A page of the profile pictures the provider keeps, oldest taken first and only those taken after `after`, at most `limit` except that a page never ends between two pictures taken at the same moment; empty where the provider does not declare `avatars`.",
+        "tags": [
+          "avatars"
+        ],
+        "x-codes": [
+          "bad-request",
+          "unauthorized",
+          "failed"
+        ]
+      }
+    },
+    "/declaration": {
+      "get": {
+        "operationId": "getDeclaration",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatDeclaration"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "The provider's self-declaration.",
+        "tags": [
+          "declaration"
+        ],
+        "x-codes": [
+          "unauthorized"
+        ]
+      }
+    },
+    "/dialect/checks": {
+      "post": {
+        "operationId": "makeDialectChecks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DialectCheck"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DialectChecked"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "The provider's dialect checking markup it built.",
+        "tags": [
+          "dialect"
+        ],
+        "x-codes": [
+          "bad-request",
+          "unauthorized"
+        ]
+      }
+    },
+    "/dialect/readings": {
+      "post": {
+        "operationId": "makeDialectReadings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DialectRead"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DialectReading"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "The provider's dialect reading markdown: the markup, its plain words, the parts, the fold.",
+        "tags": [
+          "dialect"
+        ],
+        "x-codes": [
+          "bad-request",
+          "unauthorized"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatHealth"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "summary": "Whether the provider is ready, why not where it is not, and the provider service's version.",
+        "tags": [
+          "health"
+        ],
+        "x-codes": [
+          "unauthorized"
+        ]
+      }
+    },
+    "/owner": {
+      "get": {
+        "operationId": "getOwner",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderOwner"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/NotReady"
+          }
+        },
+        "summary": "The room to reach the account's owner in unprompted.",
+        "tags": [
+          "owner"
+        ],
+        "x-codes": [
+          "unauthorized",
+          "not-ready",
+          "failed"
+        ]
+      }
+    },
+    "/people/{personId}/avatar": {
+      "get": {
+        "operationId": "readPeopleAvatar",
+        "parameters": [
+          {
+            "description": "The person's number.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/*": {
+                "schema": {
+                  "description": "The picture's bytes."
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          }
+        },
+        "summary": "A person's kept picture, as its bytes with its type as `Content-Type`; `not-found` where none is kept or the provider does not declare `avatars`.",
+        "tags": [
+          "people"
+        ],
+        "x-codes": [
+          "unauthorized",
+          "not-found",
+          "failed"
+        ]
+      }
+    },
+    "/rooms/{roomId}": {
+      "get": {
+        "operationId": "getRoom",
+        "parameters": [
+          {
+            "description": "The room's number.",
+            "in": "path",
+            "name": "roomId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderRoom"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/NotReady"
+          }
+        },
+        "summary": "What the provider knows of a room: whether it owns it, the account's identity in it, owner or group, the one person of a one-to-one, and its title; `not-found` where it knows nothing of it.",
+        "tags": [
+          "rooms"
+        ],
+        "x-codes": [
+          "unauthorized",
+          "not-found",
+          "not-ready",
+          "failed"
+        ]
+      }
+    },
+    "/rooms/{roomId}/avatar": {
+      "get": {
+        "operationId": "readRoomsAvatar",
+        "parameters": [
+          {
+            "description": "The room's number.",
+            "in": "path",
+            "name": "roomId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/*": {
+                "schema": {
+                  "description": "The picture's bytes."
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          }
+        },
+        "summary": "A room's kept picture, as its bytes with its type as `Content-Type`; `not-found` where none is kept or the provider does not declare `avatars`.",
+        "tags": [
+          "rooms"
+        ],
+        "x-codes": [
+          "unauthorized",
+          "not-found",
+          "failed"
+        ]
+      }
+    },
+    "/rooms/{roomId}/messages/{messageId}/files": {
+      "get": {
+        "operationId": "listRoomsMessagesFiles",
+        "parameters": [
+          {
+            "description": "The room's number.",
+            "in": "path",
+            "name": "roomId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The message's number in its room.",
+            "in": "path",
+            "name": "messageId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sentAt",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageFilePage"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireError"
+                }
+              }
+            },
+            "description": "- `unsupported-capability`: refused: the provider does not declare the capability the call needs.\n- `platform`: refused by the platform; the sentence is the provider's own English reason."
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/NotReady"
+          }
+        },
+        "summary": "The files a message carried, fetched again from the platform, in one page; `unavailable` where the platform would not give them, and refused `unsupported-capability` where the provider does not declare `fetchMedia`.",
+        "tags": [
+          "rooms"
+        ],
+        "x-codes": [
+          "bad-request",
+          "unauthorized",
+          "unavailable",
+          "gone",
+          "unsupported-capability",
+          "platform",
+          "not-ready",
+          "failed"
+        ]
+      }
+    },
+    "/sends": {
+      "post": {
+        "operationId": "createSends",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatSendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSent"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SpeakerNotAllowed"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireError"
+                }
+              }
+            },
+            "description": "- `unsupported-capability`: refused: the provider does not declare the capability the call needs.\n- `no-picture-sent`: refused: none of the pictures of the send went; the sentence names each with why.\n- `speaker-unnumbered`: refused: the provider has no number in the room for the speaker the send names.\n- `platform`: refused by the platform; the sentence is the provider's own English reason."
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/NotReady"
+          }
+        },
+        "summary": "One send into one room, answered with what it came to; the kind, not the path, carries the difference. A send the provider does not perform is answered with its refusal, and one of a kind the provider does not declare is refused `unsupported-capability`.",
+        "tags": [
+          "sends"
+        ],
+        "x-codes": [
+          "bad-request",
+          "unauthorized",
+          "speaker-not-allowed",
+          "gone",
+          "unsupported-capability",
+          "no-picture-sent",
+          "speaker-unnumbered",
+          "platform",
+          "not-ready",
+          "failed"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "a chat provider",
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "declaration"
+    },
+    {
+      "name": "health"
+    },
+    {
+      "name": "sends"
+    },
+    {
+      "name": "rooms"
+    },
+    {
+      "name": "owner"
+    },
+    {
+      "name": "dialect"
+    },
+    {
+      "name": "avatars"
+    },
+    {
+      "name": "people"
+    }
+  ],
+  "x-calls": [],
+  "x-harness": {
+    "entry": "A harness building or testing a chat provider reads its declaration with chat_declaration, sends through it with chat_send and checks its dialect with chat_dialect_check, with no receiving side running.",
+    "mcp": "bmo-chat mcp --provider <url>",
+    "plugin": "ahas-chat"
+  },
+  "x-layer": "upstream",
+  "x-stage": 1,
+  "x-tools": [
+    {
+      "description": "The provider's self-declaration: its key and label, its modes, capabilities, dialect and numbering.",
+      "input": {
+        "additionalProperties": false,
+        "description": "No input.",
+        "type": "object"
+      },
+      "name": "chat_declaration",
+      "output": {
+        "$ref": "#/components/schemas/ChatDeclaration"
+      },
+      "route": "GET /declaration"
+    },
+    {
+      "description": "Whether the provider is ready, why not where it is not, and its version.",
+      "input": {
+        "additionalProperties": false,
+        "description": "No input.",
+        "type": "object"
+      },
+      "name": "chat_health",
+      "output": {
+        "$ref": "#/components/schemas/ChatHealth"
+      },
+      "route": "GET /health"
+    },
+    {
+      "description": "Performs one send on the platform; the kind, not the route, carries the difference. A send the provider does not perform answers with its refusal.",
+      "input": {
+        "description": "A body sent as it is.",
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/ChatSendRequest"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "name": "chat_send",
+      "output": {
+        "$ref": "#/components/schemas/ChatSent"
+      },
+      "route": "POST /sends"
+    },
+    {
+      "description": "What the provider knows of a room: whether it owns it, the account's identity in it, whether it is the owner's private chat, the one person of a one-to-one, and its title.",
+      "input": {
+        "description": "One room, by its number.",
+        "properties": {
+          "roomId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "roomId"
+        ],
+        "type": "object"
+      },
+      "name": "chat_room",
+      "output": {
+        "$ref": "#/components/schemas/ProviderRoom"
+      },
+      "route": "GET /rooms/{roomId}"
+    },
+    {
+      "description": "The room to reach the account's owner in unprompted.",
+      "input": {
+        "additionalProperties": false,
+        "description": "No input.",
+        "type": "object"
+      },
+      "name": "chat_owner",
+      "output": {
+        "$ref": "#/components/schemas/ProviderOwner"
+      },
+      "route": "GET /owner"
+    },
+    {
+      "description": "The files a message carried, fetched again from the platform; refused where the provider does not declare fetchMedia.",
+      "input": {
+        "description": "One message's files: its room, its number and when it was sent.",
+        "properties": {
+          "messageId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "roomId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sentAt": {
+            "default": null,
+            "description": "When the message was sent, in epoch milliseconds.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "roomId",
+          "messageId",
+          "sentAt"
+        ],
+        "type": "object"
+      },
+      "name": "chat_message_files",
+      "output": {
+        "$ref": "#/components/schemas/MessageFilePage"
+      },
+      "route": "GET /rooms/{roomId}/messages/{messageId}/files"
+    },
+    {
+      "description": "The provider's dialect reading markdown: the markup that would go out, its plain words, the parts each fitting one message, and the fold.",
+      "input": {
+        "description": "A body sent as it is.",
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/DialectRead"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "name": "chat_dialect_reading",
+      "output": {
+        "$ref": "#/components/schemas/DialectReading"
+      },
+      "route": "POST /dialect/readings"
+    },
+    {
+      "description": "The provider's dialect checking markup it built: the fault, or none, and what a reader sees of it.",
+      "input": {
+        "description": "A body sent as it is.",
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/DialectCheck"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "name": "chat_dialect_check",
+      "output": {
+        "$ref": "#/components/schemas/DialectChecked"
+      },
+      "route": "POST /dialect/checks"
+    },
+    {
+      "description": "A page of the profile pictures the provider keeps, oldest taken first, only those taken after `after`.",
+      "input": {
+        "description": "The query of `GET /avatars`: only the pictures taken after `after`, and at most `limit` of them.",
+        "properties": {
+          "after": {
+            "description": "A time, in epoch milliseconds.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "limit": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "chat_avatars",
+      "output": {
+        "$ref": "#/components/schemas/ChatAvatarPage"
+      },
+      "route": "GET /avatars"
+    }
+  ]
+}

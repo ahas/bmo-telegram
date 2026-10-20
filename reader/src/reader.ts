@@ -3,16 +3,16 @@
 // room. This reads every new message another bot writes in a room the receiver listens to and hands it to
 // the service, which hands it to the receiver as read in the `human-reader` mode.
 
-import { fileIdOf, messageHasPhoto, pictureOf, readerFileOf, seconds } from "./media";
+import { fileIdOf, messageFileKind, messageHasPhoto, pictureOf, readerFileOf, seconds } from "./media";
 import { mtproto, mtprotoEvents, mtprotoSessions } from "./mtproto";
 import { fill, POLICY } from "./policy";
-import { base64Of, roomFacts, via } from "./service";
+import { base64Of, handedMessage, roomFacts } from "./service";
 
 import type { Api, TelegramClient as Client } from "telegram";
 import type { NewMessageEvent } from "telegram/events";
 import type { AccountConfig } from "./config";
 import type { Peers } from "./media";
-import type { HandedContext, HandedMessage, Handover, Service } from "./service";
+import type { HandedContext, Service } from "./service";
 
 export interface ReaderDeps {
   account: AccountConfig;
@@ -74,7 +74,6 @@ function metadataOf(message: Api.Message, text: string): unknown {
 async function gather(deps: ReaderDeps, client: Client, message: Api.Message, chatId: number): Promise<void> {
   const document = message.document!;
   const file = readerFileOf(document);
-  const base = { chatId, messageId: message.id, via };
 
   try {
     const data = await client.downloadMedia(message);
@@ -85,13 +84,26 @@ async function gather(deps: ReaderDeps, client: Client, message: Api.Message, ch
 
     await deps.service.inbound({
       kind: "gathered",
-      ...base,
-      outcome: "kept",
-      files: [{ id: fileIdOf(message), name: file.name, mime: document.mimeType, bytes: base64Of(data) }],
+      roomId: chatId,
+      messageId: message.id,
+      patch: {
+        files: [{
+          id: fileIdOf(message),
+          name: file.name,
+          mime: document.mimeType,
+          bytes: base64Of(data),
+          kind: messageFileKind(document),
+        }],
+      },
     });
   } catch (error) {
     console.error(`reader keeping ${file.name} from chat ${chatId} failed:`, error);
-    await deps.service.inbound({ kind: "gathered", ...base, outcome: "not-kept", reason: POLICY.gathering.file_not_kept });
+    await deps.service.inbound({
+      kind: "gathered",
+      roomId: chatId,
+      messageId: message.id,
+      patch: { files: [], gatherFailure: POLICY.gathering.file_not_kept },
+    });
   }
 }
 
@@ -136,51 +148,51 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
   }
 
   const replyHeader = message.replyTo;
-  const handed: HandedMessage = {
-    chatId,
-    messageId: message.id,
-    senderId,
-    senderName: sender.firstName ?? sender.username ?? String(senderId),
-    sentAt: message.date,
-    text: text === "" ? readerMark(message, carriesPhoto) : text,
-    replyToMessageId: replyHeader instanceof Api.MessageReplyHeader ? (replyHeader.replyToMsgId ?? null) : null,
-    via,
-    album: null,
-    mode: "human-reader",
-  };
   const context: HandedContext = {
     ...(roomTitle === undefined ? {} : { roomTitle }),
     ...(text === "" ? {} : { spokenText: text }),
     metadata: metadataOf(message, text),
   };
-  const handover: Handover = { message: handed, context, room: roomFacts(chatId, deps.peers.ownerId, deps.peers.botId) };
+  const handed = handedMessage({
+    chatId,
+    messageId: message.id,
+    origin: "live",
+    senderId,
+    senderName: sender.firstName ?? sender.username ?? String(senderId),
+    sentAt: message.date,
+    text: text === "" ? readerMark(message, carriesPhoto) : text,
+    replyToMessageId: replyHeader instanceof Api.MessageReplyHeader ? (replyHeader.replyToMsgId ?? null) : null,
+    context,
+    room: roomFacts(chatId, deps.peers.ownerId, deps.peers.botId),
+  });
 
   // A photo, or an image sent as an uncompressed file: handed over as words are, with its bytes where they
   // could be had.
   if (carriesPhoto) {
     const picture = await pictureOf(client, message);
 
-    if (picture === null) {
-      await deps.service.inbound({ kind: "message", ...handover });
-    } else {
-      await deps.service.inbound({ kind: "message", ...handover, context: { ...context, carriesFile: true }, files: [picture] });
+    if (picture !== null) {
+      handed.context = { ...context, carriesFile: true };
+      handed.files = [picture];
     }
+
+    await deps.service.inbound({ kind: "message", roomId: chatId, messageId: message.id, message: handed });
 
     return;
   }
 
   if (file === null) {
-    await deps.service.inbound({ kind: "message", ...handover });
+    await deps.service.inbound({ kind: "message", roomId: chatId, messageId: message.id, message: handed });
 
     return;
   }
 
-  // A file somebody handed over — a document that is neither a picture nor a sticker — goes as an
-  // attachment, which with no caption wakes nobody but the senders the receiver names; a caption is
-  // words in the room and goes as a message. Either way its bytes follow once they are had.
-  const kind = file.sticker || text !== "" ? "message" : "attachment";
+  // A file somebody handed over whose bytes are still on their way: the message says so and the files follow
+  // once they are had. A caption is words in the room, and the bytes follow all the same.
+  handed.context = { ...context, carriesFile: true };
+  handed.gathering = true;
 
-  await deps.service.inbound({ kind, ...handover, context: { ...context, carriesFile: true, gathering: true } });
+  await deps.service.inbound({ kind: "message", roomId: chatId, messageId: message.id, message: handed });
   await gather(deps, client, message, chatId);
 }
 

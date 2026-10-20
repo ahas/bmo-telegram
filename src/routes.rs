@@ -1,13 +1,12 @@
 //! The service as one router (docs/boundary-api.md, 「Routes served」): bmo-chat's provider routes, the seam's
-//! routes the reader calls, and this repository's own `/status` and `/avatars/…`, all under the service's token.
-//! The binary and the service's tests stand on this one assembly.
+//! routes the reader calls, and this repository's own `/status`, all under the service's token. The binary and
+//! the service's tests stand on this one assembly.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::extract::{Path, Request, State};
-use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
+use axum::extract::{Request, State};
+use axum::http::header::AUTHORIZATION;
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
@@ -21,20 +20,17 @@ use crate::seam::{Seam, seam_router};
 /// Why a route that takes the token was asked without it.
 const WRONG_TOKEN: &str = "the token is missing or wrong";
 
-/// What the service's own routes stand on: the provider, the seam, and the folder the reader keeps the
-/// profile pictures in.
+/// What the service's own routes stand on: the provider and the seam.
 pub struct Served {
   provider: Arc<TelegramProvider>,
   seam: Arc<Seam>,
-  avatars: PathBuf,
 }
 
-/// The service's routes over `provider` and the seam, serving the profile pictures kept in `avatars`.
-pub fn service(provider: Arc<TelegramProvider>, seam: Arc<Seam>, avatars: PathBuf) -> Router {
+/// The service's routes over `provider` and the seam.
+pub fn service(provider: Arc<TelegramProvider>, seam: Arc<Seam>) -> Router {
   let own = Arc::new(Served {
     provider: provider.clone(),
     seam: seam.clone(),
-    avatars,
   });
   let protocol: Arc<dyn ChatProvider> = provider;
 
@@ -47,7 +43,6 @@ pub fn service(provider: Arc<TelegramProvider>, seam: Arc<Seam>, avatars: PathBu
 fn own_routes(served: Arc<Served>) -> Router {
   Router::new()
     .route("/status", get(status))
-    .route("/avatars/{kind}/{id}", get(avatar))
     .layer(from_fn_with_state(served.clone(), authorized))
     .with_state(served)
 }
@@ -90,7 +85,7 @@ fn standing(active: bool, reason: Option<String>) -> Value {
 /// pictures. The reader is asked again before the parts are written down.
 async fn status(State(served): State<Arc<Served>>) -> Response {
   let reader = served.provider.refresh_reader().await;
-  let ChatHealth { ready, reason } = served.provider.health();
+  let ChatHealth { ready, reason, .. } = served.provider.health();
   let history = served.seam.standing.history();
   let avatars = served.seam.standing.avatars();
 
@@ -101,20 +96,4 @@ async fn status(State(served): State<Arc<Served>>) -> Response {
     "avatars": standing(avatars.is_none(), avatars),
   }))
   .into_response()
-}
-
-/// The profile picture the reader keeps for a room or a person, as it stands in the provider's data folder.
-async fn avatar(State(served): State<Arc<Served>>, Path((kind, id)): Path<(String, String)>) -> Response {
-  let numbered = id.parse::<i64>().ok();
-
-  let Some(number) = numbered.filter(|_| matches!(kind.as_str(), "room" | "person")) else {
-    return failure(ErrorCode::NoRoute, format!("no route GET /avatars/{kind}/{id}"));
-  };
-
-  let file = served.avatars.join(&kind).join(format!("{number}.jpg"));
-
-  match std::fs::read(&file) {
-    Ok(bytes) => ([(CONTENT_TYPE, "image/jpeg".to_owned())], bytes).into_response(),
-    Err(_why) => failure(ErrorCode::NothingHeld, format!("no profile picture is kept for {kind} {number}")),
-  }
 }

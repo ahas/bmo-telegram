@@ -9,7 +9,6 @@ use serde_json::{Value, json};
 use crate::bot_api::Answered;
 use crate::policy::POLICY;
 use crate::send::{Sent, Speaker, message_id, refused, sent, turned_down};
-use bmo_chat::ChatSendResult;
 
 /// Whether Telegram's description of a refused act says the message is not there to act on.
 pub fn is_gone(description: &str) -> bool {
@@ -33,10 +32,7 @@ impl Speaker {
     }
 
     if is_gone(description) {
-      return Ok(ChatSendResult::Refused {
-        refusal: POLICY.message_gone(description),
-        gone: true,
-      });
+      return Ok(refused(POLICY.message_gone(description)));
     }
 
     turned_down(method, &answered)

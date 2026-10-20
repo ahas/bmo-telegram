@@ -16,8 +16,7 @@ The provider is two processes of one repository:
 ```mermaid
 flowchart LR
   Rx[the receiver] -->|provider routes| S[service]
-  S -->|message, attachment, edited, gathered| Rx
-  S -->|needed routes| Rx
+  S -->|messages, gathered files, room questions| Rx
   S -->|Bot API| TG[Telegram]
   S -->|seam: health, picture, file, owner sends| R[reader]
   R -->|seam: hand-overs, room questions, seen record| S
@@ -29,22 +28,22 @@ flowchart LR
 ### The chat protocol's provider routes
 
 Every provider route of bmo-chat's `docs/protocol.md`, served by bmo-chat's provider server exactly as the
-protocol and its `openapi.json` state them, under the service's token:
+protocol and its `docs/openapi/provider.json` state them, under the service's token. `docs/api.md` states the
+fixed contract and `docs/openapi.json` carries it.
 
 | Route | What it answers |
 |---|---|
 | `GET /declaration` | the provider's declaration (`docs/telegram.md`, 「The declaration」) |
 | `GET /health` | `ready` once the bot account's connection is open; the reason while it is not |
-| `POST /send` | one send, any of the twelve verbs (`docs/telegram.md`, 「Sends」) |
-| `POST /media` | a picture or a file a message carried, fetched again through the reader under the id it crossed with |
-| `POST /dialect/read` | the `telegram-html` dialect reading markdown |
-| `POST /dialect/check` | the `telegram-html` dialect checking markup it built |
-| `POST /room/owns` | whether the room is one this provider has handed a message from or sent into |
-| `POST /room/identity` | the bot account's number, the same in every room |
-| `POST /room/is-owner` | `owner` for the owner's one-to-one with the bot, `group` otherwise |
-| `POST /room/private-of` | the person of a one-to-one, which on Telegram is numbered by that person |
-| `POST /room/title` | what Telegram calls the room, or null |
-| `GET /owner-room` | the owner's one-to-one, numbered by the owner |
+| `POST /sends` | one send, any of the twelve verbs (`docs/telegram.md`, 「Sends」) |
+| `GET /rooms/{roomId}` | what the provider knows of the room: whose it is, the bot's number, its kind, its person and its title |
+| `GET /owner` | the owner's one-to-one, numbered by the owner |
+| `GET /rooms/{roomId}/messages/{messageId}/files` | the pictures and files a message carried, fetched again through the reader under the ids they crossed with |
+| `POST /dialect/readings` | the `telegram-html` dialect reading markdown |
+| `POST /dialect/checks` | the `telegram-html` dialect checking markup it built |
+| `GET /avatars` | a page of the profile pictures the reader keeps, each with when it was taken |
+| `GET /rooms/{roomId}/avatar` | a room's kept profile picture, as `image/jpeg` bytes |
+| `GET /people/{personId}/avatar` | a person's kept profile picture, as `image/jpeg` bytes |
 
 Wire conventions, auth, the error shape and the retry rule are the protocol's.
 
@@ -54,25 +53,25 @@ Beside the protocol, under the same token and the protocol's conventions and err
 
 | Route | Answer |
 |---|---|
-| `GET /avatars/{kind}/{id}` | the profile picture the reader keeps for a room (`kind` `room`) or a person (`kind` `person`), as `image/jpeg` bytes; 404 `nothing-held` where none is kept, and 404 `no-route` where `kind` is neither or `id` is not a number |
 | `GET /status` | what stands of each part, each a `standing` (`active` or `inactive`) and a `reason` (an English sentence, or null): `bot`, `reader`, `history`, `avatars` |
 
-The protocol declares `avatars` as a capability and carries no route for a profile picture. This route is how
-the picture is read until the protocol carries one (「Contract gaps」).
+The status route is for the provider's own operators; no other unit reads it, and it is not part of the fixed
+API (`docs/api.md`).
 
 ## Calls made on the receiver
 
 ### The chat protocol's receiver routes
 
-Every hand-over goes through bmo-chat's receiver link to the receiver's base address, with the receiver's
-token, as the protocol states it:
+The provider reaches the receiver only through bmo-chat's `ChatReceiverLink`, at the receiver's base address and
+with the receiver's token, as the protocol states it. It holds no client of its own for the receiver.
 
-| Route | What is handed over |
+| Route | What it carries |
 |---|---|
-| `POST /message` | a message a room said, read by the bot account or by the reader |
-| `POST /attachment` | a message carrying a file, with its bytes, or with `gathering` where the bytes follow |
-| `POST /edited` | a message already handed over, said again with different words or another file |
-| `POST /gathered` | the file an attachment promised, or why it was not kept |
+| `GET /rooms?via=telegram` | a page of the rooms whose past the reader may walk back, each with the oldest message the receiver holds and when it was sent |
+| `GET /rooms/{roomId}?via=telegram` | whether the receiver listens to a room, and its oldest message; 404 `not-found` reads as a room it does not listen to |
+| `PUT /rooms/{roomId}/messages/{messageId}` | a message, whatever its origin: `live`, `edit` or `history`, with its files where they are already gathered, or `gathering` where they follow |
+| `PATCH /rooms/{roomId}/messages/{messageId}` | the files a message's gathering promised, or why they were not kept |
+| `POST /avatar-changes` | the rooms and people whose kept profile picture changed |
 
 What the provider hands over:
 
@@ -81,57 +80,52 @@ What the provider hands over:
 - **A file crosses as bytes.** Where it is kept is the receiver's. The provider keeps no copy of a file it
   hands over.
 - **A file a message carried crosses as a message file,** with its id, the same each time the same file
-  crosses, `POST /media` included (`docs/telegram.md`, 「Reading a room」).
-- **The room's title** crosses as the context's `roomTitle`, and the room facts (`kind`, `identity`,
-  `privateTo`) with every hand-over.
+  crosses, a fetch through `GET /rooms/{roomId}/messages/{messageId}/files` included, and with the kind of file
+  it is as far as Telegram says (`docs/telegram.md`, 「Reading a room」).
+- **The room's title** crosses as the context's `roomTitle`, the room facts (`kind`, `identity`, `privateTo`)
+  with every hand-over, and the message's time in epoch milliseconds.
 
-### Needed from the receiver
-
-The receiver's boundary states no route for these yet. Each is what the provider needs, the route it calls for
-it, and what it does while the receiver does not answer that route (404 `no-route`, or no answer):
-
-| Need | Route the provider calls | Body and answer | While unanswered |
-|---|---|---|---|
-| Whether the receiver listens to a room, which the reader asks before it reads another bot's message in. A room nobody listens to has nothing of the reader's handed over | `POST /rooms/listened` | `chatId`, `via`; `listened` (boolean) | the room counts as listened |
-| The rooms whose history the reader may walk back, each with the oldest message the receiver holds of it | `POST /rooms/of` | `via`; `rooms`, each `chatId`, `oldestMessageId` and `oldestSentAt` (each number or null) | the history walk stands down, and `GET /status` says why under `history` |
-| A past message read back from a room's history, archived where the receiver lacks it and waking nobody | `POST /history` | the body of `POST /message`; `kept` (boolean: false where the message was already held) | the history walk stands down, as above |
-| Word that the profile pictures changed, for whatever shows them | `POST /avatars/updated` | `via`, `rooms` and `people`, each a list of numbers | the pictures are still kept current; no word is sent, and `GET /status` says why under `avatars` |
-
-`via` is the provider's key, `telegram`, as every hand-over carries it.
+Where the receiver does not answer, the provider's fallback is the boundary's: a room it says nothing of counts
+as listened, a room it answers 404 for is not listened to, and a `GET /rooms` that fails stands the history walk
+down, which `GET /status` says under `history`. Word of changed pictures that does not go stands that part down
+the same way, while the pictures stay current.
 
 ## The seam between the service and the reader
 
 Both processes listen on the loopback only. Every seam route takes the service's token as its bearer and
-answers 401 without it. Bodies are JSON in camelCase; bytes are base64. A failure is answered with the
-protocol's error shape.
+answers 401 without it. Bodies are JSON in camelCase; times are integers of epoch milliseconds; ids are
+signed 64-bit integers; bytes are base64. A failure is answered with the protocol's error shape.
 
 ### The reader's routes, called by the service
 
 | Route | Body | Answer |
 |---|---|---|
 | `GET /health` | | `connected` (boolean), `reason` (string or null): whether the owner's account is connected, and why not |
+| `GET /reader/avatars` | | `avatars`, each `kind` (`room` or `person`), `id` and `takenAt` (when the kept picture was taken) |
 | `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null) | `outcome`: `fetched` with `id`, `name`, `mime`, `bytes`, a message file under the owner's account's id; `unavailable` with `reason`; `no-reader` with `reason` |
 | `POST /reader/file` | `chatId`, `messageId`, `sentAt` | the same outcomes |
-| `POST /owner/say` | `chatId`, `text`, `reply` (`messageId`, `sentAt`, `text`, or null) | `messageId`; or `refused` (`unavailable` or `unreachable`) with `error` |
-| `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption`, `reply` | `ids`, the message numbers in the order the files went; or `refused` with `error` |
+| `POST /owner/say` | `chatId`, `text`, `replyToMessageId` (number or null) | `messageId`; or `refused` (`unavailable` or `unreachable`) with `error` |
+| `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption`, `replyToMessageId` | `ids`, the message numbers in the order the files went; or `refused` with `error` |
 
 A picture or a file past the Bot API's ceiling for a bot is fetched by `/reader/picture` or `/reader/file`. A
 send in the owner's own voice goes by `/owner/say` and `/owner/album`, divided by the service first into the
-pieces and albums Telegram takes (`docs/telegram.md`, 「The owner's voice」).
+pieces and albums Telegram takes (`docs/telegram.md`, 「The owner's voice」). The reader finds a reply by the
+message's number on the owner's account, and refuses an `unreachable` one where that account has no line under
+it.
 
 ### The service's routes, called by the reader
 
 | Route | Body | Answer |
 |---|---|---|
-| `POST /reader/inbound` | `kind` (`message`, `attachment`, `edited`, `gathered` or `history`) and the hand-over's body as the protocol states it | `{}` once the service has handed it on, and for `history` `kept`; the receiver's failure in the error shape, `history` 409 `not-ready` while the receiver does not take it |
+| `POST /reader/inbound` | `kind` `message` with `roomId`, `messageId` and a handed message as the protocol states it, or `kind` `gathered` with `roomId`, `messageId` and `patch` (`files`, or `gatherFailure`) | `{}` once the service has handed it on, and for a message whose origin is `history` `kept`; the receiver's failure in the error shape |
 | `POST /reader/listened` | `chatId` | `listened` (boolean), the receiver's answer or its fallback |
-| `GET /reader/rooms` | | `rooms`, as `POST /rooms/of` answers them; 409 `not-ready` with the reason while the receiver does not say |
+| `GET /reader/rooms` | | `rooms`, each `chatId`, `oldestMessageId` and `oldestSentAt`, as the receiver answers them; 503 `not-ready` with the reason while the receiver does not say |
 | `GET /reader/seen` | | `rooms` and `people`: every room and sender the provider has handed a message of over or sent into |
 | `POST /reader/avatars` | `rooms`, `people` | `{}` once word of the changed pictures has gone to the receiver, or stood down |
 
-A message and an attachment carry the room and the sender into the record of what the provider has seen; a
-line out of a room's history adds nothing to it. The reader opens the owner's account only once the service
-answers, so nothing it reads is handed to a service that is not up.
+A live message carries the room and the sender into the record of what the provider has seen; an edit adds
+neither, and a line out of a room's history adds nothing to it. The reader opens the owner's account only once
+the service answers, so nothing it reads is handed to a service that is not up.
 
 ## Configuration
 
@@ -160,15 +154,15 @@ This provider's own:
 | `BMO_TELEGRAM_PICTURE_ROOT` | service | the folder a picture or an album item named by a file path may be read from; where unset, only a web address or an inline file is sent |
 | `BMO_TELEGRAM_STICKER_SET` | service | the Telegram sticker set a `sticker` send picks from by its emoji; where unset, a sticker send is refused saying no set is configured |
 
-## Contract gaps
+## Statements about siblings
 
-Statements this provider makes that a sibling's document does not yet match, each for that sibling to take up:
+- **The gate** still says this provider folds a reply's parts by its own code and is to ask `POST
+  /formats/decided`. bmo-chat's fixed protocol makes the fold decision the sender's and carries it to the
+  provider as the send's `fold`; the provider applies its dialect and asks no gate.
+- **The receiver** now states every route under 「The chat protocol's receiver routes」, so no call here waits
+  on a route it does not serve.
 
-- **The receiver** states none of the four routes under 「Needed from the receiver」.
-- **bmo-chat** declares the `avatars` capability with no route that carries a profile picture; this provider
-  serves `GET /avatars/{kind}/{id}` of its own meanwhile. The protocol's room question `owns` is answered
-  from what this provider has seen, since a native-numbered platform cannot tell its rooms from another's
-  numbers.
-  A send in the owner's own voice answers no message: `replyTo` carries the message's number alone, and the
-  owner's account finds a message by when it was said and what it says, which the seam's `reply` carries and
-  the protocol's send does not.
+A reply in the owner's own voice is named by the message's number, as the protocol carries it. The owner's
+account finds the line under that number; in a room the bot and the owner number differently, a number only the
+bot saw names no line on the owner's account, and the send is refused `unreachable` rather than sent without the
+reference the caller asked for.

@@ -2,8 +2,7 @@
 //! the service」): whether the owner's account is connected, a picture or a file the Bot API will not hand the
 //! bot, and a send in the owner's own voice.
 
-use bmo_chat::{FileItem, MessageFile};
-use serde::Serialize;
+use bmo_chat::{ChatAvatar, ChatAvatarKind, FileItem, MessageFile};
 use serde_json::{Value, json};
 
 use crate::wire::Wire;
@@ -28,16 +27,6 @@ pub enum ReaderFetch {
   Fetched(MessageFile),
   Unavailable(String),
   NoReader(String),
-}
-
-/// The message a send in the owner's voice answers, as the receiver holds it: its number, when it was said and
-/// what it says, which the owner's account finds it in its own history by.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OwnerReply {
-  pub message_id: i64,
-  pub sent_at: i64,
-  pub text: String,
 }
 
 /// What a send in the owner's voice came to: what went, or the name the account refused it by — not connected,
@@ -109,6 +98,42 @@ impl ReaderClient {
     self.fetch("/reader/file", &body).await
   }
 
+  /// Every profile picture the owner's account keeps, with when it was taken.
+  pub async fn avatars(&self) -> Result<Vec<ChatAvatar>, String> {
+    let answer = self.wire.get("/reader/avatars").await?;
+
+    if !answer.ok() {
+      return Err(answer.reason());
+    }
+
+    let kept = answer
+      .body
+      .get("avatars")
+      .and_then(Value::as_array)
+      .ok_or_else(|| "the reader's /reader/avatars answered no list of pictures".to_owned())?;
+
+    kept
+      .iter()
+      .map(|one| {
+        let kind = match one.get("kind").and_then(Value::as_str) {
+          Some("room") => ChatAvatarKind::Room,
+          Some("person") => ChatAvatarKind::Person,
+          other => return Err(format!("the reader answered an unknown picture kind: {other:?}")),
+        };
+        let id = one
+          .get("id")
+          .and_then(Value::as_i64)
+          .ok_or_else(|| "the reader answered a picture with no number".to_owned())?;
+        let taken_at = one
+          .get("takenAt")
+          .and_then(Value::as_i64)
+          .ok_or_else(|| "the reader answered a picture with no moment".to_owned())?;
+
+        Ok(ChatAvatar { kind, id, taken_at })
+      })
+      .collect()
+  }
+
   async fn as_owner(&self, route: &str, body: &Value) -> Result<AsOwner<Value>, NotCarried> {
     let not_carried = |why: String| NotCarried {
       route: route.to_owned(),
@@ -135,9 +160,9 @@ impl ReaderClient {
     &self,
     chat_id: i64,
     text: &str,
-    reply: Option<&OwnerReply>,
+    reply_to: Option<i64>,
   ) -> Result<AsOwner<Option<i64>>, NotCarried> {
-    let body = json!({ "chatId": chat_id, "text": text, "reply": reply });
+    let body = json!({ "chatId": chat_id, "text": text, "replyToMessageId": reply_to });
     let sent = self.as_owner("/owner/say", &body).await?;
 
     Ok(map_sent(sent, |answer| answer.get("messageId").and_then(Value::as_i64)))
@@ -150,9 +175,10 @@ impl ReaderClient {
     chat_id: i64,
     files: &[FileItem],
     caption: &str,
-    reply: Option<&OwnerReply>,
+    reply_to: Option<i64>,
   ) -> Result<AsOwner<Vec<Option<i64>>>, NotCarried> {
-    let body = json!({ "chatId": chat_id, "files": files, "caption": caption, "reply": reply });
+    let body =
+      json!({ "chatId": chat_id, "files": files, "caption": caption, "replyToMessageId": reply_to });
     let sent = self.as_owner("/owner/album", &body).await?;
 
     Ok(map_sent(sent, |answer| {

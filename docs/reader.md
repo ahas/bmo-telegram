@@ -13,20 +13,26 @@ reader」), and it reaches nothing but the service and Telegram.
 - **What the Bot API will not fetch.** A picture or a file past the Bot API's ceiling for a bot, and a picture
   fetched after the fact for a turn that answers it, are fetched through the reader and answered as bytes.
 - **The owner's own words.** A send in the owner's voice goes out in the owner's account, as a phone sends it.
+  A reply the send names is found on the account by the message's number; one it has no line under is refused
+  `unreachable`.
 - **History.** The past messages of the rooms the receiver names are walked back and handed over as history.
 - **Profile pictures.** The pictures of every room and every sender the provider has seen are kept current.
 
 ## What it hands over
 
-- **A message with words only** goes as a `message`.
-- **A picture,** or an image sent as an uncompressed file, goes as a `message` carrying its bytes, as words
+- **A message with words only** goes as a live message.
+- **A picture,** or an image sent as an uncompressed file, goes as a live message carrying its bytes, as words
   do; where the bytes could not be had, without them.
-- **Any other file** — a document, a sound, a video, a sticker — goes at once, its bytes following as
-  `gathered`, kept or not kept with the policy's reason. A document with no caption goes as an `attachment`;
-  a sticker, or a file under words, as a `message`.
+- **Any other file** — a document, a sound, a video, a sticker — goes at once as a live message saying
+  `gathering`, its bytes following as a `gathered` patch, kept with the file's kind or not kept with the
+  policy's reason.
 - **A wordless message** is handed over under the placeholder of its kind, from `policy/telegram.toml`, the
   same words the bot account's reading uses; the words a message carried go as `spokenText`.
 - **Telegram's own words and the custom emoji among their marks** go as the context's `metadata`.
+- **Every time goes in epoch milliseconds,** as the protocol states it: Telegram's own `date` counts seconds,
+  and the reader multiplies it once.
+- **A message's files are listed in the message itself** where they are already gathered, and a message whose
+  file is still on its way says `gathering`, its patch following.
 - **Every file it hands over or fetches carries its id,** Telegram's own number for it: `photo-` and the
   photo's number, or `document-` and the document's, so the same file crosses under the same id each time.
 - **A file with no name of its own** is named for what it is: a sticker by its document, a video, a round note
@@ -81,8 +87,10 @@ reader」), and it reaches nothing but the service and Telegram.
   where it now belongs repairs a record that points elsewhere.
 - **One pass over everyone** starts a minute after the reader connects and runs again every six hours. It
   takes what it can, counts the rest, and keeps a room and a person of one number apart. The files are kept in
-  `avatars/` in the provider's data folder, and the service serves them (`GET /avatars/{kind}/{id}`). Word of
-  the rooms and people whose picture changed goes to the service once a pass.
+  `avatars/` in the provider's data folder, the record in the reader's store carries when each was taken in
+  epoch milliseconds, and the reader lists them on `GET /reader/avatars`; the service serves them through the
+  protocol's avatar routes. Word of the rooms and people whose picture changed goes to the service once a
+  pass.
 
 ## Why it is TypeScript
 

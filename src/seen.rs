@@ -7,7 +7,6 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::{Mutex, PoisonError};
 
-use bmo_chat::ChatMessage;
 use serde::{Deserialize, Serialize};
 
 /// What has been seen: every room and every sender, each once.
@@ -64,10 +63,10 @@ impl Seen {
   }
 
   /// A message handed over: its room and its sender seen.
-  pub fn message(&self, message: &ChatMessage) {
+  pub fn message(&self, room_id: i64, sender_id: Option<i64>) {
     self.changed(|sighted| {
-      let room = sighted.rooms.insert(message.chat_id);
-      let person = message.sender_id.is_some_and(|sender| sighted.people.insert(sender));
+      let room = sighted.rooms.insert(room_id);
+      let person = sender_id.is_some_and(|sender| sighted.people.insert(sender));
 
       room || person
     });

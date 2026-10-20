@@ -3,10 +3,12 @@
 //! go only uploaded — their caption in the dialect's markup, and a picture that did not go handed back with its
 //! reason. The bytes an upload carries are read and redrawn by `telegram-picture`.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
-use bmo_chat::{AlbumItem, ChatRefusal, ChatSendResult, FileItem, MissedPicture, MissedPictureReason};
+use bmo_chat::{
+  AlbumItem, ChatRefusal, ChatSendResult, ChatSent, FileItem, MissedPicture, MissedPictureReason,
+};
 use reqwest::multipart::{Form, Part as Field};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -23,29 +25,26 @@ pub fn is_web_address(address: &str) -> bool {
   url::Url::parse(address).is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
 }
 
-/// A path with its `.` and `..` read, as the path a file is opened by.
-pub fn lexical(path: &Path) -> PathBuf {
-  let mut read = PathBuf::new();
-
-  for component in path.components() {
-    match component {
-      Component::ParentDir => {
-        read.pop();
-      }
-      Component::CurDir => {}
-      other => read.push(other),
-    }
-  }
-
-  read
-}
-
-/// Whether an address is a file this machine may send: only one that really sits under the picture root,
-/// never whatever path a caller named. With no root configured, no file may go.
+/// Whether an address is a file this machine may send: only one whose real path sits under the picture root,
+/// never whatever path a caller named and never a symbolic link reaching past the root. With no root
+/// configured, no file may go.
 pub fn is_kept(root: Option<&Path>, address: &str) -> bool {
   let path = Path::new(address);
+  let Some(root) = root else {
+    return false;
+  };
 
-  root.is_some_and(|root| path.is_absolute() && lexical(path).starts_with(lexical(root)) && path.exists())
+  if !path.is_absolute() {
+    return false;
+  }
+
+  // Canonicalizing both reads every symbolic link and every `.` and `..` on the way, so the check is made on
+  // where the file really stands, not on the characters a caller wrote.
+  let (Ok(root), Ok(path)) = (root.canonicalize(), path.canonicalize()) else {
+    return false;
+  };
+
+  path.starts_with(root) && path.is_file()
 }
 
 /// Why a picture named by an address cannot be sent at all, asked before anything reaches the platform; none
@@ -366,10 +365,10 @@ impl Speaker {
       Ok(went) => {
         self.spoke_in(chat_id);
 
-        Ok(ChatSendResult::Sent {
+        Ok(ChatSendResult::Sent(ChatSent {
           message_id: Some(went),
           missed: Vec::new(),
-        })
+        }))
       }
       Err(fault) => {
         self.fall_back(chat_id, markdown, &[&picture]).await?;
@@ -531,10 +530,10 @@ impl Speaker {
       return Ok(none_went(missed));
     }
 
-    Ok(ChatSendResult::Sent {
+    Ok(ChatSendResult::Sent(ChatSent {
       message_id: first,
       missed,
-    })
+    }))
   }
 
   // One album tried every way it may go, a flood limit's wait taken as asked: the messages it went out as and

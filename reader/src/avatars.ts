@@ -145,7 +145,7 @@ export async function refreshAvatar(
     const entity = known ?? (await resolveEntity(client, subject.peer));
     const photoId = photoIdOf(entity);
     const held = store.getAvatar(subject.kind, subject.subjectId);
-    const updatedAt = Math.max(Math.floor(Date.now() / 1000), (held?.updatedAt ?? 0) + 1);
+    const updatedAt = Math.max(Date.now(), (held?.updatedAt ?? 0) + 1);
 
     if (photoId === null) {
       if (held?.photoId === null && held.path === null) return "none";

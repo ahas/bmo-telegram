@@ -11,7 +11,6 @@ label = "Telegram"
 # stop being true where that mode is not active.
 can = ["text", "photo", "album", "document", "audio", "voice", "sticker", "reaction", "pin", "typing", "edit", "delete", "replyTo", "fetchMedia", "avatars", "history"]
 # The modes an answer cannot be pinned to a message of: what the owner's account read, the bot did not see.
-unpinned = ["human-reader"]
 # How Telegram describes a message not there to act on — deleted, never sent, or past the time it could be
 # changed — read without regard to case. Asking again would get the same answer.
 gone_descriptions = ["message to \\w+ not found", "MESSAGE_ID_INVALID", "message can't be (edited|deleted)"]

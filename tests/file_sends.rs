@@ -22,13 +22,12 @@ fn reading() -> String {
   format!("{} {}", "a".repeat(1000), "b".repeat(1500))
 }
 
-fn voice(caption: Option<&str>, transcript: Option<String>, reply_to: Option<i64>) -> ChatSend {
+fn voice(caption: Option<&str>, transcript: Option<String>) -> ChatSend {
   ChatSend::Voice {
     audio: OGG.to_vec(),
     said: "today's news".to_owned(),
     caption: caption.map(str::to_owned),
     transcript,
-    reply_to,
   }
 }
 
@@ -36,13 +35,12 @@ fn voice(caption: Option<&str>, transcript: Option<String>, reply_to: Option<i64
 async fn a_document_goes_as_a_reply_under_its_own_name() {
   let bot = BotSends::new();
   let speaker = speaker(bot.clone(), Sending::default()).await;
-  let document = |reply_to| ChatSend::Document {
+  let document = || ChatSend::Document {
     bytes: DOCUMENT.to_vec(),
     file_name: "inspection report.txt".to_owned(),
-    reply_to,
   };
 
-  assert_eq!(send(&speaker, document(Some(41))).await, Ok(sent(Some(500))));
+  assert_eq!(send(&speaker, Some(41), document()).await, Ok(sent(Some(500))));
   assert_eq!(bot.methods(), ["sendDocument"]);
   assert_eq!(
     bot.bodies()[0],
@@ -51,7 +49,7 @@ async fn a_document_goes_as_a_reply_under_its_own_name() {
   );
 
   bot.answering(|_| None);
-  send(&speaker, document(None)).await.unwrap();
+  send(&speaker, None, document()).await.unwrap();
   assert!(bot.bodies()[0].get("reply_parameters").is_none());
 }
 
@@ -62,28 +60,23 @@ async fn an_audio_file_goes_under_the_type_its_bytes_read_as_and_a_refused_file_
   let audio = ChatSend::Audio {
     audio: MP3.to_vec(),
     file_name: "song.mp3".to_owned(),
-    reply_to: None,
   };
 
-  assert_eq!(send(&speaker, audio).await, Ok(sent(Some(500))));
+  assert_eq!(send(&speaker, None, audio).await, Ok(sent(Some(500))));
   assert_eq!(bot.bodies()[0]["audio"]["type"], "audio/mpeg");
 
   bot.answering(|asked| {
     (asked.method == "sendDocument").then(|| refusal(400, "Bad Request: chat not found"))
   });
 
-  let refused = ChatSend::Document {
+  let rejected = ChatSend::Document {
     bytes: DOCUMENT.to_vec(),
     file_name: "a.txt".to_owned(),
-    reply_to: None,
   };
 
   assert_eq!(
-    send(&speaker, refused).await,
-    Ok(ChatSendResult::Refused {
-      refusal: POLICY.refused("Bad Request: chat not found"),
-      gone: false
-    })
+    send(&speaker, None, rejected).await,
+    Ok(ChatSendResult::Refused(POLICY.refused("Bad Request: chat not found")))
   );
 }
 
@@ -92,7 +85,7 @@ async fn a_voice_goes_with_the_first_part_of_its_reading_as_its_caption_and_the_
   let bot = BotSends::new();
   let speaker = speaker(bot.clone(), Sending::default()).await;
 
-  assert_eq!(send(&speaker, voice(None, Some(reading()), Some(41))).await, Ok(sent(Some(500))));
+  assert_eq!(send(&speaker, Some(41), voice(None, Some(reading()))).await, Ok(sent(Some(500))));
   assert_eq!(bot.methods(), ["sendVoice", "sendMessage"]);
 
   let bodies = bot.bodies();
@@ -115,7 +108,7 @@ async fn a_caption_telegram_will_not_read_goes_again_without_it_and_a_flood_limi
     (asked.method == "sendVoice" && !refused_once.swap(true, Ordering::SeqCst))
       .then(|| refusal(400, "Bad Request: can't parse entities: Unsupported start tag"))
   });
-  send(&speaker, voice(None, Some(reading()), None)).await.unwrap();
+  send(&speaker, None, voice(None, Some(reading()))).await.unwrap();
   assert_eq!(bot.methods(), ["sendVoice", "sendVoice", "sendMessage", "sendMessage"]);
   assert!(bot.bodies()[1].get("caption").is_none());
 
@@ -127,7 +120,7 @@ async fn a_caption_telegram_will_not_read_goes_again_without_it_and_a_flood_limi
         "parameters": { "retry_after": 0 } })
     })
   });
-  send(&speaker, voice(None, Some(reading()), None)).await.unwrap();
+  send(&speaker, None, voice(None, Some(reading()))).await.unwrap();
   assert_eq!(bot.methods(), ["sendVoice", "sendMessage", "sendMessage"]);
 }
 
@@ -136,7 +129,7 @@ async fn a_caption_of_its_own_is_read_in_the_room_and_a_reading_that_did_not_go_
   let bot = BotSends::new();
   let speaker = speaker(bot.clone(), Sending::default()).await;
 
-  send(&speaker, voice(Some("greeting sample"), None, None)).await.unwrap();
+  send(&speaker, None, voice(Some("greeting sample"), None)).await.unwrap();
   assert_eq!(bot.methods(), ["sendVoice"]);
   assert_eq!(bot.bodies()[0]["caption"], "greeting sample");
   assert!(bot.bodies()[0].get("parse_mode").is_none());
@@ -146,7 +139,7 @@ async fn a_caption_of_its_own_is_read_in_the_room_and_a_reading_that_did_not_go_
   });
 
   assert_eq!(
-    send(&speaker, voice(None, Some(reading()), None)).await,
+    send(&speaker, None, voice(None, Some(reading()))).await,
     Err(
       "voice 500 was sent; transcript continuation failed: Error: Bad Request: message text is empty"
         .to_owned()

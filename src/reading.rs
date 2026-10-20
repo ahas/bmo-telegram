@@ -2,12 +2,12 @@
 //! picture to gather first, a file to gather after, or nothing. Nothing of what a message means to the receiver
 //! is decided here: no allow list, no command, no routing. What is here is what only Telegram's reading can do.
 
-use bmo_chat::{ChatMessage, ChatVoice, InboundChatContext};
+use bmo_chat::{ChatVoice, HandedMessage, InboundChatContext, MessageOrigin, RoomFacts, RoomKind};
 use serde_json::{Map, Value};
 
+use crate::VIA;
 use crate::kinds::{Message, describe, forwarded_from, is_image_file};
 use crate::policy::POLICY;
-use crate::receiver::VIA;
 
 /// The largest number a room is told apart by without losing a digit.
 pub const SAFE_INTEGER: i64 = (1 << 53) - 1;
@@ -24,11 +24,11 @@ pub struct Picture {
 #[derive(Debug)]
 pub enum Reading {
   /// Words, or a kind handed over as a placeholder.
-  Said(ChatMessage, InboundChatContext),
+  Said(HandedMessage),
   /// A picture: its file gathered first, and the message handed over with it.
-  Picture(ChatMessage, InboundChatContext, Option<Picture>),
+  Picture(HandedMessage, Option<Picture>),
   /// A message carrying a file that is not a picture: handed over at once, its file gathered after.
-  Attachment(ChatMessage, InboundChatContext),
+  Attachment(HandedMessage),
   /// A file nobody's words go with — the bot's own, or one of a kind handed over as nothing.
   FileOnly,
   /// Nothing to take.
@@ -37,11 +37,9 @@ pub enum Reading {
 
 impl Reading {
   /// The message this reading hands over, where it hands one over.
-  pub fn message_mut(&mut self) -> Option<&mut ChatMessage> {
+  pub fn message_mut(&mut self) -> Option<&mut HandedMessage> {
     match self {
-      Reading::Said(message, _) | Reading::Picture(message, _, _) | Reading::Attachment(message, _) => {
-        Some(message)
-      }
+      Reading::Said(message) | Reading::Picture(message, _) | Reading::Attachment(message) => Some(message),
       Reading::FileOnly | Reading::Nothing => None,
     }
   }
@@ -51,7 +49,7 @@ impl Reading {
 #[derive(Debug)]
 pub struct Edit {
   /// The new words, where the kind keeps any.
-  pub said: Option<(ChatMessage, InboundChatContext)>,
+  pub said: Option<HandedMessage>,
   /// Whether it now carries a file, to be gathered again.
   pub carries_file: bool,
 }
@@ -68,18 +66,13 @@ pub fn sender_name(message: &Message) -> String {
   }
 }
 
-fn handed(message: &Message, text: &str) -> ChatMessage {
-  ChatMessage {
-    chat_id: message.chat.id,
-    message_id: message.message_id,
-    sender_id: message.from.as_ref().map(|from| from.id),
-    sender_name: sender_name(message),
-    sent_at: message.date,
-    text: format!("{}{text}", forwarded_from(message.forward_origin.as_ref())),
-    reply_to_message_id: message.reply_to_message.as_ref().map(|replied| replied.message_id),
-    via: VIA.to_owned(),
-    album: None,
-    mode: ChatVoice::BotAccount,
+/// What the provider knows of the room a message came from: Telegram numbers a one-to-one by its person,
+/// above zero, and a group, a supergroup or a channel below it.
+pub fn room_facts(chat_id: i64, owner_id: i64, me: i64) -> RoomFacts {
+  RoomFacts {
+    kind: Some(if chat_id == owner_id { RoomKind::Owner } else { RoomKind::Group }),
+    identity: Some(me),
+    private_to: (chat_id > 0).then_some(chat_id),
   }
 }
 
@@ -98,6 +91,25 @@ fn context(message: &Message) -> InboundChatContext {
   }
 }
 
+fn handed(message: &Message, text: &str, origin: MessageOrigin, owner_id: i64, me: i64) -> HandedMessage {
+  HandedMessage {
+    origin,
+    sender_id: message.from.as_ref().map(|from| from.id),
+    sender_name: sender_name(message),
+    sent_at: message.date.saturating_mul(1000),
+    text: format!("{}{text}", forwarded_from(message.forward_origin.as_ref())),
+    reply_to_message_id: message.reply_to_message.as_ref().map(|replied| replied.message_id),
+    via: VIA.to_owned(),
+    album: None,
+    mode: ChatVoice::BotAccount,
+    context: context(message),
+    room: room_facts(message.chat.id, owner_id, me),
+    files: Vec::new(),
+    gathering: false,
+    gather_failure: None,
+  }
+}
+
 /// Whether the message carries a file of the kinds kept as files.
 pub fn carries_file(message: &Message) -> bool {
   message.animation.is_some()
@@ -108,29 +120,32 @@ pub fn carries_file(message: &Message) -> bool {
     || message.voice.is_some()
 }
 
-fn picture_message(message: &Message, picture: Option<Picture>) -> Reading {
+fn picture_message(message: &Message, picture: Option<Picture>, owner_id: i64, me: i64) -> Reading {
   let caption = message.caption.clone();
-  let handed = handed(message, caption.as_deref().unwrap_or(&POLICY.pictures.mark));
-  let context = InboundChatContext {
-    spoken_text: caption,
-    carries_file: picture.is_some(),
-    ..context(message)
-  };
+  let mut handed = handed(
+    message,
+    caption.as_deref().unwrap_or(&POLICY.pictures.mark),
+    MessageOrigin::Live,
+    owner_id,
+    me,
+  );
 
-  Reading::Picture(handed, context, picture)
+  handed.context.spoken_text = caption;
+  handed.context.carries_file = picture.is_some();
+
+  Reading::Picture(handed, picture)
 }
 
-/// What becomes of a new message: `me` is the bot's own number, and `listened` whether the room is one the
-/// receiver listens to at all, which is asked only to keep a file from being fetched for a room nobody
-/// listens to.
-pub fn read(message: &Message, me: i64, listened: bool) -> Reading {
+/// What becomes of a new message: `me` is the bot's own number, `owner_id` the owner's, and `listened`
+/// whether the room is one the receiver listens to at all, which is asked only to keep a file from being
+/// fetched for a room nobody listens to.
+pub fn read(message: &Message, me: i64, owner_id: i64, listened: bool) -> Reading {
   if let Some(text) = &message.text {
-    let context = InboundChatContext {
-      spoken_text: Some(text.clone()),
-      ..context(message)
-    };
+    let mut handed = handed(message, text, MessageOrigin::Live, owner_id, me);
 
-    return Reading::Said(handed(message, text), context);
+    handed.context.spoken_text = Some(text.clone());
+
+    return Reading::Said(handed);
   }
 
   if !listened {
@@ -144,7 +159,7 @@ pub fn read(message: &Message, me: i64, listened: bool) -> Reading {
       file_size: photo.file_size,
     });
 
-    return picture_message(message, largest);
+    return picture_message(message, largest, owner_id, me);
   }
 
   if carries_file(message) {
@@ -161,6 +176,8 @@ pub fn read(message: &Message, me: i64, listened: bool) -> Reading {
             file_unique_id: document.file_unique_id.clone(),
             file_size: document.file_size,
           }),
+          owner_id,
+          me,
         );
       }
     }
@@ -169,13 +186,12 @@ pub fn read(message: &Message, me: i64, listened: bool) -> Reading {
 
     return match describe(message) {
       Some(text) if !mine => {
-        let context = InboundChatContext {
-          spoken_text: message.caption.clone(),
-          carries_file: true,
-          ..context(message)
-        };
+        let mut handed = handed(message, &text, MessageOrigin::Live, owner_id, me);
 
-        Reading::Attachment(handed(message, &text), context)
+        handed.context.spoken_text = message.caption.clone();
+        handed.context.carries_file = true;
+
+        Reading::Attachment(handed)
       }
       _ => Reading::FileOnly,
     };
@@ -184,7 +200,7 @@ pub fn read(message: &Message, me: i64, listened: bool) -> Reading {
   match describe(message) {
     // A service message the bot itself caused — pinning its own board — is nobody's word.
     Some(text) if message.from.as_ref().is_none_or(|from| from.id != me) => {
-      Reading::Said(handed(message, &text), context(message))
+      Reading::Said(handed(message, &text, MessageOrigin::Live, owner_id, me))
     }
     _ => Reading::Nothing,
   }
@@ -212,14 +228,13 @@ pub fn metadata(raw: &Value) -> Option<Value> {
 }
 
 /// What becomes of an edited message.
-pub fn read_edit(message: &Message, raw: &Value) -> Edit {
+pub fn read_edit(message: &Message, raw: &Value, me: i64, owner_id: i64) -> Edit {
   let said = describe(message).map(|text| {
-    let context = InboundChatContext {
-      metadata: metadata(raw),
-      ..context(message)
-    };
+    let mut handed = handed(message, &text, MessageOrigin::Edit, owner_id, me);
 
-    (handed(message, &text), context)
+    handed.context.metadata = metadata(raw);
+
+    handed
   });
 
   Edit {

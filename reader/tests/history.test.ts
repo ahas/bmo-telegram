@@ -54,15 +54,21 @@ describe("a room's walk", () => {
     } as unknown as TelegramClient;
     const service = keptService({ kept: true });
     const store = new ReaderStore(":memory:");
-    const room = { chatId: -5000000002, oldestMessageId: 900, oldestSentAt: 1_700_000_050 };
+    const room = { chatId: -5000000002, oldestMessageId: 900, oldestSentAt: 1_700_000_050_000 };
 
     const outcome = await walkRoom({ client, peers, service, store, pause: async () => undefined }, room);
 
     expect(outcome).toEqual({ handed: 2, kept: 2, reachedTop: true });
     expect(asked[1]).toEqual({ offsetId: 0, offsetDate: 1_700_000_050, limit: undefined });
-    expect(service.handed.map((one) => one.kind === "history" ? [one.message.messageId, one.message.text, one.message.mode] : null)).toEqual([
-      [historyMessageId(-5000000002, 12), "older words", "human-reader"],
-      [historyMessageId(-5000000002, 11), "[Photo]", "human-reader"],
+    expect(
+      service.handed.map((one) =>
+        one.kind === "message" && one.message.origin === "history"
+          ? [one.messageId, one.message.text, one.message.mode, one.message.sentAt]
+          : null,
+      ),
+    ).toEqual([
+      [historyMessageId(-5000000002, 12), "older words", "human-reader", 1_700_000_010_000],
+      [historyMessageId(-5000000002, 11), "[Photo]", "human-reader", 1_700_000_005_000],
     ]);
     expect(store.historyProgress(-5000000002)?.doneAt).not.toBeNull();
   });

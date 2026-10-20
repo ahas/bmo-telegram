@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use bmo_chat::{ChatCapability, ChatRefusal, ChatVoice, MissedPictureReason};
+use bmo_chat::{ChatCapability, ChatRefusal, MissedPictureReason};
 use serde::Deserialize;
 
 /// The policy, read once from the file the crate is built with.
@@ -32,7 +32,6 @@ pub struct Policy {
 pub struct Platform {
   pub label: String,
   pub can: Vec<ChatCapability>,
-  pub unpinned: Vec<ChatVoice>,
   pub gone_descriptions: Vec<String>,
   pub unchanged_description: String,
   pub caption_refused_descriptions: Vec<String>,
@@ -140,10 +139,12 @@ impl Policy {
     }
   }
 
-  /// An act refused because Telegram no longer has the message, `why` in Telegram's own words. The send's
-  /// result marks it gone.
+  /// An act refused because Telegram no longer has the message, `why` in Telegram's own words.
   pub fn message_gone(&self, why: &str) -> ChatRefusal {
-    self.platform(fill(&self.refusals.message_gone, &[("why", why)]))
+    ChatRefusal::Gone {
+      label: self.telegram.label.clone(),
+      detail: fill(&self.refusals.message_gone, &[("why", why)]),
+    }
   }
 
   /// A sticker the set does not carry.

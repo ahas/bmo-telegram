@@ -5,10 +5,7 @@
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use bmo_chat::{
-  ChatGathered, ChatHandover, ChatMessage, ChatReceiver, GatheredOutcome, InboundChatContext, MessageFile,
-  RoomFacts, RoomKind,
-};
+use bmo_chat::{ChatReceiver, GatheredPatch, MessageFile, ProviderRoom, RoomKind};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -20,7 +17,6 @@ use crate::kinds::Message;
 use crate::policy::POLICY;
 use crate::reader::ReaderClient;
 use crate::reading::{Reading, SAFE_INTEGER, read, read_edit};
-use crate::receiver::VIA;
 use crate::seen::Seen;
 
 /// The bot account as its configuration gives it.
@@ -106,16 +102,6 @@ impl Telegram {
     chat_id == self.owner_id || (-SAFE_INTEGER..=SAFE_INTEGER).contains(&chat_id)
   }
 
-  /// What the provider knows of a room: Telegram numbers a one-to-one by the person in it, above zero, and a
-  /// group, a supergroup or a channel below it.
-  pub fn room(&self, chat_id: i64) -> RoomFacts {
-    RoomFacts {
-      kind: Some(self.room_kind(chat_id)),
-      identity: Some(self.me()),
-      private_to: self.private_room_of(chat_id),
-    }
-  }
-
   /// `owner` for the owner's one-to-one with the bot, `group` for any other room.
   pub fn room_kind(&self, chat_id: i64) -> RoomKind {
     if chat_id == self.owner_id { RoomKind::Owner } else { RoomKind::Group }
@@ -138,6 +124,28 @@ impl Telegram {
     chat.get("title").and_then(Value::as_str).map(str::to_owned)
   }
 
+  /// What the provider knows of a room: its number space, the number the bot's words carry there, the person
+  /// of a one-to-one and what Telegram calls it. Null where the room is none this provider has seen.
+  pub async fn room(&self, chat_id: i64) -> Option<ProviderRoom> {
+    self.owns_room(chat_id).then(|| ProviderRoom {
+      id: chat_id,
+      owns: true,
+      identity: Some(self.me()),
+      kind: self.room_kind(chat_id),
+      private_to: self.private_room_of(chat_id),
+      title: None,
+    })
+  }
+
+  /// The room as the protocol answers it, its title asked of Telegram where the room is known.
+  pub async fn provider_room(&self, chat_id: i64) -> Option<ProviderRoom> {
+    let mut room = self.room(chat_id).await?;
+
+    room.title = self.room_title(chat_id).await;
+
+    Some(room)
+  }
+
   /// The Bot API this account asks.
   pub fn api(&self) -> &BotApi {
     &self.api
@@ -151,44 +159,34 @@ impl Telegram {
   // The files gathered for a message, handed over as what its promise came to.
   async fn hand_gathered(
     receiver: &dyn ChatReceiver,
-    chat_id: i64,
+    room_id: i64,
     message_id: i64,
     gathered: Result<Vec<MessageFile>, String>,
   ) {
-    let outcome = match gathered {
-      Ok(files) if !files.is_empty() => GatheredOutcome::Kept { files },
-      Ok(_) => GatheredOutcome::NotKept {
-        reason: POLICY.gathering.file_not_kept.clone(),
-      },
+    let patch = match gathered {
+      Ok(files) if !files.is_empty() => GatheredPatch::kept(files),
+      Ok(_) => GatheredPatch::not_kept(POLICY.gathering.file_not_kept.clone()),
       Err(why) => {
-        eprintln!("telegram: keeping the file of chat {chat_id} message {message_id} failed: {why}");
-        GatheredOutcome::NotKept {
-          reason: POLICY.gathering.file_not_kept.clone(),
-        }
+        eprintln!("telegram: keeping the file of chat {room_id} message {message_id} failed: {why}");
+        GatheredPatch::not_kept(POLICY.gathering.file_not_kept.clone())
       }
     };
-    let gathered = ChatGathered {
-      chat_id,
-      message_id,
-      via: VIA.to_owned(),
-      outcome,
-    };
 
-    if let Err(why) = receiver.gathered(gathered).await {
-      eprintln!("telegram: chat {chat_id} message {message_id}: the gathered file was not taken: {why}");
+    if let Err(why) = receiver.gathered(room_id, message_id, patch).await {
+      eprintln!("telegram: chat {room_id} message {message_id}: the gathered file was not taken: {why}");
     }
   }
 
   // What is promised for a message is gathered on its own, so the poll never stands still for a file.
   fn gather_later(&self, receiver: Arc<dyn ChatReceiver>, raw: Value, file: bool, assets: bool) {
     let gatherer = self.gatherer.clone();
-    let chat_id = raw.pointer("/chat/id").and_then(Value::as_i64).unwrap_or_default();
+    let room_id = raw.pointer("/chat/id").and_then(Value::as_i64).unwrap_or_default();
     let message_id = raw.get("message_id").and_then(Value::as_i64).unwrap_or_default();
 
     tokio::spawn(async move {
-      let mut files = if assets { gatherer.assets(chat_id, message_id, &raw).await } else { Vec::new() };
+      let mut files = if assets { gatherer.assets(room_id, message_id, &raw).await } else { Vec::new() };
       let gathered = if file {
-        gatherer.file(chat_id, message_id, &raw).await.map(|item| {
+        gatherer.file(room_id, message_id, &raw).await.map(|item| {
           files.extend(item);
           files
         })
@@ -196,24 +194,8 @@ impl Telegram {
         Ok(files)
       };
 
-      Self::hand_gathered(receiver.as_ref(), chat_id, message_id, gathered).await;
+      Self::hand_gathered(receiver.as_ref(), room_id, message_id, gathered).await;
     });
-  }
-
-  fn handover(
-    &self,
-    message: ChatMessage,
-    context: InboundChatContext,
-    files: Vec<MessageFile>,
-  ) -> ChatHandover {
-    self.seen.message(&message);
-
-    ChatHandover {
-      room: Some(self.room(message.chat_id)),
-      message,
-      context: Some(context),
-      files,
-    }
   }
 
   /// One new message: handed over as it reads, its picture with it, its file and assets promised and gathered
@@ -221,33 +203,29 @@ impl Telegram {
   pub async fn message(&self, receiver: Arc<dyn ChatReceiver>, raw: Value) -> Result<(), String> {
     let message: Message = serde_json::from_value(raw.clone()).map_err(|why| why.to_string())?;
     let chat_id = message.chat.id;
+    let message_id = message.message_id;
     let listened = self.listened(chat_id);
     let assets = listened && Gatherer::has_assets(&raw);
-    let mut reading = read(&message, self.me(), listened);
+    let mut reading = read(&message, self.me(), self.owner_id, listened);
 
     // Named before anything is awaited, in the order the updates came.
     if let (Some(group), Some(handed)) = (message.media_group_id.as_deref(), reading.message_mut()) {
       let mut albums = self.albums.lock().unwrap_or_else(PoisonError::into_inner);
 
-      handed.album = Some(albums.name(chat_id, group, message.message_id));
+      handed.album = Some(albums.name(chat_id, group, message_id));
     }
 
-    let with_metadata = |context: InboundChatContext| InboundChatContext {
-      metadata: listened.then(|| crate::reading::metadata(&raw)).flatten(),
-      ..context
-    };
+    if let (Some(handed), Some(kept)) =
+      (reading.message_mut(), listened.then(|| crate::reading::metadata(&raw)).flatten())
+    {
+      handed.context.metadata = Some(kept);
+    }
 
     match reading {
-      Reading::Said(handed, context) => {
-        let context = InboundChatContext {
-          gathering: assets,
-          ..with_metadata(context)
-        };
-
-        receiver
-          .message(self.handover(handed, context, Vec::new()))
-          .await
-          .map_err(|why| why.to_string())?;
+      Reading::Said(mut handed) => {
+        handed.gathering = assets;
+        self.seen.message(chat_id, handed.sender_id);
+        receiver.hand_over(chat_id, message_id, handed).await.map_err(|why| why.to_string())?;
 
         if assets {
           self.gather_later(receiver, raw, false, true);
@@ -255,37 +233,32 @@ impl Telegram {
 
         Ok(())
       }
-      Reading::Picture(handed, context, picture) => {
+      Reading::Picture(mut handed, picture) => {
         let mut files = Vec::new();
 
         if let Some(picture) = &picture {
-          files.extend(self.gatherer.picture(chat_id, message.message_id, message.date, picture).await);
+          files.extend(self.gatherer.picture(chat_id, message_id, message.date, picture).await);
         }
 
         if assets {
-          files.extend(self.gatherer.assets(chat_id, message.message_id, &raw).await);
+          files.extend(self.gatherer.assets(chat_id, message_id, &raw).await);
         }
 
-        let context = InboundChatContext {
-          carries_file: !files.is_empty(),
-          ..with_metadata(context)
-        };
+        handed.context.carries_file = !files.is_empty();
+        handed.files = files;
+        self.seen.message(chat_id, handed.sender_id);
 
         receiver
-          .message(self.handover(handed, context, files))
+          .hand_over(chat_id, message_id, handed)
           .await
+          .map(drop)
           .map_err(|why| why.to_string())
       }
-      Reading::Attachment(handed, context) => {
-        let context = InboundChatContext {
-          gathering: true,
-          ..with_metadata(context)
-        };
+      Reading::Attachment(mut handed) => {
+        handed.gathering = true;
+        self.seen.message(chat_id, handed.sender_id);
 
-        receiver
-          .attachment(self.handover(handed, context, Vec::new()))
-          .await
-          .map_err(|why| why.to_string())?;
+        receiver.hand_over(chat_id, message_id, handed).await.map_err(|why| why.to_string())?;
         self.gather_later(receiver, raw, true, assets);
 
         Ok(())
@@ -299,35 +272,35 @@ impl Telegram {
   pub async fn edited(&self, receiver: Arc<dyn ChatReceiver>, raw: Value) -> Result<(), String> {
     let message: Message = serde_json::from_value(raw.clone()).map_err(|why| why.to_string())?;
     let chat_id = message.chat.id;
+    let message_id = message.message_id;
 
     if !self.listened(chat_id) {
       return Ok(());
     }
 
-    let edit = read_edit(&message, &raw);
-    let Some((handed, context)) = edit.said else {
+    let edit = read_edit(&message, &raw, self.me(), self.owner_id);
+    let Some(mut handed) = edit.said else {
       return Ok(());
     };
-    let mut files = self.gatherer.assets(chat_id, message.message_id, &raw).await;
+    let mut files = self.gatherer.assets(chat_id, message_id, &raw).await;
 
     if edit.carries_file {
-      match self.gatherer.file(chat_id, message.message_id, &raw).await {
+      match self.gatherer.file(chat_id, message_id, &raw).await {
         Ok(file) => files.extend(file),
-        Err(why) => eprintln!(
-          "telegram: keeping the file of chat {chat_id} message {} failed: {why}",
-          message.message_id
-        ),
+        Err(why) => {
+          eprintln!("telegram: keeping the file of chat {chat_id} message {message_id} failed: {why}")
+        }
       }
     }
 
-    let context = InboundChatContext {
-      carries_file: edit.carries_file,
-      ..context
-    };
+    handed.context.carries_file = edit.carries_file;
+    handed.files = files;
+    self.seen.message(chat_id, handed.sender_id);
 
     receiver
-      .edited(self.handover(handed, context, files))
+      .hand_over(chat_id, message_id, handed)
       .await
+      .map(drop)
       .map_err(|why| why.to_string())
   }
 

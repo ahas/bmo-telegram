@@ -17,10 +17,12 @@ pub mod policy;
 pub mod provider;
 pub mod reader;
 pub mod reading;
-pub mod receiver;
 pub mod routes;
 pub mod seam;
 pub mod seen;
 pub mod send;
 pub mod telegram;
 pub mod wire;
+
+/// The provider's key, as every hand-over carries it.
+pub const VIA: &str = "telegram";

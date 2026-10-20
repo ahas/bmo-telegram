@@ -16,8 +16,8 @@
 - **The version.** `VERSION` holds the workspace's version, and the reader's `package.json` carries it.
 - **The testbed's declaration.** `testbed.toml` names only keys of the testbed's format, its major version,
   the Cargo and bun suites and the three base libraries.
-- **Hangul.** No tracked file holds a Hangul character: every word this provider writes or matches on is
-  English.
+- **Hangul.** No tracked file holds a Hangul character but the fixed marker at the top of `docs/api.md`, which
+  is written as the fixed-API rule states it: every other word this provider writes or matches on is English.
 - **Home paths and private addresses.** No tracked file holds a path under a home directory or an address of a
   private network range.
 - **Names.** No tracked file holds an agent's, a person's or a machine's name. No repository keeps the list of

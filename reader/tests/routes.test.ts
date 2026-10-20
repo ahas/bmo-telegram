@@ -13,8 +13,8 @@ const token = "seam-token";
 const ownerAsked: unknown[] = [];
 
 const owner: OwnerAccount = {
-  say: async (chatId, text, reply) => {
-    ownerAsked.push({ chatId, text, reply });
+  say: async (chatId, text, replyToMessageId) => {
+    ownerAsked.push({ chatId, text, replyToMessageId });
 
     return 900;
   },
@@ -24,7 +24,14 @@ const owner: OwnerAccount = {
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
-  fetch: readerHandler({ token, peers: { ownerId: OWNER_ID, botId: BOT_ID }, owner, client: () => null, missing: () => "the account's values are not set" }),
+  fetch: readerHandler({
+    token,
+    peers: { ownerId: OWNER_ID, botId: BOT_ID },
+    owner,
+    client: () => null,
+    avatars: () => [{ kind: "person", id: 55, takenAt: 1_700_000_000_000 }],
+    missing: () => "the account's values are not set",
+  }),
 });
 
 afterAll(() => {
@@ -43,15 +50,19 @@ async function call(path: string, body: unknown, bearer = token): Promise<[numbe
 
 describe("the reader's door", () => {
   test("takes the seam's token alone, and says whether the owner's account is connected", async () => {
-    expect((await call("/owner/say", { chatId: 1, text: "a", reply: null }, "other"))[0]).toBe(401);
+    expect((await call("/owner/say", { chatId: 1, text: "a", replyToMessageId: null }, "other"))[0]).toBe(401);
 
     const health = await fetch(`http://127.0.0.1:${server.port}/health`, { headers: { authorization: `Bearer ${token}` } });
 
     expect(await health.json()).toEqual({ connected: false, reason: "the account's values are not set" });
     expect((await call("/elsewhere", {}))[0]).toBe(404);
     expect((await call("/owner/say", { text: "no room" }))[0]).toBe(400);
-    expect(await call("/owner/say", { chatId: 5, text: "words", reply: null })).toEqual([200, { messageId: 900 }]);
-    expect(ownerAsked).toEqual([{ chatId: 5, text: "words", reply: null }]);
+    expect(await call("/owner/say", { chatId: 5, text: "words", replyToMessageId: null })).toEqual([200, { messageId: 900 }]);
+    expect(ownerAsked).toEqual([{ chatId: 5, text: "words", replyToMessageId: null }]);
+
+    const avatars = await fetch(`http://127.0.0.1:${server.port}/reader/avatars`, { headers: { authorization: `Bearer ${token}` } });
+
+    expect(await avatars.json()).toEqual({ avatars: [{ kind: "person", id: 55, takenAt: 1_700_000_000_000 }] });
   });
 });
 

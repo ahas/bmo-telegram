@@ -5,7 +5,7 @@
 import { peerOf } from "./media";
 import { mtproto } from "./mtproto";
 import { fill, POLICY } from "./policy";
-import { roomFacts, via } from "./service";
+import { handedMessage, roomFacts } from "./service";
 
 import type { TelegramClient } from "telegram";
 import type { Entity } from "telegram/define";
@@ -74,6 +74,12 @@ export function historyMessageId(chatId: number, ownId: number): number {
   return isHistoryAligned(chatId) ? ownId : foreignIdBase + ownId;
 }
 
+// The account's own number for a message the provider holds, where the room numbers messages per account and
+// the message was read back from the room's past. Every other number crosses as it stands.
+export function accountMessageId(chatId: number, messageId: number): number {
+  return !isHistoryAligned(chatId) && messageId <= foreignIdBase ? messageId - foreignIdBase : messageId;
+}
+
 // A peer the account has not met in this session cannot be resolved from its number alone; loading the
 // dialog list once fills the cache with everyone the account talks to, the bot included.
 export async function resolveEntity(client: TelegramClient, peer: number): Promise<Entity> {
@@ -133,7 +139,7 @@ export async function walkRoom(
   const oldestKnown = aligned ? room.oldestMessageId : null;
   const candidates = [progress?.reachedId, oldestKnown].filter((id): id is number => id !== undefined && id !== null && id !== 0);
   const offsetId = candidates.length === 0 ? 0 : Math.min(...candidates);
-  const floorDate = aligned ? null : room.oldestSentAt;
+  const floorDate = aligned || room.oldestSentAt === null ? null : Math.floor(room.oldestSentAt / 1000);
   const entity = await resolveEntity(client, peerOf(chatId, peers));
   const names = new Map<number, string>();
   const pause = deps.pause ?? (async () => await Bun.sleep(pauseBetweenPagesMs));
@@ -184,21 +190,22 @@ export async function walkRoom(
 
     const replyHeader = message.replyTo;
     const replyTo = replyHeader instanceof mtproto().Api.MessageReplyHeader ? (replyHeader.replyToMsgId ?? null) : null;
+    const messageId = historyMessageId(chatId, message.id);
     const answer = await service.inbound({
-      kind: "history",
-      message: {
+      kind: "message",
+      roomId: chatId,
+      messageId,
+      message: handedMessage({
         chatId,
-        messageId: historyMessageId(chatId, message.id),
+        messageId,
+        origin: "history",
         senderId,
         senderName: senderName ?? "unknown",
         sentAt: message.date,
         text: historyMessageText(hasPhoto, text),
         replyToMessageId: replyTo === null ? null : historyMessageId(chatId, replyTo),
-        via,
-        album: null,
-        mode: "human-reader",
-      },
-      room: roomFacts(chatId, peers.ownerId, peers.botId),
+        room: roomFacts(chatId, peers.ownerId, peers.botId),
+      }),
     });
 
     handed += 1;

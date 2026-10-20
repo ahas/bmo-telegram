@@ -19,7 +19,8 @@ the service calls, over the loopback.
   here names the receiver's internals or another provider, and nothing branches on an agent's name.
 - **English only** in code, comments, strings, tests, policy, documents and commit messages. A refusal is a
   bmo-chat refusal code with an English sentence; a placeholder for what a message carries is English and
-  lives in `policy/telegram.toml`. No tracked file holds Hangul.
+  lives in `policy/telegram.toml`. No tracked file holds Hangul but the fixed marker at the top of
+  `docs/api.md`.
 - **No agent names, owner names, host names, home paths or private network addresses** in code, documents or
   commits. A deployment value that would name one is configuration (`docs/boundary-api.md`,
   「Configuration」); tests use neutral names. No list of forbidden names is kept in the repository; the names

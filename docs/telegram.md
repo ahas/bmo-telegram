@@ -23,13 +23,13 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 | Voice | Reach | Standing | `canReplyTo` |
 |---|---|---|---|
 | `bot-account` | `all-messages` | `active` | true |
-| `human-reader` | `all-messages` | `active` while the reader is connected; `inactive` otherwise, with the reader's reason, `BMO_TG_API_ID, BMO_TG_API_HASH, BMO_TG_SESSION not all set` where they are missing | false |
+| `human-reader` | `all-messages` | `active` while the reader is connected; `inactive` otherwise, with the reader's reason, `BMO_TG_API_ID, BMO_TG_API_HASH, BMO_TG_SESSION not all set` where they are missing | true |
 
 - **The bot account reads every message of every room it is in,** and is what the provider runs on with
   nothing else configured.
 - **The owner's account is read only.** It sees the other bots' words, which the Bot API never shows a bot,
-  and the bytes behind a picture or a file past the Bot API's ceiling. An answer cannot be pinned to a message
-  it read, since the bot account is not the one that saw it.
+  and the bytes behind a picture or a file past the Bot API's ceiling. A send in its voice can still be pinned
+  to a message, since it finds the line by the message's number.
 
 ### Capabilities
 
@@ -51,6 +51,10 @@ part stands (`GET /status`).
   the context's `spokenText`. The placeholders are this repository's policy (`policy/telegram.toml`).
 - **Telegram's own payload** for a message of a listened room crosses as `metadata`: its words, their
   formatting, its sticker and the file it carries, each as Telegram wrote it and in that order.
+- **Every time crosses in epoch milliseconds, as the protocol states times.** Telegram's own `date` counts
+  seconds, so the reading multiplies it once, and nothing further down divides it. Every file a message carried
+  crosses with its kind as far as Telegram says it: a picture, a video, a round video, an animation, an audio
+  file, a voice note, a sticker or a document.
 - **A picture goes as a `message` carrying its bytes,** fetched before the message is handed over, as words do;
   where the bytes could not be had, without them. Telegram's largest size is taken, and a picture sent as a
   file is still a picture; an SVG is a file. A picture past the keeping threshold, or one with transparency,
@@ -107,7 +111,8 @@ own fault — is the send's failure, in the protocol's error shape, and is never
   reading are asked again twice at most.
 - **A picture named by anything but a web address or a file under the picture root** is not sent: it is
   missed as `not-an-address`, `outside-data-root` or `missing-file`. With no picture root configured, no file
-  path is sent.
+  path is sent. The file and the root are both resolved to where they really stand before either is read, so a
+  symbolic link inside the root that reaches a file outside it is `outside-data-root`.
 - **What went is not kept here.** Keeping a copy of a send is the sender's, under the number the result gives.
 
 ### Refusals
@@ -142,8 +147,9 @@ A send with `as` `human-reader` goes out in the owner's own account, through the
   line breaks each a single line feed and its ends trimmed. A file that holds nothing, or one past the
   `[owner]` ceiling, is missed with the policy's `empty_file` or `too_large`; an album the account refuses is
   missed by every file in it, and stops none after it.
-- **Neither answers `replyTo`:** the owner's account finds a message by when it was said and what it says,
-  which the protocol's send does not carry.
+- **A reply** is named by the send's `replyToMessageId`, the message's number as the protocol carries it. The
+  reader finds that number's line on the owner's account and answers it; where the account has no line under
+  that number, the send is refused `unreachable` rather than sent without the reference the caller asked for.
 - **While the reader does not have the account connected**, the send is refused with the reader's reason.
 
 ## The dialect: `telegram-html`
@@ -160,3 +166,7 @@ The agent's markdown becomes Telegram's HTML. The dialect has:
 | `fault` | an English reason where the markup is not sound HTML Telegram reads: a character left unescaped, a tag Telegram does not take, a tag left open, one closed that was never opened, two crossed, one nested where it may not be |
 | `fold` | the folded markup, or null where there is nothing worth folding |
 | `visible` | what a reader sees of the markup |
+
+Whether a reply folds is the sender's decision, carried to the provider as the send's `fold`, as the fixed
+protocol states it. The provider applies the dialect's fold where the send asks for one and asks no output gate
+of its own.

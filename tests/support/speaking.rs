@@ -283,7 +283,14 @@ pub async fn provider_served(stand_in: Arc<BotSends>, sending: Sending) -> (Stri
     seen.clone(),
     Arc::new(FileIds::in_memory()),
   ));
-  let provider = Arc::new(TelegramProvider::new(telegram, sending, None, seen, Arc::default()));
+  let provider = Arc::new(TelegramProvider::new(
+    telegram,
+    sending,
+    None,
+    seen,
+    Arc::default(),
+    std::path::PathBuf::from("avatars"),
+  ));
   let (receiver, _heard) = KeptReceiver::new();
 
   provider.start(receiver).await.expect("the provider starts");
@@ -305,10 +312,11 @@ pub async fn provider_served(stand_in: Arc<BotSends>, sending: Sending) -> (Stri
   (format!("http://127.0.0.1:{}", serve(routes).await), provider)
 }
 
-/// One send posted to the provider's `/send` route as the receiver posts it: the status and the answer.
+/// One send posted to the provider's `/sends` route as the receiving side posts it: the status and the
+/// answer.
 pub async fn post_send(base: &str, body: Value) -> (u16, Value) {
   let answer = reqwest::Client::new()
-    .post(format!("{base}/send"))
+    .post(format!("{base}/sends"))
     .bearer_auth(ROUTES_TOKEN)
     .header(CONTENT_TYPE, "application/json")
     .body(body.to_string())
@@ -321,7 +329,11 @@ pub async fn post_send(base: &str, body: Value) -> (u16, Value) {
   (status, serde_json::from_slice(&bytes).expect("a JSON answer"))
 }
 
-/// One send in the bot account's voice into the test's room.
-pub async fn send(speaker: &Speaker, send: ChatSend) -> Result<ChatSendResult, String> {
-  speaker.send(ROOM, &send).await.map_err(|why| why.to_string())
+/// One send in the bot account's voice into the test's room, answering `reply_to` where one is named.
+pub async fn send(
+  speaker: &Speaker,
+  reply_to: Option<i64>,
+  send: ChatSend,
+) -> Result<ChatSendResult, String> {
+  speaker.send(ROOM, reply_to, &send).await.map_err(|why| why.to_string())
 }

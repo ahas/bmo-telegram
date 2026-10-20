@@ -1,15 +1,19 @@
 //! The Telegram provider as bmo-chat's contract states one (docs/telegram.md, 「The declaration」): what it
-//! declares, the room questions, a send in the voice it asks for, and a message's picture or file fetched again
-//! through the owner's account. The bot account reads and speaks; the reader stands behind it.
+//! declares, the room questions, a send in the voice it asks for, a message's picture or file fetched again
+//! through the owner's account, and the profile pictures it keeps. The bot account reads and speaks; the
+//! reader stands behind it.
 
 use std::collections::BTreeSet;
+use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use async_trait::async_trait;
 use bmo_chat::{
-  ChatCapability, ChatDialect, ChatFailure, ChatHealth, ChatMediaRequest, ChatMediaResult,
-  ChatModeStanding, ChatNumberSpace, ChatNumbering, ChatProvider, ChatReach, ChatReadMode, ChatReceiver,
-  ChatSend, ChatSendRequest, ChatSendResult, ChatVoice, MessageFile, RoomKind,
+  ChatAvatar, ChatAvatarKind, ChatCapability, ChatDialect, ChatFailure, ChatHealth, ChatMediaRequest,
+  ChatMediaResult, ChatModeStanding, ChatNumberRanges, ChatNumberSpace, ChatNumbering, ChatPicture,
+  ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal, ChatSend, ChatSendRequest,
+  ChatSendResult, ChatVoice, MessageFile, ProviderRoom,
 };
 use serde::Serialize;
 use telegram_dialect::TelegramHtml;
@@ -35,6 +39,8 @@ pub struct TelegramProvider {
   reader_health: Mutex<ReaderHealth>,
   standing: Arc<Standing>,
   reading: Mutex<Option<JoinHandle<()>>>,
+  // The folder the reader keeps the profile pictures in.
+  avatars: PathBuf,
 }
 
 // The name a voice or a verb crosses the wire by.
@@ -47,13 +53,15 @@ fn wire_name(value: &impl Serialize) -> String {
 
 impl TelegramProvider {
   /// The provider over the bot account, speaking as `sending` configures it, with the reader where one stands
-  /// behind it, the record of what has been seen and where the reader's parts stand.
+  /// behind it, the record of what has been seen, where the reader's parts stand, and the folder the pictures
+  /// are kept in.
   pub fn new(
     telegram: Arc<Telegram>,
     sending: Sending,
     reader: Option<ReaderClient>,
     seen: Arc<Seen>,
     standing: Arc<Standing>,
+    avatars: PathBuf,
   ) -> Self {
     let reason = if reader.is_some() { "the reader has not been asked yet" } else { NO_READER };
 
@@ -67,6 +75,7 @@ impl TelegramProvider {
       }),
       standing,
       reading: Mutex::default(),
+      avatars,
     }
   }
 
@@ -97,11 +106,21 @@ impl TelegramProvider {
     };
 
     match &request.send {
-      ChatSend::Text { text, .. } => owner::say(reader, request.chat_id, text).await,
-      ChatSend::Album { items, caption, .. } => {
-        owner::album(&self.speaker, reader, request.chat_id, items, caption.as_deref()).await
+      ChatSend::Text { text, .. } => {
+        owner::say(reader, request.room_id, text, request.reply_to_message_id).await
       }
-      other => Ok(refused(POLICY.owner_verb(&wire_name(&other.verb())))),
+      ChatSend::Album { items, caption } => {
+        owner::album(
+          &self.speaker,
+          reader,
+          request.room_id,
+          items,
+          caption.as_deref(),
+          request.reply_to_message_id,
+        )
+        .await
+      }
+      other => Ok(refused(POLICY.owner_verb(&wire_name(&other.kind())))),
     }
   }
 }
@@ -109,11 +128,15 @@ impl TelegramProvider {
 #[async_trait]
 impl ChatProvider for TelegramProvider {
   fn key(&self) -> &str {
-    crate::receiver::VIA
+    crate::VIA
   }
 
   fn label(&self) -> &str {
     &POLICY.telegram.label
+  }
+
+  fn version(&self) -> &str {
+    env!("CARGO_PKG_VERSION")
   }
 
   fn configured(&self) -> Option<String> {
@@ -140,8 +163,8 @@ impl ChatProvider for TelegramProvider {
 
   fn health(&self) -> ChatHealth {
     match self.configured().or_else(|| self.telegram.standing()) {
-      None => ChatHealth::ready(),
-      Some(reason) => ChatHealth::not_ready(reason),
+      None => ChatHealth::ready(self.version()),
+      Some(reason) => ChatHealth::not_ready(self.version(), reason),
     }
   }
 
@@ -152,7 +175,8 @@ impl ChatProvider for TelegramProvider {
       reach: ChatReach::AllMessages,
       standing,
       reason,
-      can_reply_to: !POLICY.telegram.unpinned.contains(&voice),
+      // An answer can be pinned in every voice: the owner's account finds the line by the message's number.
+      can_reply_to: true,
     };
     let (standing, reason) = if reader.connected {
       (ChatModeStanding::Active, None)
@@ -194,36 +218,30 @@ impl ChatProvider for TelegramProvider {
       rooms: ChatNumberSpace::Native,
       people: ChatNumberSpace::Native,
       messages: ChatNumberSpace::Native,
+      ranges: ChatNumberRanges::default(),
     }
   }
 
-  async fn owns_room(&self, chat_id: i64) -> Result<bool, ChatFailure> {
-    Ok(self.telegram.owns_room(chat_id))
-  }
-
-  async fn identity_of(&self, _chat_id: i64) -> Result<Option<i64>, ChatFailure> {
-    Ok(Some(self.telegram.me()))
-  }
-
-  async fn is_owner_room(&self, chat_id: i64) -> Result<RoomKind, ChatFailure> {
-    Ok(self.telegram.room_kind(chat_id))
-  }
-
-  async fn private_room_of(&self, chat_id: i64) -> Result<Option<i64>, ChatFailure> {
-    Ok(self.telegram.private_room_of(chat_id))
+  async fn room(&self, room_id: i64) -> Result<Option<ProviderRoom>, ChatFailure> {
+    Ok(self.telegram.provider_room(room_id).await)
   }
 
   async fn owner_room(&self) -> Result<Option<i64>, ChatFailure> {
     Ok(Some(self.telegram.owner_id()))
   }
 
-  async fn room_title(&self, chat_id: i64) -> Result<Option<String>, ChatFailure> {
-    Ok(self.telegram.room_title(chat_id).await)
-  }
-
   async fn send(&self, request: ChatSendRequest) -> Result<ChatSendResult, ChatFailure> {
-    match request.voice {
-      None | Some(ChatVoice::BotAccount) => self.speaker.send(request.chat_id, &request.send).await,
+    if let Some(speaker) = &request.speaker {
+      return Ok(refused(ChatRefusal::SpeakerNotAllowed {
+        label: self.label().to_owned(),
+        speaker: speaker.clone(),
+      }));
+    }
+
+    match request.mode {
+      None | Some(ChatVoice::BotAccount) => {
+        self.speaker.send(request.room_id, request.reply_to_message_id, &request.send).await
+      }
       Some(ChatVoice::HumanReader) => self.as_owner(&request).await,
       Some(other) => Ok(refused(POLICY.mode_down(&wire_name(&other), None))),
     }
@@ -231,30 +249,52 @@ impl ChatProvider for TelegramProvider {
 
   async fn fetch_media(&self, request: ChatMediaRequest) -> Result<ChatMediaResult, ChatFailure> {
     let Some(reader) = &self.reader else {
-      return Ok(ChatMediaResult::Refused {
-        refusal: self.unsupported(ChatCapability::FetchMedia),
-      });
+      return Ok(ChatMediaResult::Refused(self.unsupported(ChatCapability::FetchMedia)));
     };
     let ChatMediaRequest {
-      chat_id,
+      room_id,
       message_id,
       sent_at,
     } = request;
-    let fetched = match reader.picture(chat_id, message_id, sent_at).await {
-      ReaderFetch::Unavailable(_) => reader.file(chat_id, message_id, sent_at.unwrap_or_default()).await,
+    let fetched = match reader.picture(room_id, message_id, sent_at).await {
+      ReaderFetch::Unavailable(_) => reader.file(room_id, message_id, sent_at.unwrap_or_default()).await,
       other => other,
     };
 
     Ok(match fetched {
       // A file the bot account handed over is fetched again under the id it crossed with.
-      ReaderFetch::Fetched(file) => ChatMediaResult::Fetched(MessageFile {
-        id: self.telegram.file_id_of(chat_id, message_id).unwrap_or(file.id),
+      ReaderFetch::Fetched(file) => ChatMediaResult::Fetched(vec![MessageFile {
+        id: self.telegram.file_id_of(room_id, message_id).unwrap_or(file.id),
         ..file
-      }),
+      }]),
       ReaderFetch::Unavailable(reason) => ChatMediaResult::Unavailable { reason },
-      ReaderFetch::NoReader(reason) => ChatMediaResult::Refused {
-        refusal: POLICY.mode_down(&wire_name(&ChatVoice::HumanReader), Some(&reason)),
-      },
+      ReaderFetch::NoReader(reason) => {
+        ChatMediaResult::Refused(POLICY.mode_down(&wire_name(&ChatVoice::HumanReader), Some(&reason)))
+      }
     })
+  }
+
+  async fn avatars(&self) -> Result<Vec<ChatAvatar>, ChatFailure> {
+    let Some(reader) = &self.reader else {
+      return Ok(Vec::new());
+    };
+
+    reader
+      .avatars()
+      .await
+      .map_err(|why| format!("the reader's profile pictures were not read: {why}").into())
+  }
+
+  async fn avatar(&self, kind: ChatAvatarKind, id: i64) -> Result<Option<ChatPicture>, ChatFailure> {
+    let path = self.avatars.join(kind.to_string()).join(format!("{id}.jpg"));
+
+    match tokio::fs::read(&path).await {
+      Ok(bytes) => Ok(Some(ChatPicture {
+        mime: "image/jpeg".to_owned(),
+        bytes,
+      })),
+      Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+      Err(error) => Err(format!("the picture {} could not be read: {error}", path.display()).into()),
+    }
   }
 }

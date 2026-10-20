@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use axum::Router;
 use axum::response::Json;
 use axum::routing::{get, post};
-use bmo_chat::{ChatProvider, ChatSend, ChatSendRequest, ChatSendResult, ChatVoice};
+use bmo_chat::{ChatProvider, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, ChatVoice};
 use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::owner::{albums, caption_of, kind_of, megabytes, refusal};
 use bmo_telegram::policy::{POLICY, fill};
@@ -58,17 +58,24 @@ async fn provider(connected: bool, said: Arc<Mutex<Vec<Value>>>) -> TelegramProv
   ));
   let reader = ReaderClient::new(Wire::loopback(port, "seam-token"));
 
-  TelegramProvider::new(telegram, Sending::default(), Some(reader), seen, Arc::default())
+  TelegramProvider::new(
+    telegram,
+    Sending::default(),
+    Some(reader),
+    seen,
+    Arc::default(),
+    std::path::PathBuf::from("avatars"),
+  )
 }
 
 fn as_owner(text: &str) -> ChatSendRequest {
   ChatSendRequest {
-    voice: Some(ChatVoice::HumanReader),
+    mode: Some(ChatVoice::HumanReader),
+    reply_to_message_id: Some(5),
     ..ChatSendRequest::new(
       ROOM,
       ChatSend::Text {
         text: text.to_owned(),
-        reply_to: Some(5),
         silent: false,
         fold: false,
       },
@@ -85,10 +92,10 @@ async fn words_are_cut_after_the_last_pause_that_fits_and_a_run_with_no_pause_be
 
   assert_eq!(
     up.send(as_owner(&words)).await.unwrap(),
-    ChatSendResult::Sent {
+    ChatSendResult::Sent(ChatSent {
       message_id: Some(900),
       missed: Vec::new()
-    }
+    })
   );
   up.send(as_owner(&run)).await.unwrap();
 
@@ -104,16 +111,13 @@ async fn words_are_cut_after_the_last_pause_that_fits_and_a_run_with_no_pause_be
       "\u{1f600}".repeat(52)
     ]
   );
-  assert!(pieces.iter().all(|piece| piece["chatId"] == ROOM && piece["reply"].is_null()));
+  assert!(pieces.iter().all(|piece| piece["chatId"] == ROOM && piece["replyToMessageId"] == 5));
 
   let down = provider(false, Arc::default()).await;
 
   assert_eq!(
     down.send(as_owner("hello")).await.unwrap(),
-    ChatSendResult::Refused {
-      refusal: POLICY.mode_down("human-reader", Some("the account is not connected")),
-      gone: false
-    }
+    ChatSendResult::Refused(POLICY.mode_down("human-reader", Some("the account is not connected")))
   );
 }
 

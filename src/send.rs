@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bmo_chat::{ChatFailure, ChatRefusal, ChatSend, ChatSendResult};
+use bmo_chat::{ChatFailure, ChatRefusal, ChatSend, ChatSendResult, ChatSent};
 use serde_json::{Value, json};
 
 use crate::bot_api::{Answered, BotApi};
@@ -35,18 +35,15 @@ pub struct Speaker {
 
 /// A send that went, as the message it went out as where there is one.
 pub fn sent(message_id: Option<i64>) -> ChatSendResult {
-  ChatSendResult::Sent {
+  ChatSendResult::Sent(ChatSent {
     message_id,
     missed: Vec::new(),
-  }
+  })
 }
 
-/// A send refused, about nothing that is gone.
+/// A send refused.
 pub fn refused(refusal: ChatRefusal) -> ChatSendResult {
-  ChatSendResult::Refused {
-    refusal,
-    gone: false,
-  }
+  ChatSendResult::Refused(refusal)
 }
 
 /// What a call Telegram did not take comes to: a refusal in Telegram's own words where it turned the call down
@@ -106,42 +103,22 @@ impl Speaker {
     self.seen.room(chat_id);
   }
 
-  /// One send in the bot account's voice.
-  pub async fn send(&self, chat_id: i64, send: &ChatSend) -> Sent {
+  /// One send in the bot account's voice, answering the message the send names.
+  pub async fn send(&self, chat_id: i64, reply_to: Option<i64>, send: &ChatSend) -> Sent {
     match send {
-      ChatSend::Text {
-        text,
-        reply_to,
-        silent,
-        fold,
-      } => self.text(chat_id, text, *reply_to, *silent, *fold).await,
-      ChatSend::Photo {
-        image_url,
-        caption,
-        reply_to,
-      } => self.photo(chat_id, image_url, caption.as_deref(), *reply_to).await,
-      ChatSend::Album {
-        items,
-        caption,
-        reply_to,
-      } => self.album(chat_id, items, caption.as_deref(), *reply_to).await,
-      ChatSend::Document {
-        bytes,
-        file_name,
-        reply_to,
-      } => self.document(chat_id, bytes, file_name, *reply_to).await,
-      ChatSend::Audio {
-        audio,
-        file_name,
-        reply_to,
-      } => self.audio(chat_id, audio, file_name, *reply_to).await,
+      ChatSend::Text { text, silent, fold } => self.text(chat_id, text, reply_to, *silent, *fold).await,
+      ChatSend::Photo { image_url, caption } => {
+        self.photo(chat_id, image_url, caption.as_deref(), reply_to).await
+      }
+      ChatSend::Album { items, caption } => self.album(chat_id, items, caption.as_deref(), reply_to).await,
+      ChatSend::Document { bytes, file_name } => self.document(chat_id, bytes, file_name, reply_to).await,
+      ChatSend::Audio { audio, file_name } => self.audio(chat_id, audio, file_name, reply_to).await,
       ChatSend::Voice {
         audio,
         caption,
         transcript,
-        reply_to,
         ..
-      } => self.voice(chat_id, audio, caption.as_deref(), transcript.as_deref(), *reply_to).await,
+      } => self.voice(chat_id, audio, caption.as_deref(), transcript.as_deref(), reply_to).await,
       ChatSend::Sticker { emoji } => self.sticker(chat_id, emoji).await,
       ChatSend::Reaction { message_id, emoji } => self.reaction(chat_id, *message_id, emoji).await,
       ChatSend::Pin {

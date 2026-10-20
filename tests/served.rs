@@ -1,5 +1,6 @@
 //! The service as one router (docs/boundary-api.md): bmo-chat's provider routes, the seam's routes the reader
-//! calls and the repository's own, served together and asked over HTTP as the receiver and the reader ask them.
+//! calls and the repository's own, served together and asked over HTTP as the receiving side and the reader ask
+//! them.
 
 mod support;
 
@@ -7,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::Router;
 use axum::extract::Request;
+use axum::http::StatusCode;
 use axum::http::header::CONTENT_TYPE;
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
@@ -14,7 +16,6 @@ use bmo_chat::{ChatProvider, ChatReceiver, ChatReceiverLink};
 use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::provider::TelegramProvider;
 use bmo_telegram::reader::ReaderClient;
-use bmo_telegram::receiver::ReceiverNeeds;
 use bmo_telegram::routes::service;
 use bmo_telegram::seam::{Seam, Standing};
 use bmo_telegram::seen::Seen;
@@ -36,7 +37,7 @@ const ROOM: i64 = -100;
 const PERSON: i64 = 55;
 const OWNER: i64 = 42;
 const BOT: i64 = 7_000_000_001_i64;
-const SENT_AT: i64 = 1_700_000_000;
+const SENT_AT: i64 = 1_700_000_000_000;
 
 /// A port nothing listens on: the reader that does not stand behind the service.
 async fn closed_port() -> u16 {
@@ -70,7 +71,7 @@ async fn bot_api() -> String {
   format!("http://127.0.0.1:{}", serve(router).await)
 }
 
-// The receiver: every hand-over and every need kept, each answered with an empty body.
+// The receiving side: every hand-over and every call kept; a hand-over answered as held.
 #[derive(Default)]
 struct Kept {
   handed: Mutex<Vec<(String, Value)>>,
@@ -81,16 +82,18 @@ async fn receiver_served(kept: Arc<Kept>) -> String {
     let kept = kept.clone();
 
     async move {
+      let method = request.method().clone();
       let path = request.uri().path().to_owned();
       let bytes = axum::body::to_bytes(request.into_body(), usize::MAX).await.unwrap_or_default();
+      let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
 
-      kept
-        .handed
-        .lock()
-        .unwrap()
-        .push((path, serde_json::from_slice(&bytes).unwrap_or(Value::Null)));
+      kept.handed.lock().unwrap().push((path, body.clone()));
 
-      Json(json!({})).into_response()
+      if method == axum::http::Method::PUT {
+        (StatusCode::CREATED, Json(body)).into_response()
+      } else {
+        Json(json!({})).into_response()
+      }
     }
   });
 
@@ -162,12 +165,26 @@ async fn stood(reader_standing: bool) -> Served {
   let seam = Arc::new(Seam {
     token: TOKEN.to_owned(),
     receiver: receiver.clone(),
-    needs: ReceiverNeeds::new(Wire::new(receiver_base.as_str(), RECEIVER_TOKEN)),
     seen: seen.clone(),
     standing: standing.clone(),
   });
-  let provider =
-    Arc::new(TelegramProvider::new(telegram, Sending::default(), Some(reader), seen, standing));
+
+  let pictures = tempdir().expect("a temporary folder");
+  let avatars = pictures.path().join("avatars");
+
+  let person = avatars.join("person");
+
+  std::fs::create_dir_all(&person).expect("the pictures folder is made");
+  std::fs::write(person.join(format!("{PERSON}.jpg")), [0xff, 0xd8]).expect("a picture is kept");
+
+  let provider = Arc::new(TelegramProvider::new(
+    telegram,
+    Sending::default(),
+    Some(reader),
+    seen,
+    standing,
+    avatars,
+  ));
 
   provider.start(receiver).await.expect("the provider starts");
 
@@ -182,15 +199,7 @@ async fn stood(reader_standing: bool) -> Served {
 
   assert!(provider.health().ready, "the provider is ready");
 
-  let pictures = tempdir().expect("a temporary folder");
-  let avatars = pictures.path().join("avatars");
-
-  let person = avatars.join("person");
-
-  std::fs::create_dir_all(&person).expect("the pictures folder is made");
-  std::fs::write(person.join(format!("{PERSON}.jpg")), [0xff, 0xd8]).expect("a picture is kept");
-
-  let app = service(provider.clone(), seam, avatars);
+  let app = service(provider.clone(), seam);
 
   Served {
     base: format!("http://127.0.0.1:{}", serve(app).await),
@@ -202,7 +211,7 @@ async fn stood(reader_standing: bool) -> Served {
   }
 }
 
-/// One route of the served service asked as the receiver asks it: the status and the JSON answer.
+/// One route of the served service asked as the receiving side asks it: the status and the JSON answer.
 async fn asked(base: &str, route: &str, body: Value) -> (u16, Value) {
   let answer = Wire::new(base, TOKEN).post(route, &body).await.expect("the service answers");
 
@@ -232,7 +241,10 @@ async fn the_declaration_names_the_provider_its_modes_and_its_dialect() {
   assert_eq!(answer["speakers"], false);
   assert_eq!(
     answer["numbering"],
-    json!({ "rooms": "native", "people": "native", "messages": "native" })
+    json!({
+      "rooms": "native", "people": "native", "messages": "native",
+      "ranges": { "rooms": null, "people": null }
+    })
   );
   assert_eq!(
     answer["dialect"],
@@ -252,7 +264,7 @@ async fn the_declaration_names_the_provider_its_modes_and_its_dialect() {
   assert_eq!(answer["modes"][1]["voice"], "human-reader");
   assert_eq!(answer["modes"][1]["reach"], "all-messages");
   assert_eq!(answer["modes"][1]["standing"], "active");
-  assert_eq!(answer["modes"][1]["canReplyTo"], false);
+  assert_eq!(answer["modes"][1]["canReplyTo"], true);
 
   assert_eq!(
     answer["can"],
@@ -290,6 +302,7 @@ async fn the_service_is_ready_with_and_without_the_reader_behind_it() {
     assert_eq!(status, 200);
     assert_eq!(answer["ready"], json!(true));
     assert_eq!(answer["reason"], Value::Null);
+    assert_eq!(answer["version"], env!("CARGO_PKG_VERSION"));
   }
 
   with.provider.refresh_reader().await;
@@ -317,31 +330,24 @@ async fn the_service_is_ready_with_and_without_the_reader_behind_it() {
 async fn every_room_route_answers_for_a_room_the_provider_reads() {
   let served = stood(true).await;
 
-  let (_status, owns) = asked(&served.base, "/room/owns", json!({ "chatId": OWNER })).await;
-  assert_eq!(owns["owns"], true);
-
-  let (_status, owns_other) = asked(&served.base, "/room/owns", json!({ "chatId": ROOM })).await;
-  assert_eq!(owns_other["owns"], false);
-
-  let (_status, identity) = asked(&served.base, "/room/identity", json!({ "chatId": ROOM })).await;
-  assert_eq!(identity["identity"], BOT);
-
-  let (_status, kind) = asked(&served.base, "/room/is-owner", json!({ "chatId": OWNER })).await;
-  assert_eq!(kind["kind"], "owner");
-
-  let (_status, group) = asked(&served.base, "/room/is-owner", json!({ "chatId": ROOM })).await;
-  assert_eq!(group["kind"], "group");
-
-  let (_status, person) = asked(&served.base, "/room/private-of", json!({ "chatId": PERSON })).await;
-  assert_eq!(person["person"], PERSON);
-
-  let (_status, title) = asked(&served.base, "/room/title", json!({ "chatId": ROOM })).await;
-  assert_eq!(title["title"], "Board room");
-
-  let (status, owner_room) = asked_get(&served.base, "/owner-room").await;
+  let (status, owner) = asked_get(&served.base, &format!("/rooms/{OWNER}")).await;
 
   assert_eq!(status, 200);
-  assert_eq!(owner_room["chatId"], json!(OWNER));
+  assert_eq!(
+    owner,
+    json!({ "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER,
+      "title": "Board room" })
+  );
+
+  let (status, unknown) = asked_get(&served.base, &format!("/rooms/{ROOM}")).await;
+
+  assert_eq!(status, 404);
+  assert_eq!(unknown["code"], "not-found");
+
+  let (status, owner_room) = asked_get(&served.base, "/owner").await;
+
+  assert_eq!(status, 200);
+  assert_eq!(owner_room, json!({ "roomId": OWNER }));
 }
 
 /// A message's picture fetched again through the reader seam: the bytes the owner's account hands over, under
@@ -350,28 +356,28 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
 #[tokio::test]
 async fn a_picture_is_fetched_again_through_the_reader_seam_under_the_id_it_crossed_with() {
   let served = stood(true).await;
-  let request = json!({ "chatId": ROOM, "messageId": 6, "sentAt": SENT_AT });
+  let route = format!("/rooms/{ROOM}/messages/6/files?sentAt={SENT_AT}");
 
-  let (status, answer) = asked(&served.base, "/media", request.clone()).await;
+  let (status, answer) = asked_get(&served.base, &route).await;
 
   assert_eq!(status, 200);
   assert_eq!(
     answer,
-    json!({ "outcome": "fetched", "id": "photo-9", "name": "picture.jpg", "mime": "image/jpeg", "bytes": "AQID" })
+    json!({ "items": [{ "id": "photo-9", "name": "picture.jpg", "mime": "image/jpeg", "bytes": "AQID" }],
+      "more": false })
   );
 
   served.file_ids.keep(ROOM, 6, "photo-unique");
 
-  let (_status, again) = asked(&served.base, "/media", request.clone()).await;
+  let (_status, again) = asked_get(&served.base, &route).await;
 
-  assert_eq!(again["id"], "photo-unique");
+  assert_eq!(again["items"][0]["id"], "photo-unique");
 
   let down = stood(false).await;
-  let (_status, refused) = asked(&down.base, "/media", request.clone()).await;
+  let (status, refused) = asked_get(&down.base, &route).await;
 
-  assert_eq!(refused["outcome"], "refused");
-  assert_eq!(refused["refusal"]["code"], "unsupported-capability");
-  assert_eq!(refused["refusal"]["capability"], "fetchMedia");
+  assert_eq!(status, 422);
+  assert_eq!(refused["code"], "unsupported-capability");
 }
 
 /// A send in the owner's own voice goes through the seam to the reader: the words cross to the owner's account,
@@ -383,17 +389,20 @@ async fn a_send_as_the_owner_goes_through_the_reader() {
 
   let (status, answer) = asked(
     &served.base,
-    "/send",
-    json!({ "chatId": ROOM, "as": "human-reader", "verb": "text", "text": words }),
+    "/sends",
+    json!({ "roomId": ROOM, "kind": "text", "fields": { "text": words }, "mode": "human-reader" }),
   )
   .await;
 
-  assert_eq!(status, 200);
-  assert_eq!(answer, json!({ "sent": true, "messageId": 900 }));
+  assert_eq!(status, 201);
+  assert_eq!(answer, json!({ "messageId": 900, "missed": [] }));
 
   let asked = served.asked.lock().unwrap().clone();
 
-  assert_eq!(asked.last().unwrap().clone(), json!({ "chatId": ROOM, "text": words, "reply": null }));
+  assert_eq!(
+    asked.last().unwrap().clone(),
+    json!({ "chatId": ROOM, "text": words, "replyToMessageId": null })
+  );
 }
 
 /// The repository's own routes beside the protocol's: what stands of each part, the profile pictures the
@@ -413,7 +422,7 @@ async fn the_service_s_own_routes_report_the_parts_and_serve_the_pictures() {
 
   let base = served.base.as_str();
   let picture = reqwest::Client::new()
-    .get(format!("{base}/avatars/person/{PERSON}"))
+    .get(format!("{base}/people/{PERSON}/avatar"))
     .bearer_auth(TOKEN)
     .send()
     .await
@@ -430,10 +439,10 @@ async fn the_service_s_own_routes_report_the_parts_and_serve_the_pictures() {
   assert_eq!(kind, Some("image/jpeg"));
   assert_eq!(picture.bytes().await.expect("the picture's bytes"), vec![0xff, 0xd8]);
 
-  let (status, missing) = asked_get(&served.base, "/avatars/room/9").await;
+  let (status, missing) = asked_get(&served.base, "/rooms/9/avatar").await;
 
   assert_eq!(status, 404);
-  assert_eq!(missing["code"], "nothing-held");
+  assert_eq!(missing["code"], "not-found");
 
   let (status, astray) = asked_get(&served.base, "/avatars/sticker/9").await;
 
@@ -452,12 +461,17 @@ async fn the_seam_stands_beside_the_provider_routes() {
   let served = stood(true).await;
   let handover = json!({
     "kind": "message",
+    "roomId": ROOM,
+    "messageId": 7,
     "message": {
-      "chatId": ROOM, "messageId": 7, "senderId": PERSON, "senderName": "Other bot", "sentAt": SENT_AT,
-      "text": "words", "replyToMessageId": null, "via": "telegram", "album": null, "mode": "human-reader"
-    },
-    "context": { "roomTitle": "Room", "carriesFile": false, "gathering": false },
-    "room": { "kind": "group", "identity": BOT, "privateTo": null }
+      "origin": "live",
+      "senderId": PERSON, "senderName": "Other bot", "sentAt": SENT_AT,
+      "text": "words", "replyToMessageId": null, "via": "telegram", "album": null,
+      "mode": "human-reader",
+      "context": { "roomTitle": "Room", "carriesFile": false },
+      "room": { "kind": "group", "identity": BOT, "privateTo": null },
+      "files": [], "gathering": false
+    }
   });
 
   let (status, _answer) = asked(&served.base, "/reader/inbound", handover.clone()).await;
@@ -466,9 +480,18 @@ async fn the_seam_stands_beside_the_provider_routes() {
 
   let handed = served.kept.handed.lock().unwrap().clone();
 
-  assert_eq!(handed.iter().map(|(route, _)| route.as_str()).collect::<Vec<_>>(), ["/message"]);
+  assert_eq!(
+    handed.iter().map(|(route, _)| route.as_str()).collect::<Vec<_>>(),
+    [format!("/rooms/{ROOM}/messages/7").as_str()]
+  );
 
   let (_status, seen) = asked_get(&served.base, "/reader/seen").await;
 
   assert_eq!(seen, json!({ "rooms": [ROOM], "people": [PERSON] }));
+
+  let (status, room) = asked_get(&served.base, &format!("/rooms/{ROOM}")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(room["owns"], true);
+  assert_eq!(room["kind"], "group");
 }

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use bmo_chat::{ChatMessage, ChatVoice};
+use bmo_chat::{ChatFileKind, ChatVoice, MessageOrigin, RoomFacts, RoomKind};
 use bmo_telegram::albums::{AlbumNames, KEPT};
 use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::files::audio_type;
@@ -16,6 +16,15 @@ use bmo_telegram::telegram::{TOKEN_MISSING, Telegram};
 use serde_json::{Value, json};
 
 const ME: i64 = 7_000_000_001;
+const OWNER: i64 = 42;
+
+fn room(kind: RoomKind, identity: i64, private_to: Option<i64>) -> RoomFacts {
+  RoomFacts {
+    kind: Some(kind),
+    identity: Some(identity),
+    private_to,
+  }
+}
 
 // The placeholders a message of each kind is handed over as, the same words the reading reads.
 fn kinds() -> &'static Kinds {
@@ -38,37 +47,34 @@ fn words_are_handed_over_with_who_said_them_what_they_answer_and_where_they_were
     "text": "hello"
   }"#;
 
-  let Reading::Said(handed, context) = read(&message(json), ME, true) else {
+  let Reading::Said(handed) = read(&message(json), ME, OWNER, true) else {
     panic!("words are said");
   };
 
-  assert_eq!(
-    handed,
-    ChatMessage {
-      chat_id: -1001,
-      message_id: 31,
-      sender_id: Some(55),
-      sender_name: "Test Er".into(),
-      sent_at: 1_760_000_000,
-      text: format!("{}hello", fill(&kinds().forwarded, &[("from", "Far")])),
-      reply_to_message_id: Some(30),
-      via: "telegram".into(),
-      album: None,
-      mode: ChatVoice::BotAccount,
-    }
-  );
-  assert_eq!(context.room_title.as_deref(), Some("Room"));
-  assert_eq!(context.sender_username.as_deref(), Some("tester"));
-  assert_eq!(context.reply_to_sender_id, Some(66));
-  assert_eq!(context.spoken_text.as_deref(), Some("hello"));
-  assert!(!context.carries_file);
+  assert_eq!(handed.origin, MessageOrigin::Live);
+  assert_eq!(handed.sender_id, Some(55));
+  assert_eq!(handed.sender_name, "Test Er");
+  assert_eq!(handed.sent_at, 1_760_000_000_000);
+  assert_eq!(handed.text, format!("{}hello", fill(&kinds().forwarded, &[("from", "Far")])));
+  assert_eq!(handed.reply_to_message_id, Some(30));
+  assert_eq!(handed.via, "telegram");
+  assert_eq!(handed.album, None);
+  assert_eq!(handed.mode, ChatVoice::BotAccount);
+  assert_eq!(handed.room, room(RoomKind::Group, ME, None));
+  assert!(handed.files.is_empty());
+  assert!(!handed.gathering);
+  assert_eq!(handed.context.room_title.as_deref(), Some("Room"));
+  assert_eq!(handed.context.sender_username.as_deref(), Some("tester"));
+  assert_eq!(handed.context.reply_to_sender_id, Some(66));
+  assert_eq!(handed.context.spoken_text.as_deref(), Some("hello"));
+  assert!(!handed.context.carries_file);
 }
 
 #[test]
 fn words_are_handed_over_from_a_room_nobody_listens_to_and_the_receiver_decides() {
   let json = r#"{ "message_id": 1, "date": 1, "chat": { "id": 99999999999999999, "type": "group" }, "text": "words" }"#;
 
-  assert!(matches!(read(&message(json), ME, false), Reading::Said(..)));
+  assert!(matches!(read(&message(json), ME, OWNER, false), Reading::Said(..)));
 }
 
 #[test]
@@ -80,7 +86,7 @@ fn a_photo_asks_for_its_largest_size_and_goes_under_its_caption_or_the_placehold
                { "file_id": "large", "file_unique_id": "l", "width": 900, "height": 900, "file_size": 9000 } ]
   }"#;
 
-  let Reading::Picture(handed, context, picture) = read(&message(json), ME, true) else {
+  let Reading::Picture(handed, picture) = read(&message(json), ME, OWNER, true) else {
     panic!("a photo is a picture");
   };
 
@@ -93,16 +99,16 @@ fn a_photo_asks_for_its_largest_size_and_goes_under_its_caption_or_the_placehold
       file_size: Some(9000)
     })
   );
-  assert_eq!(context.spoken_text, None);
-  assert!(context.carries_file);
+  assert_eq!(handed.context.spoken_text, None);
+  assert!(handed.context.carries_file);
 
   let captioned = json.replace(r#""photo""#, r#""caption": "look at this", "photo""#);
-  let Reading::Picture(handed, context, _) = read(&message(&captioned), ME, true) else {
+  let Reading::Picture(handed, _) = read(&message(&captioned), ME, OWNER, true) else {
     panic!("a photo is a picture");
   };
 
   assert_eq!(handed.text, "look at this");
-  assert_eq!(context.spoken_text.as_deref(), Some("look at this"));
+  assert_eq!(handed.context.spoken_text.as_deref(), Some("look at this"));
 }
 
 #[test]
@@ -110,7 +116,7 @@ fn nothing_but_words_is_taken_from_a_room_nobody_listens_to() {
   let json = r#"{ "message_id": 2, "date": 5, "chat": { "id": 1, "type": "private" },
     "photo": [ { "file_id": "only", "file_unique_id": "o", "width": 1, "height": 1 } ] }"#;
 
-  assert!(matches!(read(&message(json), ME, false), Reading::Nothing));
+  assert!(matches!(read(&message(json), ME, OWNER, false), Reading::Nothing));
 }
 
 #[test]
@@ -124,22 +130,22 @@ fn a_picture_sent_as_a_file_is_a_picture_and_an_svg_is_a_file() {
   };
 
   assert!(matches!(
-    read(&message(&document("image/png", "a.png")), ME, true),
-    Reading::Picture(_, _, Some(Picture { ref file_id, .. })) if file_id == "doc"
+    read(&message(&document("image/png", "a.png")), ME, OWNER, true),
+    Reading::Picture(_, Some(Picture { ref file_id, .. })) if file_id == "doc"
   ));
   assert!(matches!(
-    read(&message(&document("application/octet-stream", "b.JPG")), ME, true),
+    read(&message(&document("application/octet-stream", "b.JPG")), ME, OWNER, true),
     Reading::Picture(..)
   ));
 
-  let Reading::Attachment(handed, context) = read(&message(&document("image/svg+xml", "c.svg")), ME, true)
+  let Reading::Attachment(handed) = read(&message(&document("image/svg+xml", "c.svg")), ME, OWNER, true)
   else {
     panic!("an svg is a file");
   };
 
   assert_eq!(handed.text, fill(&kinds().document, &[("name", " c.svg"), ("caption", "")]));
-  assert!(context.carries_file);
-  assert_eq!(context.spoken_text, None);
+  assert!(handed.context.carries_file);
+  assert_eq!(handed.context.spoken_text, None);
 }
 
 #[test]
@@ -150,7 +156,7 @@ fn a_file_the_bot_sent_itself_is_left_to_the_sender_that_sent_it() {
       "voice": {{ "file_id": "v", "file_unique_id": "v", "duration": 75 }} }}"#
   );
 
-  assert!(matches!(read(&message(&json), ME, true), Reading::FileOnly));
+  assert!(matches!(read(&message(&json), ME, OWNER, true), Reading::FileOnly));
 }
 
 #[test]
@@ -159,12 +165,12 @@ fn a_voice_is_described_with_its_length_and_its_caption() {
     "from": { "id": 9, "is_bot": false, "first_name": "Tester" }, "caption": "listen",
     "voice": { "file_id": "v", "file_unique_id": "v", "duration": 75 } }"#;
 
-  let Reading::Attachment(handed, context) = read(&message(json), ME, true) else {
+  let Reading::Attachment(handed) = read(&message(json), ME, OWNER, true) else {
     panic!("a voice is an attachment");
   };
 
   assert_eq!(handed.text, fill(&kinds().voice, &[("duration", " 1:15"), ("caption", " listen")]));
-  assert_eq!(context.spoken_text.as_deref(), Some("listen"));
+  assert_eq!(handed.context.spoken_text.as_deref(), Some("listen"));
 }
 
 #[test]
@@ -207,7 +213,7 @@ fn the_other_kinds_are_kept_as_placeholders_and_the_bots_own_service_messages_ar
     let json = format!(
       r#"{{ "message_id": 6, "date": 5, "chat": {{ "id": -5, "type": "group" }}, "from": {{ "id": 9, "is_bot": false, "first_name": "Tester" }}, {kind} }}"#
     );
-    let Reading::Said(handed, _) = read(&message(&json), ME, true) else {
+    let Reading::Said(handed) = read(&message(&json), ME, OWNER, true) else {
       panic!("{kind} is said");
     };
 
@@ -218,7 +224,7 @@ fn the_other_kinds_are_kept_as_placeholders_and_the_bots_own_service_messages_ar
     r#"{{ "message_id": 7, "date": 5, "chat": {{ "id": -5, "type": "group" }}, "from": {{ "id": {ME}, "is_bot": true, "first_name": "Helper" }}, "pinned_message": {{ "message_id": 3, "date": 0, "chat": {{ "id": -5, "type": "group" }}, "text": "board" }} }}"#
   );
 
-  assert!(matches!(read(&message(&pinned_by_bot), ME, true), Reading::Nothing));
+  assert!(matches!(read(&message(&pinned_by_bot), ME, OWNER, true), Reading::Nothing));
 }
 
 #[test]
@@ -228,16 +234,17 @@ fn an_edit_carries_the_platforms_own_words_formatting_and_file_in_order() {
     "caption_entities": [ { "type": "bold", "offset": 0, "length": 2 } ],
     "document": { "file_id": "d", "file_unique_id": "d", "file_name": "x.txt" } }"#;
   let raw: Value = serde_json::from_str(json).unwrap();
-  let edit = read_edit(&message(json), &raw);
-  let (handed, context) = edit.said.unwrap();
+  let edit = read_edit(&message(json), &raw, ME, OWNER);
+  let handed = edit.said.unwrap();
 
+  assert_eq!(handed.origin, MessageOrigin::Edit);
   assert_eq!(
     handed.text,
     fill(&kinds().document, &[("name", " x.txt"), ("caption", " edited words")])
   );
   assert!(edit.carries_file);
   assert_eq!(
-    serde_json::to_string(&context.metadata.unwrap()).unwrap(),
+    serde_json::to_string(&handed.context.metadata.unwrap()).unwrap(),
     r#"{"text":"edited words","entities":[{"type":"bold","offset":0,"length":2}],"sticker":null,"attachment":{"file_id":"d","file_unique_id":"d","file_name":"x.txt"}}"#
   );
 }
@@ -266,7 +273,7 @@ fn a_message_s_file_is_read_with_the_video_kinds_first() {
 
   assert_eq!(
     (read.file_id.as_str(), read.kind, read.file_name.as_deref()),
-    ("a", "video", Some("gif.mp4"))
+    ("a", ChatFileKind::Animation, Some("gif.mp4"))
   );
   assert_eq!(media_file_name(Some("audio/ogg; codecs=opus"), true), "voice.ogg");
   assert!(bot_file(&voice).unwrap().voice);

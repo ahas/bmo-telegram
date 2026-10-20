@@ -5,7 +5,8 @@
 use std::path::Path;
 
 use bmo_chat::{
-  AlbumItem, ChatFailure, ChatRefusal, ChatSendResult, FileItem, MissedPicture, MissedPictureReason,
+  AlbumItem, ChatFailure, ChatRefusal, ChatSendResult, ChatSent, FileItem, MissedPicture,
+  MissedPictureReason,
 };
 use telegram_dialect::ALBUM_LIMIT;
 use telegram_dialect::js;
@@ -132,11 +133,11 @@ fn owner_refused(name: &str, error: &str) -> ChatRefusal {
 
 /// The owner's words said in the room through the reader, piece by piece as a client sends a long paste: the
 /// message the first piece went out as.
-pub async fn say(reader: &ReaderClient, chat_id: i64, text: &str) -> Sent {
+pub async fn say(reader: &ReaderClient, chat_id: i64, text: &str, reply_to: Option<i64>) -> Sent {
   let mut first = None;
 
   for part in plain_parts(text, TEXT_LIMIT) {
-    match reader.owner_say(chat_id, &part, None).await? {
+    match reader.owner_say(chat_id, &part, reply_to).await? {
       AsOwner::Sent(went) => {
         first.get_or_insert(went);
       }
@@ -144,10 +145,10 @@ pub async fn say(reader: &ReaderClient, chat_id: i64, text: &str) -> Sent {
     }
   }
 
-  Ok(ChatSendResult::Sent {
+  Ok(ChatSendResult::Sent(ChatSent {
     message_id: first.flatten(),
     missed: Vec::new(),
-  })
+  }))
 }
 
 // One item of the owner's album as a file: one handed over as it is, one named by an address read where a
@@ -181,6 +182,7 @@ pub async fn album(
   chat_id: i64,
   items: &[AlbumItem],
   caption: Option<&str>,
+  reply_to: Option<i64>,
 ) -> Result<ChatSendResult, ChatFailure> {
   let root = speaker.sending.picture_root.as_deref();
   let caption = caption_of(caption);
@@ -207,7 +209,7 @@ pub async fn album(
   {
     let caption = if at == 0 { caption.as_str() } else { "" };
 
-    match reader.owner_album(chat_id, album, caption, None).await? {
+    match reader.owner_album(chat_id, album, caption, reply_to).await? {
       AsOwner::Sent(ids) => {
         went_any = true;
         first = first.or(ids.into_iter().flatten().next());
@@ -235,8 +237,8 @@ pub async fn album(
     }));
   }
 
-  Ok(ChatSendResult::Sent {
+  Ok(ChatSendResult::Sent(ChatSent {
     message_id: first,
     missed,
-  })
+  }))
 }

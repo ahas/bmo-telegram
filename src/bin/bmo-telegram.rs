@@ -12,7 +12,6 @@ use bmo_telegram::config::Config;
 use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::provider::TelegramProvider;
 use bmo_telegram::reader::ReaderClient;
-use bmo_telegram::receiver::ReceiverNeeds;
 use bmo_telegram::routes::{keep_reader_current, service};
 use bmo_telegram::seam::{Seam, Standing};
 use bmo_telegram::seen::Seen;
@@ -91,19 +90,28 @@ async fn serve() -> Result<(), String> {
   let seam = Arc::new(Seam {
     token: config.token,
     receiver: receiver.clone(),
-    needs: ReceiverNeeds::new(Wire::new(config.receiver_url.as_str(), config.receiver_token.as_str())),
     seen: seen.clone(),
     standing: standing.clone(),
   });
-  let provider =
-    Arc::new(TelegramProvider::new(telegram, Sending::default(), Some(reader), seen, standing));
+  let sending = Sending {
+    picture_root: config.picture_root,
+    sticker_set: config.sticker_set,
+  };
+  let provider = Arc::new(TelegramProvider::new(
+    telegram,
+    sending,
+    Some(reader),
+    seen,
+    standing,
+    config.data.join("avatars"),
+  ));
 
   provider.start(receiver).await.map_err(|why| why.to_string())?;
 
   let listener = tokio::net::TcpListener::bind(("127.0.0.1", config.port))
     .await
     .map_err(|why| why.to_string())?;
-  let app = service(provider.clone(), seam, config.data.join("avatars"));
+  let app = service(provider.clone(), seam);
   let on = config.port;
 
   println!("telegram: serving on 127.0.0.1:{on}");

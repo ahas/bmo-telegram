@@ -10,23 +10,31 @@ use axum::extract::{Request, State};
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
-use bmo_chat::{ChatGathered, ChatHandover, ChatReceiver, ErrorCode, WireError};
+use bmo_chat::{
+  AvatarChange, ChatFailure, ChatReceiver, ErrorCode, GatheredPatch, HandedMessage, MessageOrigin,
+  RoomQuery, RoomsQuery, WireError,
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::receiver::ReceiverNeeds;
+use crate::VIA;
 use crate::seen::Seen;
 
-/// One hand-over the reader makes: a message, an attachment, an edit, a file gathered, or a line out of a
-/// room's history.
+/// One hand-over the reader makes: a message, whatever its origin, or the files a message's gathering
+/// promised.
 #[derive(Debug, Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "lowercase", rename_all_fields = "camelCase")]
 pub enum Inbound {
-  Message(ChatHandover),
-  Attachment(ChatHandover),
-  Edited(ChatHandover),
-  History(ChatHandover),
-  Gathered(ChatGathered),
+  Message {
+    room_id: i64,
+    message_id: i64,
+    message: Box<HandedMessage>,
+  },
+  Gathered {
+    room_id: i64,
+    message_id: i64,
+    patch: GatheredPatch,
+  },
 }
 
 /// Why a part the reader runs stands down, where it does: the history walk and the word of changed profile
@@ -61,7 +69,6 @@ impl Standing {
 pub struct Seam {
   pub token: String,
   pub receiver: Arc<dyn ChatReceiver>,
-  pub needs: ReceiverNeeds,
   pub seen: Arc<Seen>,
   pub standing: Arc<Standing>,
 }
@@ -101,7 +108,7 @@ fn body_of<T: serde::de::DeserializeOwned>(body: &[u8]) -> Result<T, String> {
   serde_json::from_slice(body).map_err(|why| why.to_string())
 }
 
-fn handed(result: Result<(), bmo_chat::ChatFailure>) -> Response {
+fn handed(result: Result<(), ChatFailure>) -> Response {
   match result {
     Ok(()) => Json(json!({})).into_response(),
     Err(why) => failure(ErrorCode::Failed, why.to_string()),
@@ -115,28 +122,31 @@ async fn inbound(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Resp
   };
 
   match inbound {
-    Inbound::Message(handover) => {
-      seam.seen.message(&handover.message);
-      handed(seam.receiver.message(handover).await)
-    }
-    Inbound::Attachment(handover) => {
-      seam.seen.message(&handover.message);
-      handed(seam.receiver.attachment(handover).await)
-    }
-    Inbound::Edited(handover) => handed(seam.receiver.edited(handover).await),
-    Inbound::Gathered(gathered) => handed(seam.receiver.gathered(gathered).await),
-    Inbound::History(handover) => match seam.needs.history(&handover).await {
-      Ok(kept) => {
-        Standing::set(&seam.standing.history, None);
-        Json(json!({ "kept": kept })).into_response()
-      }
-      Err(why) => {
-        let reason = format!("the history walk stands down: {why}");
+    Inbound::Message {
+      room_id,
+      message_id,
+      message,
+    } => {
+      let history = message.origin == MessageOrigin::History;
 
-        Standing::set(&seam.standing.history, Some(reason.clone()));
-        failure(ErrorCode::NotReady, reason)
+      if message.origin == MessageOrigin::Live {
+        seam.seen.message(room_id, message.sender_id);
       }
-    },
+
+      match seam.receiver.hand_over(room_id, message_id, *message).await {
+        Ok(held) if history => {
+          Standing::set(&seam.standing.history, None);
+          Json(json!({ "kept": held.created })).into_response()
+        }
+        Ok(_) => Json(json!({})).into_response(),
+        Err(why) => failure(ErrorCode::Failed, why.to_string()),
+      }
+    }
+    Inbound::Gathered {
+      room_id,
+      message_id,
+      patch,
+    } => handed(seam.receiver.gathered(room_id, message_id, patch).await.map(drop)),
   }
 }
 
@@ -146,27 +156,54 @@ struct Room {
   chat_id: i64,
 }
 
-// Whether the receiver listens to a room; a room it does not say of counts as listened.
+// Whether the receiver listens to a room; a room it holds nothing of is one it does not listen to, and a
+// receiver that does not answer counts the room as listened.
 async fn listened(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Response {
   let room: Room = match body_of(&body) {
     Ok(room) => room,
     Err(why) => return failure(ErrorCode::BadRequest, why),
   };
+  let query = RoomQuery {
+    via: VIA.to_owned(),
+  };
+  let listened = match seam.receiver.room(room.chat_id, query).await {
+    Ok(held) => held.is_some_and(|held| held.listened),
+    Err(_) => true,
+  };
 
-  Json(json!({ "listened": seam.needs.listened(room.chat_id).await.unwrap_or(true) })).into_response()
+  Json(json!({ "listened": listened })).into_response()
 }
 
+// The rooms whose history may be walked, each with the oldest message the receiver holds of it.
 async fn rooms(State(seam): State<Arc<Seam>>) -> Response {
-  match seam.needs.rooms().await {
-    Ok(rooms) => {
+  let query = RoomsQuery {
+    via: VIA.to_owned(),
+    after: None,
+    limit: None,
+  };
+
+  match seam.receiver.rooms(query).await {
+    Ok(page) => {
       Standing::set(&seam.standing.history, None);
+      let rooms: Vec<Value> = page
+        .items
+        .into_iter()
+        .map(|room| {
+          json!({
+            "chatId": room.id,
+            "oldestMessageId": room.oldest_message_id,
+            "oldestSentAt": room.oldest_sent_at,
+          })
+        })
+        .collect();
+
       Json(json!({ "rooms": rooms })).into_response()
     }
     Err(why) => {
       let reason = format!("the history walk stands down: {why}");
 
-      Standing::set(&seam.standing.history, Some(reason.clone()));
-      failure(ErrorCode::NotReady, why)
+      Standing::set(&seam.standing.history, Some(reason));
+      failure(ErrorCode::NotReady, why.to_string())
     }
   }
 }
@@ -188,9 +225,14 @@ async fn avatars(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Resp
     Ok(changed) => changed,
     Err(why) => return failure(ErrorCode::BadRequest, why),
   };
+  let change = AvatarChange {
+    via: VIA.to_owned(),
+    room_ids: changed.rooms,
+    person_ids: changed.people,
+  };
   let reason = seam
-    .needs
-    .avatars_updated(&changed.rooms, &changed.people)
+    .receiver
+    .avatars_changed(change)
     .await
     .err()
     .map(|why| format!("word of changed profile pictures stands down: {why}"));

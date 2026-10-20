@@ -7,13 +7,23 @@ import { ownerRefusalName } from "./owner";
 
 import type { TelegramClient } from "telegram";
 import type { Peers } from "./media";
-import type { OwnerAccount, ReplyTarget } from "./owner";
+import type { AvatarKind } from "./store";
+import type { OwnerAccount } from "./owner";
+
+// One kept profile picture as the service lists it: whose it is, and when it was taken.
+export interface KeptAvatar {
+  kind: AvatarKind;
+  id: number;
+  takenAt: number;
+}
 
 export interface RoutesDeps {
   token: string;
   peers: Peers;
   owner: OwnerAccount;
   client: () => TelegramClient | null;
+  // Every profile picture the reader keeps.
+  avatars: () => KeptAvatar[];
   // Why the account is not connected, where it is not.
   missing: () => string | null;
 }
@@ -32,15 +42,11 @@ function failure(code: string, error: string, status: number): Response {
 }
 
 // The message a send in the owner's voice answers, as it crosses: null where none is named, undefined where
-// what was named is not one.
-function replyOf(value: unknown): ReplyTarget | null | undefined {
+// what was named is not a number.
+function replyOf(value: unknown): number | null | undefined {
   if (value === null || value === undefined) return null;
 
-  const reply = value as Partial<ReplyTarget>;
-
-  return isNumber(reply.messageId) && isNumber(reply.sentAt) && isText(reply.text)
-    ? { messageId: reply.messageId, sentAt: reply.sentAt, text: reply.text }
-    : undefined;
+  return isNumber(value) ? value : undefined;
 }
 
 // A send in the owner's voice carried, a refusal of the account answered by its name.
@@ -75,30 +81,30 @@ function routes(deps: RoutesDeps): Record<string, (body: Body) => Promise<Respon
     },
 
     "/owner/say": async (body) => {
-      const reply = replyOf(body.reply);
+      const replyToMessageId = replyOf(body.replyToMessageId);
 
-      if (!isNumber(body.chatId) || !isText(body.text) || reply === undefined) {
-        return failure("bad-request", "chatId (number), text (string) and a reply or none are required", 400);
+      if (!isNumber(body.chatId) || !isText(body.text) || replyToMessageId === undefined) {
+        return failure("bad-request", "chatId (number), text (string) and a replyToMessageId or null are required", 400);
       }
 
       const { chatId, text } = body;
 
-      return await asOwner(async () => ({ messageId: await deps.owner.say(chatId, text, reply) }));
+      return await asOwner(async () => ({ messageId: await deps.owner.say(chatId, text, replyToMessageId) }));
     },
 
     "/owner/album": async (body) => {
-      const reply = replyOf(body.reply);
+      const replyToMessageId = replyOf(body.replyToMessageId);
       const files = Array.isArray(body.files) ? (body.files as Body[]) : null;
 
-      if (!isNumber(body.chatId) || files === null || !files.every((file) => isText(file.name) && isText(file.mime) && isText(file.bytes)) || reply === undefined) {
-        return failure("bad-request", "chatId (number), files ({ name, mime, bytes }) and a reply or none are required", 400);
+      if (!isNumber(body.chatId) || files === null || !files.every((file) => isText(file.name) && isText(file.mime) && isText(file.bytes)) || replyToMessageId === undefined) {
+        return failure("bad-request", "chatId (number), files ({ name, mime, bytes }) and a replyToMessageId or null are required", 400);
       }
 
       const album = {
         chatId: body.chatId,
         files: files.map((file) => ({ name: file.name as string, mime: file.mime as string, bytes: new Uint8Array(Buffer.from(file.bytes as string, "base64")) })),
         caption: isText(body.caption) ? body.caption : "",
-        reply,
+        replyToMessageId,
       };
 
       return await asOwner(async () => ({ ids: await deps.owner.album(album) }));
@@ -121,6 +127,10 @@ export function readerHandler(deps: RoutesDeps): (request: Request) => Promise<R
       const reason = deps.client() === null ? (deps.missing() ?? "the owner's account is not connected yet") : null;
 
       return json({ connected: reason === null, reason });
+    }
+
+    if (request.method === "GET" && pathname === "/reader/avatars") {
+      return json({ avatars: deps.avatars() });
     }
 
     const route = request.method === "POST" ? table[pathname] : undefined;

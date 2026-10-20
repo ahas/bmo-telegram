@@ -45,7 +45,9 @@ export function keptService(options: { rooms?: HistoryRoom[] | string; seen?: { 
     inbound: async (inbound) => {
       handed.push(inbound);
 
-      return inbound.kind === "history" ? { kept: options.kept ?? true } : {};
+      return inbound.kind === "message" && inbound.message.origin === "history"
+        ? { kept: options.kept ?? true }
+        : {};
     },
     listened: async () => true,
     rooms: async (): Promise<Rooms> =>

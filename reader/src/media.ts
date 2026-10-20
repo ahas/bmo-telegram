@@ -1,6 +1,7 @@
 // What the owner's account fetches of a message: a picture or a file the Bot API will not hand the bot,
 // found by the message's number and, where the account numbers the room its own way, by the second it
-// was sent in; and the name a file with none of its own is given.
+// was sent in (the service asks with epoch milliseconds, Telegram keeps seconds); and the name a file with
+// none of its own is given.
 
 import { mtproto } from "./mtproto";
 import { POLICY } from "./policy";
@@ -134,7 +135,7 @@ async function downloaded(client: TelegramClient, message: Api.Message): Promise
 /** The picture a message the account read carries, or null where its bytes could not be had. */
 export async function pictureOf(client: TelegramClient, message: Api.Message): Promise<MessageFile | null> {
   try {
-    return { id: fileIdOf(message), name: `${message.id}.jpg`, mime: "image/jpeg", bytes: Buffer.from(await downloaded(client, message)).toString("base64") };
+    return { id: fileIdOf(message), name: `${message.id}.jpg`, mime: "image/jpeg", bytes: Buffer.from(await downloaded(client, message)).toString("base64"), kind: "photo" };
   } catch (error) {
     console.error(`reader photo download for message ${message.id} failed:`, error);
 
@@ -153,14 +154,15 @@ export async function fetchPicture(
   }
 
   try {
-    const message = await readerMessageFor(client, peers, asked.chatId, asked.messageId, asked.sentAt, messageHasPhoto);
+    const sentAt = asked.sentAt === null ? null : Math.floor(asked.sentAt / 1000);
+    const message = await readerMessageFor(client, peers, asked.chatId, asked.messageId, sentAt, messageHasPhoto);
 
     if (message === "none") return { outcome: "unavailable", reason: "the message carries no picture" };
     if (message === null) return { outcome: "unavailable", reason: "the owner's account found no such message" };
 
     const bytes = await downloaded(client, message);
 
-    return { outcome: "fetched", id: fileIdOf(message), name: `${asked.messageId}.jpg`, mime: "image/jpeg", bytes: Buffer.from(bytes).toString("base64") };
+    return { outcome: "fetched", id: fileIdOf(message), name: `${asked.messageId}.jpg`, mime: "image/jpeg", bytes: Buffer.from(bytes).toString("base64"), kind: "photo" };
   } catch (error) {
     return { outcome: "unavailable", reason: error instanceof Error ? error.message : String(error) };
   }
@@ -177,7 +179,8 @@ export async function fetchFile(
   }
 
   try {
-    const message = await readerMessageFor(client, peers, asked.chatId, asked.messageId, asked.sentAt, (one) => one.document !== undefined && one.document !== null);
+    const sentAt = Math.floor(asked.sentAt / 1000);
+    const message = await readerMessageFor(client, peers, asked.chatId, asked.messageId, sentAt, (one) => one.document !== undefined && one.document !== null);
 
     if (message === null || message === "none") {
       return { outcome: "unavailable", reason: "the owner's account found no file under this message" };
@@ -186,7 +189,14 @@ export async function fetchFile(
     const document = message.document!;
     const bytes = await downloaded(client, message);
 
-    return { outcome: "fetched", id: fileIdOf(message), name: readerFileOf(document).name, mime: document.mimeType, bytes: Buffer.from(bytes).toString("base64") };
+    return {
+      outcome: "fetched",
+      id: fileIdOf(message),
+      name: readerFileOf(document).name,
+      mime: document.mimeType,
+      bytes: Buffer.from(bytes).toString("base64"),
+      kind: messageFileKind(document),
+    };
   } catch (error) {
     return { outcome: "unavailable", reason: error instanceof Error ? error.message : String(error) };
   }
@@ -220,8 +230,23 @@ export interface ReaderFile {
   sticker: boolean;
   video: VideoKind | null;
   audio: boolean;
+  voice: boolean;
   svg: boolean;
   image: boolean;
+}
+
+// What the file is as the protocol names it, as far as the account can tell.
+export function messageFileKind(document: Api.Document): MessageFile["kind"] {
+  const file = readerFileOf(document);
+
+  if (file.sticker) return "sticker";
+  if (file.video === "video-note") return "round-video";
+  if (file.video === "gif") return "animation";
+  if (file.video === "video") return "video";
+  if (file.audio) return file.voice ? "voice-note" : "audio";
+  if (file.image) return "photo";
+
+  return "document";
 }
 
 export function readerFileOf(document: Api.Document): ReaderFile {
@@ -253,5 +278,5 @@ export function readerFileOf(document: Api.Document): ReaderFile {
     ? `sticker-${String(document.id)}.${stickerExtension}`
     : documentName ?? (video === null ? mediaFileName(document.mimeType, voice) : videoFileName(document.mimeType, video));
 
-  return { name, sticker, video, audio, svg, image: !sticker && !svg && mime.startsWith("image/") };
+  return { name, sticker, video, audio, voice, svg, image: !sticker && !svg && mime.startsWith("image/") };
 }

@@ -1,7 +1,7 @@
 //! The policy file read whole: every key it holds is one the provider reads, every line is filled where it
 //! is used, and each reason becomes its bmo-chat refusal code.
 
-use bmo_chat::{ChatCapability, ChatRefusal, ChatVoice, MissedPictureReason};
+use bmo_chat::{ChatCapability, ChatRefusal, MissedPictureReason};
 use bmo_telegram::policy::{Gathering, Kinds, Owner, POLICY, Pictures, Platform, Policy, Refusals, fill};
 use strum::VariantArray;
 
@@ -18,7 +18,6 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
   let Platform {
     label,
     can,
-    unpinned,
     gone_descriptions,
     unchanged_description,
     caption_refused_descriptions,
@@ -150,7 +149,6 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
   assert!(lines.iter().all(|line| !line.trim().is_empty()), "a line of the policy is empty");
   assert_eq!(label, "Telegram");
   assert_eq!(can.len(), ChatCapability::VARIANTS.len(), "every capability is declared");
-  assert_eq!(unpinned, &vec![ChatVoice::HumanReader]);
   assert_eq!(gone_descriptions.len(), 3);
   assert_eq!(caption_refused_descriptions.len(), 2);
   assert_eq!((*upload_quality, *kept_quality), (90, 80));
@@ -185,7 +183,7 @@ fn a_placeholder_is_filled_and_an_optional_part_leaves_nothing_behind() {
 fn each_reason_is_a_platform_refusal_under_the_label() {
   let gone = POLICY.message_gone("message to delete not found");
 
-  assert_eq!(gone.code(), "platform");
+  assert_eq!(gone.code(), bmo_chat::ErrorCode::Gone);
   assert_eq!(
     gone.to_string(),
     "Telegram: Telegram can no longer act on that message: message to delete not found"

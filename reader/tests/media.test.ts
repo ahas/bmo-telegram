@@ -49,13 +49,13 @@ function account(message: Api.Message | null): { asked: number[]; client: Telegr
 describe("videos", () => {
   test("one too large for the Bot API is fetched through the reader, and with no reader is answered as none", async () => {
     const reader = account(videoMessage(60, [new Api.DocumentAttributeVideo({ duration: 3, w: 640, h: 360 })]));
-    const fetched = await fetchFile(reader.client, peers, { chatId: -10, messageId: 60, sentAt: 1_788_487_000 });
+    const fetched = await fetchFile(reader.client, peers, { chatId: -10, messageId: 60, sentAt: 1_788_487_000_000 });
 
     expect(fetched.outcome).toBe("fetched");
     expect(fetched.outcome === "fetched" ? Buffer.from(fetched.bytes, "base64").toString() : null).toBe("video bytes");
     expect(fetched.outcome === "fetched" ? [fetched.id, fetched.name, fetched.mime] : null).toEqual(["document-760", "video.mp4", "video/mp4"]);
     expect(reader.asked).toEqual([60]);
-    expect(await fetchFile(null, peers, { chatId: -10, messageId: 61, sentAt: 1_788_487_000 })).toEqual({
+    expect(await fetchFile(null, peers, { chatId: -10, messageId: 61, sentAt: 1_788_487_000_000 })).toEqual({
       outcome: "no-reader",
       reason: "the owner's account is not connected",
     });

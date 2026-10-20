@@ -24,6 +24,7 @@ const where = places(settings.dataDir);
 const peers = { ownerId: settings.ownerId, botId: settings.botId };
 const service = serviceAt(settings.servicePort, settings.token);
 let client: TelegramClient | null = null;
+let store: ReaderStore | null = null;
 let missing: string | null = settings.account === null ? accountMissing : null;
 let lock: HeldLock | null = null;
 let stopping = false;
@@ -32,7 +33,14 @@ const server = Bun.serve({
   hostname: "127.0.0.1",
   port: settings.port,
   idleTimeout: 0,
-  fetch: readerHandler({ token: settings.token, peers, owner: heldOwnerAccount(() => client, peers), client: () => client, missing: () => missing }),
+  fetch: readerHandler({
+    token: settings.token,
+    peers,
+    owner: heldOwnerAccount(() => client, peers),
+    client: () => client,
+    avatars: () => store?.keptAvatars() ?? [],
+    missing: () => missing,
+  }),
 });
 
 console.log(`reader: listening on 127.0.0.1:${server.port}`);
@@ -56,7 +64,7 @@ async function open(): Promise<void> {
 
   if (lock === null) return;
 
-  const store = new ReaderStore(where.store);
+  store = new ReaderStore(where.store);
 
   try {
     client = await startReader({ account, peers, service });
