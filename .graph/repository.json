@@ -2,7 +2,7 @@
   {
     "id": "repository/checks",
     "title": "Repository checks",
-    "what": "The checks that read the tree: dependencies, manifests, layout, version, the testbed declaration, Hangul, home paths and private addresses, and the names list held outside the checkout.",
+    "what": "The checks that read the tree: dependencies, manifests, layout, version, the testbed declaration, Hangul, and the names list held outside the checkout. The personal-data check stands in its own node.",
     "files": [
       "docs/checks.md",
       "tests/repository.rs",
@@ -13,7 +13,23 @@
     "symbols": [],
     "aliases": [],
     "needs": [],
-    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
-    "changed": 1792519858855
+    "base": "770aef8a8398a57a233eca5dc376ed4eef574164",
+    "changed": 1792533522179
+  },
+  {
+    "id": "repository/personal-data",
+    "title": "Personal-data rule and its check",
+    "what": "The repository prohibition of personal data, the values it allows, and the check that reads every tracked file for a mail address, a home path, a telephone number, a token and a private network address, in docs/PERSONAL-DATA.md and tests/personal_data.rs.",
+    "files": [
+      "docs/PERSONAL-DATA.md",
+      "tests/personal_data.rs"
+    ],
+    "symbols": [],
+    "aliases": [
+      "개인정보"
+    ],
+    "needs": [],
+    "base": "770aef8a8398a57a233eca5dc376ed4eef574164",
+    "changed": 1792533520594
   }
 ]

@@ -1,6 +1,7 @@
 # The repository checks
 
-`tests/repository.rs` holds the checks that span the repository. Each runs with the root package's tests.
+`tests/repository.rs` holds the checks that span the repository, and `tests/personal_data.rs` the
+personal-data check. Each runs with the root package's tests.
 
 - **Dependencies.** No package of the workspace depends on a `bmo-*` package but the base libraries,
   `bmo-chat`, `bmo-chat-client` and `bmo-ui`, nor on a crate named after a shared crate of the single
@@ -18,8 +19,10 @@
   the Cargo and bun suites and the three base libraries.
 - **Hangul.** No tracked file holds a Hangul character but the fixed marker at the top of `docs/api.md`, which
   is written as the fixed-API rule states it: every other word this provider writes or matches on is English.
-- **Home paths and private addresses.** No tracked file holds a path under a home directory or an address of a
-  private network range.
+- **Personal data.** No tracked file holds a mail address outside the reserved example domains, a home path
+  outside the neutral role names, a telephone number, a token, or a private network address. A loopback
+  address passes. `docs/PERSONAL-DATA.md` states the rule, and `tests/personal_data.rs` reads every tracked
+  file and reports the file, the line and the kind, never the value.
 - **Names.** No tracked file holds an agent's, a person's or a machine's name. No repository keeps the list of
   those names, so the check reads it from the file the variable `BMO_NAMES_LIST` names, outside the checkout:
   a TOML file with `words` (matched as whole words, ignoring case), `exact_words` (whole words, case kept),

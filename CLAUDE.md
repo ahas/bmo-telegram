@@ -28,6 +28,9 @@ the service calls, over the loopback.
   commits. A deployment value that would name one is configuration (`docs/boundary-api.md`,
   「Configuration」); tests use neutral names. No list of forbidden names is kept in the repository; the names
   check reads one from outside it (`docs/checks.md`).
+- **No personal data in a tracked file.** `docs/PERSONAL-DATA.md` states the rule and `tests/personal_data.rs`
+  holds it: no mail address, home path, telephone number, token or private network address. The check reports
+  the file, the line and the kind, never the value.
 - **Tests live in `tests/`.** A crate's tests are in its own `tests/`; checks that span the repository and the
   service's own tests are in the root `tests/`; the reader's are in `reader/tests/`. No test module sits in
   `src/`; a private function a test needs becomes public in its own module.
