@@ -3,6 +3,7 @@ name = "telegram-dialect"
 description = "The telegram-html dialect: markdown read into Telegram's HTML, its structure check, the fold and the division into messages."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

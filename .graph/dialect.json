@@ -19,8 +19,8 @@
       "dialect/format",
       "dialect/limits"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437253
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858601
   },
   {
     "id": "dialect/format",
@@ -46,8 +46,8 @@
     "needs": [
       "dialect/limits"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437239
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858611
   },
   {
     "id": "dialect/limits",
@@ -72,8 +72,8 @@
     ],
     "aliases": [],
     "needs": [],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437234
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858620
   },
   {
     "id": "dialect/markdown",
@@ -103,8 +103,8 @@
       "dialect/limits",
       "dialect/web-addresses"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437248
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858631
   },
   {
     "id": "dialect/web-addresses",
@@ -128,7 +128,7 @@
     "needs": [
       "dialect/limits"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437244
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858642
   }
 ]

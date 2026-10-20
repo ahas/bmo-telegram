@@ -27,8 +27,8 @@
       "reader/service-client",
       "reader/media"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437383
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858699
   },
   {
     "id": "reader/configuration",
@@ -49,8 +49,8 @@
     ],
     "aliases": [],
     "needs": [],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437329
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858708
   },
   {
     "id": "reader/history",
@@ -81,8 +81,8 @@
       "reader/store",
       "policy/settings"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500441496
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858718
   },
   {
     "id": "reader/live",
@@ -105,8 +105,8 @@
       "reader/service-client",
       "policy/settings"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437369
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858727
   },
   {
     "id": "reader/login",
@@ -121,8 +121,8 @@
     "needs": [
       "reader/mtproto"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437349
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858736
   },
   {
     "id": "reader/media",
@@ -151,8 +151,8 @@
       "reader/mtproto",
       "policy/settings"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437362
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858746
   },
   {
     "id": "reader/mtproto",
@@ -169,8 +169,8 @@
     ],
     "aliases": [],
     "needs": [],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437323
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858756
   },
   {
     "id": "reader/owner-sends",
@@ -200,8 +200,8 @@
       "reader/history",
       "reader/mtproto"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437389
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858767
   },
   {
     "id": "reader/process",
@@ -222,8 +222,8 @@
       "reader/session-lock",
       "reader/routes"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437403
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858777
   },
   {
     "id": "reader/routes",
@@ -243,8 +243,8 @@
       "reader/media",
       "reader/owner-sends"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437395
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858786
   },
   {
     "id": "reader/service-client",
@@ -274,8 +274,8 @@
     "needs": [
       "reader/configuration"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437356
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858796
   },
   {
     "id": "reader/session-lock",
@@ -293,8 +293,8 @@
     ],
     "aliases": [],
     "needs": [],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437343
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858806
   },
   {
     "id": "reader/store",
@@ -313,7 +313,7 @@
     ],
     "aliases": [],
     "needs": [],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437335
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858816
   }
 ]

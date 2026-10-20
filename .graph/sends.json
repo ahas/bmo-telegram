@@ -27,8 +27,8 @@
       "dialect/declaration",
       "policy/settings"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437292
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858885
   },
   {
     "id": "sends/owner-voice",
@@ -54,8 +54,8 @@
       "dialect/declaration",
       "policy/settings"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437304
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858895
   },
   {
     "id": "sends/pictures",
@@ -81,7 +81,7 @@
       "picture/redrawing",
       "policy/settings"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437298
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858904
   }
 ]

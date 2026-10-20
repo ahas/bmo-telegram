@@ -18,8 +18,8 @@
       "seam/reader-client",
       "provider/declaration"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437415
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858914
   },
   {
     "id": "service/configuration",
@@ -34,8 +34,8 @@
     ],
     "aliases": [],
     "needs": [],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437230
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858923
   },
   {
     "id": "service/routes",
@@ -56,7 +56,7 @@
       "seam/service-routes",
       "provider/declaration"
     ],
-    "base": "0a667279dead31db6dd9fddac2a581a14861e6c5",
-    "changed": 1792500437410
+    "base": "ef9b6f74ee4bab56099f5df8dee8ad6c5deb530a",
+    "changed": 1792519858931
   }
 ]

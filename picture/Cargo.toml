@@ -3,6 +3,7 @@ name = "telegram-picture"
 description = "A picture read and redrawn for Telegram: its type, its transparency, an upload Telegram takes as a photo, and a picture kept inside its size."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]
