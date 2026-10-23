@@ -1,7 +1,7 @@
 //! The Telegram provider as bmo-chat's contract states one (docs/telegram.md, 「The declaration」): what it
-//! declares, the room questions, a send in the voice it asks for, a message's picture or file fetched again
-//! through the owner's account, and the profile pictures it keeps. The bot account reads and speaks; the
-//! reader stands behind it.
+//! declares, the room questions and the rooms of the owner's account, a send in the voice it asks for, a
+//! message's picture or file fetched again through the owner's account, and the profile pictures it keeps. The
+//! bot account reads and speaks; the reader stands behind it.
 
 use std::collections::BTreeSet;
 use std::io::ErrorKind;
@@ -188,6 +188,7 @@ impl ChatProvider for TelegramProvider {
 
     if !reading {
       can.remove(&ChatCapability::FetchMedia);
+      can.remove(&ChatCapability::RoomList);
     }
 
     if !reading || self.standing.history().is_some() {
@@ -220,6 +221,23 @@ impl ChatProvider for TelegramProvider {
 
   async fn owner_room(&self) -> Result<Option<i64>, ChatFailure> {
     Ok(Some(self.telegram.owner_id()))
+  }
+
+  async fn account_rooms(&self) -> Result<Vec<ProviderRoom>, ChatFailure> {
+    let Some(reader) = &self.reader else {
+      return Err(NO_READER.into());
+    };
+    let dialogs = reader
+      .dialogs()
+      .await
+      .map_err(|why| format!("the owner's account's rooms were not read: {why}"))?;
+
+    Ok(
+      dialogs
+        .into_iter()
+        .map(|room| self.telegram.room_of(room.chat_id, room.title))
+        .collect(),
+    )
   }
 
   async fn send(&self, request: ChatSendRequest) -> Result<ChatSendResult, ChatFailure> {

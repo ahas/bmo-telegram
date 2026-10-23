@@ -254,7 +254,7 @@
         "type": "object"
       },
       "ChatCapability": {
-        "description": "What a provider can do: the twelve verbs, and four answers that are not verbs.",
+        "description": "What a provider can do: the twelve verbs, and five answers that are not verbs.",
         "oneOf": [
           {
             "enum": [
@@ -291,6 +291,11 @@
           {
             "const": "history",
             "description": "The provider can read a room's past messages back.",
+            "type": "string"
+          },
+          {
+            "const": "roomList",
+            "description": "The provider can list the rooms its account is in.",
             "type": "string"
           }
         ]
@@ -1546,6 +1551,25 @@
         ],
         "type": "object"
       },
+      "ProviderRoomPage": {
+        "description": "One page of a list: its items, and whether anything stands past the last of them.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderRoom"
+            },
+            "type": "array"
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "type": "object"
+      },
       "RoomKind": {
         "description": "Which kind of room one chat is.",
         "oneOf": [
@@ -1589,7 +1613,7 @@
   "info": {
     "description": "The routes a chat provider serves and the receiving side calls, as the chat protocol defines them: the declaration, health, sends, a room, the account owner's room, a message's files fetched again, the dialect's readings and checks, and kept profile pictures. Paths are relative to the base address the caller is configured with, and a service may mount them under a prefix of its own. Bodies are JSON, except a profile picture, which is answered as its own bytes; bytes inside JSON are base64. Times are integers of epoch milliseconds. Every failure, a refusal among them, is answered in the error shape with its status, so a 2xx answer is always the route's success. The sends, a room, the owner and a message's files answer 503 `not-ready` while the provider is not ready. A caller offers a request again only when the connection was refused, so a request that reached a listener is never made twice. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`.",
     "title": "bmo-chat provider routes",
-    "version": "0.1.0-rev.5"
+    "version": "0.1.0-rev.6"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1871,6 +1895,78 @@
         "x-codes": [
           "unauthorized",
           "not-found",
+          "failed"
+        ]
+      }
+    },
+    "/rooms": {
+      "get": {
+        "operationId": "listAccountRooms",
+        "parameters": [
+          {
+            "description": "A room number.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "description": "A room number.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderRoomPage"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnsupportedCapability"
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/NotReady"
+          }
+        },
+        "summary": "A page of the rooms the provider's account is in, in ascending order of room number and only those after `after`, at most `limit`, each as `GET /rooms/{roomId}` answers it; refused `unsupported-capability` where the provider does not declare `roomList`.",
+        "tags": [
+          "rooms"
+        ],
+        "x-codes": [
+          "bad-request",
+          "unauthorized",
+          "unsupported-capability",
+          "not-ready",
           "failed"
         ]
       }
@@ -2229,6 +2325,36 @@
         "$ref": "#/components/schemas/ChatSent"
       },
       "route": "POST /sends"
+    },
+    {
+      "description": "A page of the rooms the provider's account is in, in ascending order of room number, only those after `after`; refused where the provider does not declare roomList.",
+      "input": {
+        "description": "The query of `GET /rooms`: only the rooms numbered after `after`, and at most `limit` of them.",
+        "properties": {
+          "after": {
+            "description": "A room number.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "limit": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "chat_rooms",
+      "output": {
+        "$ref": "#/components/schemas/ProviderRoomPage"
+      },
+      "route": "GET /rooms"
     },
     {
       "description": "What the provider knows of a room: whether it owns it, the account's identity in it, whether it is the owner's private chat, the one person of a one-to-one, and its title.",

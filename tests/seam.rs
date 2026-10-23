@@ -6,11 +6,12 @@ mod support;
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
+use axum::http::StatusCode;
 use axum::response::Json;
 use axum::routing::{get, post};
 use bmo_chat::{FileItem, MessageFile, ReceiverRoom};
 use bmo_telegram::compose::Part;
-use bmo_telegram::reader::{AsOwner, OwnerSent, ReaderClient, ReaderFetch};
+use bmo_telegram::reader::{AsOwner, OwnerSent, ReaderClient, ReaderFetch, ReaderRoom};
 use bmo_telegram::seam::{Seam, Standing, seam_router};
 use bmo_telegram::seen::Seen;
 use bmo_telegram::wire::Wire;
@@ -51,6 +52,12 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
           { "kind": "person", "id": 55, "takenAt": 1_700_000_000_000_i64 },
           { "kind": "room", "id": -1001, "takenAt": 1_700_000_001_000_i64 }
         ] }))
+      }),
+    )
+    .route(
+      "/reader/dialogs",
+      get(|| async {
+        Json(json!({ "rooms": [{ "chatId": -1001, "title": "Board" }, { "chatId": 55, "title": null }] }))
       }),
     )
     .route(
@@ -104,6 +111,19 @@ async fn the_reader_is_asked_for_its_health_its_fetches_its_pictures_and_the_own
   };
 
   assert!(reader.health().await.connected);
+  assert_eq!(
+    reader.dialogs().await,
+    Ok(vec![
+      ReaderRoom {
+        chat_id: -1001,
+        title: Some("Board".to_owned())
+      },
+      ReaderRoom {
+        chat_id: 55,
+        title: None
+      },
+    ])
+  );
   assert_eq!(
     reader.picture(5, 6, Some(1)).await,
     ReaderFetch::Fetched(MessageFile {
@@ -181,6 +201,7 @@ async fn a_reader_that_does_not_answer_has_no_account_to_ask_and_carries_no_send
   let reader = ReaderClient::new(Wire::loopback(closed_port().await, TOKEN));
 
   assert!(!reader.health().await.connected);
+  assert!(reader.dialogs().await.is_err());
   assert!(matches!(reader.picture(5, 6, None).await, ReaderFetch::Unavailable(_)));
   let words = Part {
     plain: "words".to_owned(),
@@ -188,6 +209,24 @@ async fn a_reader_that_does_not_answer_has_no_account_to_ask_and_carries_no_send
   };
 
   assert!(reader.owner_say(5, &words, false, None).await.is_err());
+}
+
+/// A reader whose account is not connected answers its dialogs 503 `not-ready`, and the reason is what the
+/// service is told.
+#[tokio::test]
+async fn a_reader_whose_account_is_not_connected_lists_no_rooms() {
+  let down = Router::new().route(
+    "/reader/dialogs",
+    get(|| async {
+      (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({ "code": "not-ready", "error": "the account's values are not set" })),
+      )
+    }),
+  );
+  let reader = ReaderClient::new(Wire::loopback(serve(down).await, TOKEN));
+
+  assert_eq!(reader.dialogs().await, Err("the account's values are not set".to_owned()));
 }
 
 struct Served {

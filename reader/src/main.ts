@@ -5,6 +5,7 @@
 
 import { startAvatarSweeper } from "./avatars";
 import { accountMissing, places, readerSettings } from "./config";
+import { roomLister } from "./dialogs";
 import { startHistory } from "./history";
 import { lockOnceFree, takeLock } from "./lock";
 import { heldOwnerAccount } from "./owner";
@@ -38,6 +39,7 @@ const server = Bun.serve({
     peers,
     owner: heldOwnerAccount(() => client, peers),
     client: () => client,
+    rooms: roomLister(peers),
     avatars: () => store?.keptAvatars() ?? [],
     missing: () => missing,
   }),

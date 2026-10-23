@@ -1,11 +1,12 @@
 // The reader's routes, called by the service alone (docs/boundary-api.md, 「The reader's routes, called by the
-// service」): whether the owner's account is connected, a picture or a file fetched through it, and a send in
-// the owner's voice. Every route takes the seam's token.
+// service」): whether the owner's account is connected, the chats it is in, a picture or a file fetched through
+// it, and a send in the owner's voice. Every route takes the seam's token.
 
 import { fetchFile, fetchPicture } from "./media";
 import { ownerRefusalName } from "./owner";
 
 import type { TelegramClient } from "telegram";
+import type { AccountRoom } from "./dialogs";
 import type { Peers } from "./media";
 import type { AvatarKind } from "./store";
 import type { OwnerAccount } from "./owner";
@@ -22,6 +23,8 @@ export interface RoutesDeps {
   peers: Peers;
   owner: OwnerAccount;
   client: () => TelegramClient | null;
+  // Every chat the connected account is in.
+  rooms: (client: TelegramClient) => Promise<AccountRoom[]>;
   // Every profile picture the reader keeps.
   avatars: () => KeptAvatar[];
   // Why the account is not connected, where it is not.
@@ -143,10 +146,24 @@ export function readerHandler(deps: RoutesDeps): (request: Request) => Promise<R
       return failure("unauthorized", "the token is missing or wrong", 401);
     }
 
+    const notConnected = (): string => deps.missing() ?? "the owner's account is not connected yet";
+
     if (request.method === "GET" && pathname === "/health") {
-      const reason = deps.client() === null ? (deps.missing() ?? "the owner's account is not connected yet") : null;
+      const reason = deps.client() === null ? notConnected() : null;
 
       return json({ connected: reason === null, reason });
+    }
+
+    if (request.method === "GET" && pathname === "/reader/dialogs") {
+      const client = deps.client();
+
+      if (client === null) return failure("not-ready", notConnected(), 503);
+
+      try {
+        return json({ rooms: await deps.rooms(client) });
+      } catch (error) {
+        return failure("failed", error instanceof Error ? error.message : String(error), 500);
+      }
     }
 
     if (request.method === "GET" && pathname === "/reader/avatars") {

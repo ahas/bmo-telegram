@@ -131,14 +131,20 @@ impl Telegram {
   /// What the provider knows of a room: its number space, the number the bot's words carry there, the person
   /// of a one-to-one and what Telegram calls it. Null where the room is none this provider has seen.
   pub async fn room(&self, chat_id: i64) -> Option<ProviderRoom> {
-    self.owns_room(chat_id).then(|| ProviderRoom {
+    self.owns_room(chat_id).then(|| self.room_of(chat_id, None))
+  }
+
+  /// A room of the provider's own as the protocol shapes it, under `title`: the number the bot's words carry
+  /// there, its kind and the person of a one-to-one.
+  pub fn room_of(&self, chat_id: i64, title: Option<String>) -> ProviderRoom {
+    ProviderRoom {
       id: chat_id,
       owns: true,
       identity: Some(self.me()),
       kind: self.room_kind(chat_id),
       private_to: self.private_room_of(chat_id),
-      title: None,
-    })
+      title,
+    }
   }
 
   /// The room as the protocol answers it, its title asked of Telegram where the room is known.

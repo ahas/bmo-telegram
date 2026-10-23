@@ -33,6 +33,7 @@ const server = Bun.serve({
     peers: { ownerId: OWNER_ID, botId: BOT_ID },
     owner,
     client: () => null,
+    rooms: async () => [],
     avatars: () => [{ kind: "person", id: 55, takenAt: 1_700_000_000_000 }],
     missing: () => "the account's values are not set",
   }),

@@ -1,6 +1,6 @@
 //! The reader as the service reaches it over the seam (docs/boundary-api.md, 「The reader's routes, called by
-//! the service」): whether the owner's account is connected, a picture or a file the Bot API will not hand the
-//! bot, and a send in the owner's own voice.
+//! the service」): whether the owner's account is connected, the chats it is in, a picture or a file the Bot API
+//! will not hand the bot, and a send in the owner's own voice.
 
 use bmo_chat::{ChatAvatar, ChatAvatarKind, FileItem, MessageFile};
 use serde_json::{Value, json};
@@ -19,6 +19,14 @@ pub struct ReaderClient {
 pub struct ReaderHealth {
   pub connected: bool,
   pub reason: Option<String>,
+}
+
+/// One chat the owner's account is in: the room's number as the service numbers it, and the account's title
+/// for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReaderRoom {
+  pub chat_id: i64,
+  pub title: Option<String>,
 }
 
 /// What a fetch through the owner's account came to: the file, a reason it could not be had, or no account
@@ -139,6 +147,34 @@ impl ReaderClient {
           .ok_or_else(|| "the reader answered a picture with no moment".to_owned())?;
 
         Ok(ChatAvatar { kind, id, taken_at })
+      })
+      .collect()
+  }
+
+  /// Every chat the owner's account is in; a reader that does not answer, or answers no list, is the reason.
+  pub async fn dialogs(&self) -> Result<Vec<ReaderRoom>, String> {
+    let answer = self.wire.get("/reader/dialogs").await?;
+
+    if !answer.ok() {
+      return Err(answer.reason());
+    }
+
+    let rooms = answer
+      .body
+      .get("rooms")
+      .and_then(Value::as_array)
+      .ok_or_else(|| "the reader's /reader/dialogs answered no list of rooms".to_owned())?;
+
+    rooms
+      .iter()
+      .map(|one| {
+        let chat_id = one
+          .get("chatId")
+          .and_then(Value::as_i64)
+          .ok_or_else(|| "the reader answered a room with no number".to_owned())?;
+        let title = one.get("title").and_then(Value::as_str).map(str::to_owned);
+
+        Ok(ReaderRoom { chat_id, title })
       })
       .collect()
   }

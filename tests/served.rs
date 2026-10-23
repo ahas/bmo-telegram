@@ -35,6 +35,7 @@ const TOKEN: &str = "served-token";
 const RECEIVER_TOKEN: &str = "receiver-token";
 const ROOM: i64 = -100;
 const PERSON: i64 = 55;
+const OTHER_ROOM: i64 = -200;
 const OWNER: i64 = 42;
 const BOT: i64 = 7_000_000_001_i64;
 const SENT_AT: i64 = 1_700_000_000_000;
@@ -107,6 +108,17 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
 
   Router::new()
     .route("/health", get(|| async { Json(json!({ "connected": true, "reason": null })) }))
+    .route(
+      "/reader/dialogs",
+      get(|| async {
+        Json(json!({ "rooms": [
+          { "chatId": PERSON, "title": "Someone" },
+          { "chatId": ROOM, "title": "Board" },
+          { "chatId": OWNER, "title": "Helper" },
+          { "chatId": OTHER_ROOM, "title": null }
+        ] }))
+      }),
+    )
     .route(
       "/reader/picture",
       post(|| async {
@@ -285,6 +297,7 @@ async fn the_declaration_names_the_provider_its_modes_and_its_dialect() {
       "fetchMedia",
       "avatars",
       "history",
+      "roomList",
     ])
   );
 }
@@ -348,6 +361,46 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
 
   assert_eq!(status, 200);
   assert_eq!(owner_room, json!({ "roomId": OWNER }));
+}
+
+/// The rooms of the owner's account, listed through the reader seam and paged by bmo-chat's provider server in
+/// ascending order of room: each a room of the provider's own, with the bot's number, its kind, the person of a
+/// one-to-one and the account's title for it. Where no reader stands, `roomList` is not declared and the list is
+/// refused.
+#[tokio::test]
+async fn the_rooms_of_the_owner_s_account_are_paged_from_the_reader() {
+  let served = stood(true).await;
+  served.provider.refresh_reader().await;
+
+  let (status, first) = asked_get(&served.base, "/rooms?limit=2").await;
+
+  assert_eq!(status, 200);
+  assert_eq!(
+    first,
+    json!({ "items": [
+      { "id": OTHER_ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": null },
+      { "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board" }
+    ], "more": true })
+  );
+
+  let (status, next) = asked_get(&served.base, &format!("/rooms?after={ROOM}&limit=2")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(
+    next,
+    json!({ "items": [
+      { "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER, "title": "Helper" },
+      { "id": PERSON, "owns": true, "identity": BOT, "kind": "group", "privateTo": PERSON, "title": "Someone" }
+    ], "more": false })
+  );
+
+  let down = stood(false).await;
+  down.provider.refresh_reader().await;
+
+  let (status, refused) = asked_get(&down.base, "/rooms?limit=3").await;
+
+  assert_eq!(status, 422);
+  assert_eq!(refused["code"], "unsupported-capability");
 }
 
 /// A message's picture fetched again through the reader seam: the bytes the owner's account hands over, under

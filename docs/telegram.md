@@ -34,9 +34,10 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 
 ### Capabilities
 
-All twelve send verbs, and `replyTo`, `fetchMedia`, `avatars` and `history`. The last three are the owner's
-account's: each is declared only while the reader mode is active, and `history` and `avatars` only while their
-part stands (`GET /status`).
+All twelve send verbs, and `replyTo`, `fetchMedia`, `avatars`, `history` and `roomList`. The last four are the
+owner's account's: each is declared only while the reader mode is active, and `history` and `avatars` only while
+their part stands (`GET /status`). The rooms `roomList` lists are the chats of the owner's account
+(`docs/reader.md`, 「The rooms of the account」).
 
 ## Reading a room
 

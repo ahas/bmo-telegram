@@ -17,6 +17,8 @@ reader」), and it reaches nothing but the service and Telegram.
   account refuses the markup. A reply the send names is found on the account by the message's number; one it
   has no line under is refused `unreachable`. Each send answers the numbers its messages went out as and the
   words Telegram holds for each, by which the service knows the bot account's sight of them as their echo.
+- **The rooms of the account.** Every chat the owner's account is in is listed, for a person to choose a room
+  among them.
 - **History.** The past messages of the rooms the receiver names are walked back and handed over as history.
 - **Profile pictures.** The pictures of every room and every sender the provider has seen are kept current.
 
@@ -54,6 +56,18 @@ reader」), and it reaches nothing but the service and Telegram.
 - **Without its three variables the reader stands inactive,** says why on its health, and opens nothing; the
   provider then declares the `human-reader` mode inactive with that reason. A session Telegram no longer
   authorizes is said on its health the same way.
+
+## The rooms of the account
+
+- **Every chat in the account's dialog list** is listed on `GET /reader/dialogs`, archived ones included, each
+  under the number the service gives the room and with the title the account shows for it: a group's or a
+  channel's name, a person's name for a one-to-one.
+- **The owner's one-to-one with the bot** is the chat with the bot as the account sees it, and is listed under
+  the owner's number, as the service numbers that room. The account's own saved messages are no room of the
+  provider's and are not listed.
+- **The list is read again at most every thirty seconds;** a page asked within that time is answered from the
+  list last read, so walking the pages does not walk the account's dialogs each time.
+- **While the account is not connected** the route answers 503 `not-ready` with the reason the health gives.
 
 ## The history walk
 

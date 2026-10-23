@@ -1,9 +1,9 @@
 # The Telegram provider's fixed API
 
-**고정됨 0.5.0.**
+**고정됨 0.6.0.**
 
 This service is a chat provider, so its public API is the chat protocol's provider routes, fixed by bmo-chat at
-0.1.0-rev.5 (the release its history numbers 1.0.0). The service serves them through bmo-chat's provider server
+0.1.0-rev.6 (the release its history numbers 1.0.0). The service serves them through bmo-chat's provider server
 and answers them itself; it adds no public route of its own. `docs/openapi.json` is the same contract in machine
 form, exactly as bmo-chat-plugin generates it from the published types, and the routes below are that document's.
 
@@ -26,6 +26,7 @@ the reader」).
 
 | Method | Path | Answer |
 |---|---|---|
+| `GET` | `/rooms` | a page of the rooms the owner's account is in, in ascending order of `id`, walked by `after` (a room) and `limit`, each as `GET /rooms/{roomId}` shapes a room; refused `unsupported-capability` while `roomList` is not declared |
 | `GET` | `/rooms/{roomId}` | what the provider knows of the room: `id`, `owns`, `identity`, `kind`, `privateTo` and `title`; 404 `not-found` where it knows nothing of it |
 | `GET` | `/owner` | `roomId`, the room to reach the owner in, or null |
 
@@ -64,8 +65,9 @@ A send is one `kind` and its `fields`, with an optional `mode`, `speaker`, `tag`
 - **Keys** are camelCase. **Times** are integers of epoch milliseconds. **Rooms, people and messages** are signed
   64-bit integers. A message file's id is an opaque string, the same each time the same file crosses and never
   shared by two files of one message.
-- **A list is a page**, `{"items": [...], "more": boolean}`. The avatar list is walked by `after` (a time) and
-  `limit`; a page never ends between two pictures taken at the same moment. A message's files are one page.
+- **A list is a page**, `{"items": [...], "more": boolean}`. The room list is walked by `after` (a room) and
+  `limit`, the avatar list by `after` (a time) and `limit`; a page never ends between two pictures taken at the
+  same moment. A message's files are one page.
 - **A failure is a non-2xx status** whose body is `{"code": ..., "error": ...}`. A refusal is answered by status
   too; no 2xx carries a refusal. The codes are the protocol's: `bad-request`, `unauthorized`, `no-route`,
   `not-found`, `conflict`, `gone`, `failed`, `not-ready`, `unavailable`, `unsupported-capability`,
