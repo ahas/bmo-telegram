@@ -19,7 +19,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::VIA;
-use crate::seen::Seen;
+use crate::seen::{Seen, Sighted};
 
 /// One hand-over the reader makes: a message, whatever its origin, or the files a message's gathering
 /// promised.
@@ -230,8 +230,11 @@ async fn rooms(State(seam): State<Arc<Seam>>) -> Response {
   }
 }
 
+// The rooms and the senders seen, whose pictures the reader keeps.
 async fn seen(State(seam): State<Arc<Seam>>) -> Response {
-  Json(seam.seen.sighted()).into_response()
+  let Sighted { rooms, people, .. } = seam.seen.sighted();
+
+  Json(json!({ "rooms": rooms, "people": people })).into_response()
 }
 
 #[derive(Deserialize)]

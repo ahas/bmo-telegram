@@ -119,8 +119,9 @@ rooms」): each room once, as a room of the provider's own, with the bot's numbe
 in it and null where it is not, `owner` for the owner's one-to-one and `group` for any other, the person of a
 one-to-one as `privateTo`, the account's title for it, and as `modes` the declaration's active voices where the
 bot is in it and `human-reader` alone where it is not. The mode a room was added in is the receiver's. bmo-chat's provider server orders and pages the list; a reader that does not answer it is
-a failure of the route. Whether the bot is in a room is asked of the Bot API: `getChatMember` with the bot's own
-number for a group, `getChat` for a one-to-one.
+a failure of the route. Whether the bot is in a group or a channel is asked of the Bot API, `getChatMember` with
+the bot's own number; a one-to-one is the bot's where its person has written to the bot privately, by the
+service's own record, and no Bot API call answers it.
 
 A picture or a file past the Bot API's ceiling for a bot is fetched by `/reader/picture` or `/reader/file`. A
 send in the owner's own voice, one naming the voice `human-reader`, goes by `/owner/say` and `/owner/album`,
@@ -168,7 +169,7 @@ This provider's own:
 | `BMO_TELEGRAM_RECEIVER_URL` | service | the receiver's base address; required |
 | `BMO_TELEGRAM_RECEIVER_TOKEN` | service | the token the receiver's routes take; required |
 | `BMO_TELEGRAM_READER_PORT` | both | the loopback port the reader listens on; 3221 where unset |
-| `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen, the id each picture and file the bot account handed over crossed with, and the lock that keeps the owner's session to one process |
+| `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen and the people who wrote to the bot privately, the id each picture and file the bot account handed over crossed with, and the lock that keeps the owner's session to one process |
 | `BMO_TELEGRAM_PICTURE_ROOT` | service | the folder a picture or an album item named by a file path may be read from; where unset, only a web address or an inline file is sent |
 | `BMO_TELEGRAM_STICKER_SET` | service | the Telegram sticker set a `sticker` send picks from by its emoji; where unset, a sticker send is refused saying no set is configured |
 

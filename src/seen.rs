@@ -1,7 +1,8 @@
 //! The rooms and the senders the provider has handed a message of over or sent into (docs/boundary-api.md,
 //! 「The service's routes, called by the reader」): whose profile pictures the reader keeps, and which rooms
-//! are the provider's own when the receiver asks. Kept in the provider's data folder, so a restart forgets
-//! none of them.
+//! are the provider's own when the receiver asks. With them, the people who wrote to the bot in their private
+//! chat with it, whose one-to-one is the bot's (docs/telegram.md, 「The rooms」). Kept in the provider's data
+//! folder, so a restart forgets none of them.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -9,11 +10,14 @@ use std::sync::{Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
-/// What has been seen: every room and every sender, each once.
+/// What has been seen: every room and every sender, each once, and everyone who wrote to the bot privately.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Sighted {
   pub rooms: BTreeSet<i64>,
   pub people: BTreeSet<i64>,
+  #[serde(default)]
+  pub wrote_privately: BTreeSet<i64>,
 }
 
 /// The record, kept in a file where one is named.
@@ -75,6 +79,21 @@ impl Seen {
   /// A room sent into.
   pub fn room(&self, chat_id: i64) {
     self.changed(|sighted| sighted.rooms.insert(chat_id));
+  }
+
+  /// A person who wrote to the bot in their private chat with it, as the bot account read the message.
+  pub fn wrote_privately(&self, person_id: i64) {
+    self.changed(|sighted| sighted.wrote_privately.insert(person_id));
+  }
+
+  /// Whether a person has written to the bot in their private chat with it.
+  pub fn has_written_privately(&self, person_id: i64) -> bool {
+    self
+      .sighted
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .wrote_privately
+      .contains(&person_id)
   }
 
   /// Whether the room has been seen.

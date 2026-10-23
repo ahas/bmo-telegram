@@ -140,12 +140,17 @@ impl Telegram {
     self.seen.has_room(chat_id)
   }
 
-  /// Whether the bot account is in a room (docs/telegram.md, 「The rooms」): the owner's one-to-one always, any
-  /// other as Telegram last said within `PRESENCE_FRESH`, asked again past it; where Telegram cannot be asked,
-  /// a room the provider has seen.
+  /// Whether the bot account is in a room (docs/telegram.md, 「The rooms」): the owner's one-to-one always,
+  /// another one-to-one once its person has written to the bot privately, and a group or a channel as Telegram
+  /// last said within `PRESENCE_FRESH`, asked again past it; where Telegram cannot be asked, a room the provider
+  /// has seen.
   pub async fn bot_in(&self, chat_id: i64) -> bool {
     if chat_id == self.owner_id {
       return true;
+    }
+
+    if let Some(person) = self.private_room_of(chat_id) {
+      return self.seen.has_written_privately(person);
     }
 
     let kept = self.presence.lock().unwrap_or_else(PoisonError::into_inner).get(&chat_id).copied();
@@ -167,21 +172,16 @@ impl Telegram {
     }
   }
 
-  // Telegram asked whether the bot is in a room: a group by the bot's own membership, a one-to-one by whether
-  // the bot has a chat with its person. Null where Telegram gave no answer either way.
+  // Telegram asked whether the bot is a member of a group or a channel. Null where Telegram gave no answer
+  // either way.
   async fn ask_presence(&self, chat_id: i64) -> Option<bool> {
-    let answer = if chat_id > 0 {
-      self.api.answered("getChat", &json!({ "chat_id": chat_id })).await
-    } else {
-      self
-        .api
-        .answered("getChatMember", &json!({ "chat_id": chat_id, "user_id": self.me() }))
-        .await
-    };
-    let answer = answer.ok()?;
+    let answer = self
+      .api
+      .answered("getChatMember", &json!({ "chat_id": chat_id, "user_id": self.me() }))
+      .await
+      .ok()?;
 
     match (answer.ok, answer.error_code) {
-      (true, _) if chat_id > 0 => Some(true),
       (true, _) => Some(answer.result.as_ref().is_some_and(member)),
       // The chat is not one the bot has, or the bot is not or no longer a member.
       (false, Some(400 | 403)) => Some(false),
@@ -300,6 +300,11 @@ impl Telegram {
     let message_id = message.message_id;
 
     self.forget_presence(chat_id);
+
+    // A person writing in their private chat with the bot makes that one-to-one the bot's.
+    if message.from.as_ref().is_some_and(|from| from.id == chat_id) {
+      self.seen.wrote_privately(chat_id);
+    }
 
     // The owner's own message, sent in the owner's voice: the sender holds it already.
     if message.from.as_ref().is_some_and(|from| from.id == self.owner_id) {

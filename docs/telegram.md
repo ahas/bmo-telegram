@@ -44,8 +44,14 @@ owner's account's alone (「Contacts and starting a conversation」).
 
 ### The rooms
 
-- **A room is the bot's where the bot account is in it:** the owner's one-to-one, and any room Telegram says the
-  bot is a member of. Telegram is asked once for a room and its answer stands for ten minutes; a message the bot
+- **A room is the bot's where the bot account is in it:** the owner's one-to-one, a one-to-one whose person has
+  written to the bot, and any group or channel Telegram says the bot is a member of.
+- **A one-to-one is the bot's only once its person has written to the bot** in their private chat with it, as the
+  bot account read the message; the provider keeps a record of who has, and Telegram is not asked. Telegram lets
+  a bot speak to a person only after the person has spoken to it, and it knows a person the bot merely shares a
+  group with as well as one who wrote to it, so that knowing is no sign of a chat. A one-to-one of the owner's
+  account with anyone else, the bot met in a group or never at all, is the owner's account's and read-only.
+- **For a group or a channel** Telegram is asked once and its answer stands for ten minutes; a message the bot
   account reads in a room lets go of the answer kept for it, so a room the bot has just joined is asked again.
   Where Telegram cannot be asked, a room the provider has seen stands as the bot's.
 - **A room of the owner's account the bot is not in is read-only.** It is listed and answered as a room of the

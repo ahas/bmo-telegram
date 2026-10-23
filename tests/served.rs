@@ -61,7 +61,8 @@ async fn closed_port() -> u16 {
 }
 
 // The Bot API: who the bot is, the rooms it is in and what it calls them, and no updates at all. The bot is a
-// member of `ROOM` and `BOT_ROOM`, has no chat with `PERSON` or any of `STRANGERS`, and is in no other room.
+// member of `ROOM` and `BOT_ROOM` and of no other room, and Telegram answers `getChat` for every person, as it
+// does for anyone the bot has met in a group, whether or not they ever wrote to the bot.
 async fn bot_api() -> String {
   let router = Router::new().fallback(move |request: Request| {
     async move {
@@ -78,8 +79,9 @@ async fn bot_api() -> String {
 
       let answer = match method.as_str() {
         "getMe" => json!({ "ok": true, "result": { "id": BOT, "is_bot": true, "first_name": "Helper", "username": "helper_bot" } }),
-        "getChat" if matches!(chat, Some(PERSON | CONTACT)) => not_found,
-        "getChat" if chat.is_some_and(|chat| STRANGERS.contains(&chat)) => not_found,
+        "getChat" if chat.is_some_and(|chat| chat > 0 && chat != OWNER) => {
+          json!({ "ok": true, "result": { "id": chat, "type": "private", "first_name": "Person" } })
+        }
         "getChat" => json!({ "ok": true, "result": { "title": "Board room" } }),
         "getChatMember" if asked["user_id"] == json!(BOT) && matches!(chat, Some(ROOM | BOT_ROOM)) => {
           json!({ "ok": true, "result": { "status": "member", "user": { "id": BOT } } })
@@ -192,6 +194,8 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
 struct Served {
   base: String,
   provider: Arc<TelegramProvider>,
+  telegram: Arc<Telegram>,
+  receiver: Arc<dyn ChatReceiver>,
   seen: Arc<Seen>,
   file_ids: Arc<FileIds>,
   kept: Arc<Kept>,
@@ -243,7 +247,7 @@ async fn stood(reader_standing: bool) -> Served {
   std::fs::write(person.join(format!("{PERSON}.jpg")), [0xff, 0xd8]).expect("a picture is kept");
 
   let provider = Arc::new(TelegramProvider::new(
-    telegram,
+    telegram.clone(),
     Sending::default(),
     Some(reader),
     seen.clone(),
@@ -251,7 +255,7 @@ async fn stood(reader_standing: bool) -> Served {
     avatars,
   ));
 
-  provider.start(receiver).await.expect("the provider starts");
+  provider.start(receiver.clone()).await.expect("the provider starts");
 
   // The bot account is ready once Telegram has said who it is, which the stand-in answers at once.
   for _ in 0..500 {
@@ -269,6 +273,8 @@ async fn stood(reader_standing: bool) -> Served {
   Served {
     base: format!("http://127.0.0.1:{}", serve(app).await),
     provider,
+    telegram,
+    receiver,
     seen,
     file_ids,
     kept: handed,
@@ -515,6 +521,44 @@ async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
 
   assert_eq!(status, 422);
   assert_eq!(refused["code"], "unsupported-capability");
+}
+
+/// A one-to-one is the bot's only once its person has written to the bot privately: a person Telegram knows,
+/// as it knows anyone the bot met in a group, stays the owner's account's and read-only, and the same person's
+/// one-to-one is the bot's, listed with the bot's number, once the bot account reads a message they wrote to it.
+#[tokio::test]
+async fn a_one_to_one_is_the_bot_s_only_once_its_person_wrote_to_the_bot() {
+  let served = stood(true).await;
+  served.provider.refresh_reader().await;
+  let met = STRANGERS.start;
+
+  let (status, before) = asked_get(&served.base, &format!("/rooms/{met}")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!((&before["identity"], &before["modes"]), (&Value::Null, &json!(["human-reader"])));
+
+  let wrote = json!({ "message_id": 3, "date": 1_760_000_000, "chat": { "id": met, "type": "private" },
+    "from": { "id": met, "is_bot": false, "first_name": "Person" }, "text": "hello bot" });
+
+  served
+    .telegram
+    .message(served.receiver.clone(), wrote)
+    .await
+    .expect("the message is read");
+
+  let (status, after) = asked_get(&served.base, &format!("/rooms/{met}")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(
+    after,
+    json!({ "id": met, "owns": true, "identity": BOT, "kind": "group", "privateTo": met, "title": null,
+      "modes": ["bot-account", "human-reader"] })
+  );
+
+  let (_, listed) = asked_get(&served.base, &format!("/rooms?after={PERSON}&limit=2")).await;
+
+  assert_eq!(listed["items"][0]["identity"], json!(BOT));
+  assert_eq!(listed["items"][1]["identity"], Value::Null);
 }
 
 /// The owner's account's contacts, listed through the reader seam and paged by bmo-chat's provider server in
