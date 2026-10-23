@@ -37,6 +37,8 @@ fixed contract and `docs/openapi.json` carries it.
 | `GET /health` | `ready` once the bot account's connection is open; the reason while it is not |
 | `POST /sends` | one send, any of the twelve verbs (`docs/telegram.md`, 「Sends」) |
 | `GET /rooms` | a page of the bot's rooms and the rooms the owner's account is in, the latter asked of the reader (`docs/telegram.md`, 「The rooms」); refused `unsupported-capability` while `roomList` is not declared |
+| `POST /rooms` | a conversation started by the owner's account, a one-to-one with a contact or a group of contacts, answered with its room (`docs/telegram.md`, 「Contacts and starting a conversation」); refused `unsupported-capability` while `startChat` or `startGroup` is not declared |
+| `GET /contacts` | a page of the owner's account's contacts, asked of the reader, each with the one-to-one the account has with it; refused `unsupported-capability` while `contactList` is not declared |
 | `GET /rooms/{roomId}` | what the provider knows of the room: whose it is, the bot's number where the bot is in it and null where it is not, its kind, its person and its title |
 | `GET /owner` | the owner's one-to-one, numbered by the owner |
 | `GET /rooms/{roomId}/messages/{messageId}/files` | the pictures and files a message carried, fetched again through the reader under the ids they crossed with |
@@ -105,6 +107,8 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `GET /health` | | `connected` (boolean), `reason` (string or null): whether the owner's account is connected, and why not |
 | `GET /reader/avatars` | | `avatars`, each `kind` (`room` or `person`), `id` and `takenAt` (when the kept picture was taken) |
 | `GET /reader/dialogs` | | `rooms`, each `chatId` and `title` (string or null): every chat the owner's account is in, numbered as the service numbers it; 503 `not-ready` with the reason while the account is not connected |
+| `GET /reader/contacts` | | `contacts`, each `id`, `name`, `bot` (boolean) and `chatId` (number or null, the one-to-one the account has with it): the account's contact list; 503 `not-ready` with the reason while the account is not connected |
+| `POST /reader/start` | `contactId`, or `title` and `contactIds` | `outcome`: `started` with `chatId` and `title`; `no-contact` with `contactId`; `refused` with `reason`, Telegram's own words; 503 `not-ready` with the reason while the account is not connected |
 | `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null) | `outcome`: `fetched` with `id`, `name`, `mime`, `bytes`, a message file under the owner's account's id; `unavailable` with `reason`; `no-reader` with `reason` |
 | `POST /reader/file` | `chatId`, `messageId`, `sentAt` | the same outcomes |
 | `POST /owner/say` | `chatId`, `text` (the plain words), `markup` (the dialect's HTML, or null), `silent` (boolean), `replyToMessageId` (number or null) | `messageId` and `text`, the words as Telegram holds them; or `refused` (`unavailable` or `unreachable`) with `error` |

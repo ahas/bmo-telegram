@@ -5,6 +5,7 @@
 
 import { startAvatarSweeper } from "./avatars";
 import { accountMissing, places, readerSettings } from "./config";
+import { contactLister, makeGroup, startChat } from "./contacts";
 import { roomLister } from "./dialogs";
 import { startHistory } from "./history";
 import { lockOnceFree, takeLock } from "./lock";
@@ -24,6 +25,8 @@ const settings = readerSettings();
 const where = places(settings.dataDir);
 const peers = { ownerId: settings.ownerId, botId: settings.botId };
 const service = serviceAt(settings.servicePort, settings.token);
+const rooms = roomLister(peers);
+const contacts = contactLister(peers, rooms);
 let client: TelegramClient | null = null;
 let store: ReaderStore | null = null;
 let missing: string | null = settings.account === null ? accountMissing : null;
@@ -39,7 +42,10 @@ const server = Bun.serve({
     peers,
     owner: heldOwnerAccount(() => client, peers),
     client: () => client,
-    rooms: roomLister(peers),
+    rooms,
+    contacts,
+    start: (account, asked) =>
+      startChat(asked, { contacts: () => contacts(account), makeGroup: (title, ids) => makeGroup(account, title, ids), forgetRooms: rooms.forget }, peers),
     avatars: () => store?.keptAvatars() ?? [],
     missing: () => missing,
   }),

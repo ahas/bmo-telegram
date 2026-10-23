@@ -254,7 +254,7 @@
         "type": "object"
       },
       "ChatCapability": {
-        "description": "What a provider can do: the twelve verbs, and five answers that are not verbs.",
+        "description": "What a provider can do: the twelve verbs, and eight answers that are not verbs.",
         "oneOf": [
           {
             "enum": [
@@ -297,8 +297,89 @@
             "const": "roomList",
             "description": "The provider can list the rooms its account is in.",
             "type": "string"
+          },
+          {
+            "const": "contactList",
+            "description": "The provider can list the contacts of its account.",
+            "type": "string"
+          },
+          {
+            "const": "startChat",
+            "description": "The provider can start a one-to-one with a contact of its account.",
+            "type": "string"
+          },
+          {
+            "const": "startGroup",
+            "description": "The provider can start a room of several contacts of its account, under a title.",
+            "type": "string"
           }
         ]
+      },
+      "ChatContact": {
+        "description": "One contact of the provider's account.",
+        "properties": {
+          "id": {
+            "description": "The contact, as a number of the provider's `people` space.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ChatContactKind"
+          },
+          "name": {
+            "description": "What the account calls the contact.",
+            "type": "string"
+          },
+          "roomId": {
+            "description": "The one-to-one the account already has with the contact, or null where it has none.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "roomId"
+        ],
+        "type": "object"
+      },
+      "ChatContactKind": {
+        "description": "What kind of account a contact is.",
+        "oneOf": [
+          {
+            "const": "person",
+            "description": "A person's account.",
+            "type": "string"
+          },
+          {
+            "const": "bot",
+            "description": "A platform's bot account.",
+            "type": "string"
+          }
+        ]
+      },
+      "ChatContactPage": {
+        "description": "One page of a list: its items, and whether anything stands past the last of them.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatContact"
+            },
+            "type": "array"
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "type": "object"
       },
       "ChatDeclaration": {
         "description": "What a provider declares of itself. The base holds no record of a provider anywhere else.",
@@ -1093,6 +1174,46 @@
         ],
         "type": "object"
       },
+      "ChatStart": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "description": "A one-to-one with one contact of the account.",
+            "properties": {
+              "contactId": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "contactId"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "A room of several contacts, under a title: not blank, and naming each contact once.",
+            "properties": {
+              "contactIds": {
+                "items": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "contactIds"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "The body of `POST /rooms`: a conversation to start, with one contact or with several under a title."
+      },
       "ChatVoice": {
         "description": "Whose account speaks on a provider. One axis of a read mode; `ChatReach` is the other.",
         "oneOf": [
@@ -1625,7 +1746,7 @@
   "info": {
     "description": "The routes a chat provider serves and the receiving side calls, as the chat protocol defines them: the declaration, health, sends, a room, the account owner's room, a message's files fetched again, the dialect's readings and checks, and kept profile pictures. Paths are relative to the base address the caller is configured with, and a service may mount them under a prefix of its own. Bodies are JSON, except a profile picture, which is answered as its own bytes; bytes inside JSON are base64. Times are integers of epoch milliseconds. Every failure, a refusal among them, is answered in the error shape with its status, so a 2xx answer is always the route's success. The sends, a room, the owner and a message's files answer 503 `not-ready` while the provider is not ready. A caller offers a request again only when the connection was refused, so a request that reached a listener is never made twice. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`.",
     "title": "bmo-chat provider routes",
-    "version": "0.1.0-rev.7"
+    "version": "0.1.0-rev.8"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1689,6 +1810,78 @@
         "x-codes": [
           "bad-request",
           "unauthorized",
+          "failed"
+        ]
+      }
+    },
+    "/contacts": {
+      "get": {
+        "operationId": "listContacts",
+        "parameters": [
+          {
+            "description": "A contact number.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "description": "A contact number.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatContactPage"
+                }
+              }
+            },
+            "description": "Answered."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnsupportedCapability"
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/NotReady"
+          }
+        },
+        "summary": "A page of the contacts of the provider's account, in ascending order of contact number and only those after `after`, at most `limit`, each with the one-to-one the account already has with it; refused `unsupported-capability` where the provider does not declare `contactList`.",
+        "tags": [
+          "contacts"
+        ],
+        "x-codes": [
+          "bad-request",
+          "unauthorized",
+          "unsupported-capability",
+          "not-ready",
           "failed"
         ]
       }
@@ -1978,6 +2171,69 @@
           "bad-request",
           "unauthorized",
           "unsupported-capability",
+          "not-ready",
+          "failed"
+        ]
+      },
+      "post": {
+        "operationId": "createRooms",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderRoom"
+                }
+              }
+            },
+            "description": "Created."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireError"
+                }
+              }
+            },
+            "description": "- `unsupported-capability`: refused: the provider does not declare the capability the call needs.\n- `platform`: refused by the platform; the sentence is the provider's own English reason."
+          },
+          "500": {
+            "$ref": "#/components/responses/Failed"
+          },
+          "503": {
+            "$ref": "#/components/responses/NotReady"
+          }
+        },
+        "summary": "A conversation started on the platform, a one-to-one with one contact or a group of several under a title, answered with its room as `GET /rooms/{roomId}` answers it, the one-to-one the account already had where it had one; refused `unsupported-capability` where the provider does not declare the shape's capability, `startChat` or `startGroup`, and `not-found` for a contact it does not know.",
+        "tags": [
+          "rooms"
+        ],
+        "x-codes": [
+          "bad-request",
+          "unauthorized",
+          "not-found",
+          "unsupported-capability",
+          "platform",
           "not-ready",
           "failed"
         ]
@@ -2271,6 +2527,9 @@
       "name": "rooms"
     },
     {
+      "name": "contacts"
+    },
+    {
       "name": "owner"
     },
     {
@@ -2367,6 +2626,56 @@
         "$ref": "#/components/schemas/ProviderRoomPage"
       },
       "route": "GET /rooms"
+    },
+    {
+      "description": "Starts a conversation on the platform, a one-to-one with `contactId` or a group of `contactIds` under `title`, and answers its room; refused where the provider does not declare startChat or startGroup.",
+      "input": {
+        "description": "A body sent as it is.",
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/ChatStart"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "name": "chat_start",
+      "output": {
+        "$ref": "#/components/schemas/ProviderRoom"
+      },
+      "route": "POST /rooms"
+    },
+    {
+      "description": "A page of the contacts of the provider's account, in ascending order of contact number, only those after `after`, each with the one-to-one the account already has with it; refused where the provider does not declare contactList.",
+      "input": {
+        "description": "The query of `GET /contacts`: only the contacts numbered after `after`, and at most `limit` of them.",
+        "properties": {
+          "after": {
+            "description": "A contact number.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "limit": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "name": "chat_contacts",
+      "output": {
+        "$ref": "#/components/schemas/ChatContactPage"
+      },
+      "route": "GET /contacts"
     },
     {
       "description": "What the provider knows of a room: whether it owns it, the account's identity in it, whether it is the owner's private chat, the one person of a one-to-one, its title, and the voices it is read by and may be sent in.",

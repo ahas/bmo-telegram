@@ -45,11 +45,14 @@ async function dialogsOf(client: TelegramClient): Promise<DialogEntry[]> {
   });
 }
 
+/** The account's rooms, read off the account, and `forget` to read them again on the next asking. */
+export type RoomLister = ((client: TelegramClient) => Promise<AccountRoom[]>) & { forget: () => void };
+
 /** The account's rooms, the list last read answering while it is fresh. `now` is the clock, for tests. */
-export function roomLister(peers: Peers, now: () => number = Date.now): (client: TelegramClient) => Promise<AccountRoom[]> {
+export function roomLister(peers: Peers, now: () => number = Date.now): RoomLister {
   let last: { at: number; rooms: AccountRoom[] } | null = null;
 
-  return async (client) => {
+  const list = async (client: TelegramClient): Promise<AccountRoom[]> => {
     if (last !== null && now() - last.at < freshForMs) return last.rooms;
 
     const rooms = accountRooms(await dialogsOf(client), peers);
@@ -58,4 +61,10 @@ export function roomLister(peers: Peers, now: () => number = Date.now): (client:
 
     return rooms;
   };
+
+  return Object.assign(list, {
+    forget: () => {
+      last = null;
+    },
+  });
 }

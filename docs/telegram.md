@@ -36,10 +36,11 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 
 ### Capabilities
 
-All twelve send verbs, and `replyTo`, `fetchMedia`, `avatars`, `history` and `roomList`. The last four are the
-owner's account's: each is declared only while the reader mode is active, and `history` and `avatars` only while
-their part stands (`GET /status`). The rooms `roomList` lists are the bot's and the owner's account's
-(「The rooms」).
+All twelve send verbs, and `replyTo`, `fetchMedia`, `avatars`, `history`, `roomList`, `contactList`,
+`startChat` and `startGroup`. All but `replyTo` are the owner's account's: each is declared only while the reader
+mode is active, and `history` and `avatars` only while their part stands (`GET /status`). The rooms `roomList`
+lists are the bot's and the owner's account's (「The rooms」); the contacts and the conversations started are the
+owner's account's alone (「Contacts and starting a conversation」).
 
 ### The rooms
 
@@ -67,6 +68,29 @@ their part stands (`GET /status`). The rooms `roomList` lists are the bot's and 
   also in is the bot's, under the account's title for it, and a room of the bot's the account does not list is
   titled as Telegram tells the bot. Each is shaped as `GET /rooms/{roomId}` answers it. Whether the bot is in each
   room is asked of Telegram one room after another, each answer kept as above.
+
+### Contacts and starting a conversation
+
+- **The contacts are the owner's account's,** its Telegram contact list as the reader reads it
+  (`docs/reader.md`, 「Contacts and starting a conversation」): each under the person's own number, with the
+  name the account shows, `bot` for a bot account and `person` for any other, and as `roomId` the one-to-one the
+  account already has with the contact, numbered as the service numbers rooms, or null. The bot account has no
+  contacts.
+- **The bot account cannot start a one-to-one.** Telegram lets a bot speak to a person only once the person has
+  spoken to it, so every conversation is started by the owner's account, through the reader.
+- **A one-to-one started is an owner-account room, read-only,** as any room the bot is not in (「The rooms」):
+  `human-reader` alone and no `identity`, unless the bot is already in a one-to-one numbered the same, which is
+  then the bot's. Starting it sends nothing: Telegram makes a one-to-one stand only once a message is in it, so
+  the room answered is the one the first message will make, under the person's number, titled with the
+  contact's name. A one-to-one the account already has comes to that room.
+- **A group started is a Telegram group the owner's account makes,** under the title asked, with the contacts
+  asked as its members; its people see it made. It is a room of the bot's where a contact brought in is the bot,
+  and read-only otherwise.
+- **A start naming a number that is not a contact** of the account is answered `not-found`, and one Telegram
+  refuses is refused `platform` with Telegram's own description. While the reader mode is not active neither
+  capability is declared, so bmo-chat refuses the start before the provider is asked.
+- **A room of a contact is known before its first message:** `GET /rooms/{roomId}` answers the one-to-one with a
+  contact of the account read-only, where neither the bot nor the account's dialog list has it yet.
 
 ## Reading a room
 

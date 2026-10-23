@@ -22,6 +22,8 @@ reader」), and it reaches nothing but the service and Telegram.
   words Telegram holds for each, by which the service knows the bot account's sight of them as their echo.
 - **The rooms of the account.** Every chat the owner's account is in is listed, for a person to choose a room
   among them; one the bot is not in is read-only (`docs/telegram.md`, 「The rooms」).
+- **Contacts and conversations started.** The account's contacts are listed, and a one-to-one or a group with
+  them is started in the owner's account, which the bot cannot do (「Contacts and starting a conversation」).
 - **History.** The past messages of the rooms the receiver names are walked back and handed over as history.
 - **Profile pictures.** The pictures of every room and every sender the provider has seen are kept current.
 
@@ -71,6 +73,24 @@ reader」), and it reaches nothing but the service and Telegram.
 - **The list is read again at most every thirty seconds;** a page asked within that time is answered from the
   list last read, so walking the pages does not walk the account's dialogs each time.
 - **While the account is not connected** the route answers 503 `not-ready` with the reason the health gives.
+
+## Contacts and starting a conversation
+
+- **The contacts are the account's contact list,** read by MTProto's `contacts.getContacts` and listed on
+  `GET /reader/contacts`: each contact's number, the name the account shows for it (first and last name, else
+  the handle, else the number), whether it is a bot, and the number of the one-to-one the account has with it
+  where its dialog list holds one, the chat with the bot under the owner's number as in the rooms. The
+  account itself and a deleted account are not listed. The list is read again at most every thirty seconds, as
+  the rooms are.
+- **A one-to-one is started** on `POST /reader/start` with `contactId`: a contact of the account comes to its
+  room's number and its name, and nothing is sent, since Telegram makes the chat stand at its first message. A
+  number that is not a contact is answered `no-contact`.
+- **A group is started** on the same route with `title` and `contactIds`, by MTProto's `messages.createChat`
+  with those contacts as its members; it comes to the new group's number, as the service numbers a group, and
+  the title. Every number must be a contact, else the first that is not is answered `no-contact` and nothing
+  is made; what Telegram refuses is answered `refused` with Telegram's own words. The list of rooms is read
+  again on the next page asked, so the new group is listed at once.
+- **While the account is not connected** both routes answer 503 `not-ready` with the reason the health gives.
 
 ## The history walk
 

@@ -1,7 +1,7 @@
 //! The Telegram provider as bmo-chat's contract states one (docs/telegram.md, 「The declaration」): what it
-//! declares, the room questions and the rooms of the owner's account, a send in the voice it asks for, a
-//! message's picture or file fetched again through the owner's account, and the profile pictures it keeps. The
-//! bot account reads and speaks; the reader stands behind it.
+//! declares, the room questions and the rooms of the owner's account, its contacts and a conversation started
+//! with them, a send in the voice it asks for, a message's picture or file fetched again through the owner's
+//! account, and the profile pictures it keeps. The bot account reads and speaks; the reader stands behind it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
@@ -10,10 +10,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use async_trait::async_trait;
 use bmo_chat::{
-  ChatAvatar, ChatAvatarKind, ChatCapability, ChatDialect, ChatFailure, ChatHealth, ChatMediaRequest,
-  ChatMediaResult, ChatModeStanding, ChatNumberRanges, ChatNumberSpace, ChatNumbering, ChatPicture,
-  ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal, ChatSendRequest, ChatSendResult,
-  ChatVoice, MessageFile, ProviderRoom,
+  ChatAvatar, ChatAvatarKind, ChatCapability, ChatContact, ChatContactKind, ChatDialect, ChatFailure,
+  ChatHealth, ChatMediaRequest, ChatMediaResult, ChatModeStanding, ChatNumberRanges, ChatNumberSpace,
+  ChatNumbering, ChatPicture, ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal,
+  ChatSendRequest, ChatSendResult, ChatStart, ChatStartResult, ChatVoice, MessageFile, ProviderRoom,
 };
 use serde::Serialize;
 use telegram_dialect::TelegramHtml;
@@ -21,7 +21,7 @@ use tokio::task::JoinHandle;
 
 use crate::owner::OwnerVoice;
 use crate::policy::POLICY;
-use crate::reader::{ReaderClient, ReaderFetch, ReaderHealth, ReaderRoom};
+use crate::reader::{ReaderClient, ReaderContact, ReaderFetch, ReaderHealth, ReaderRoom, ReaderStart};
 use crate::seam::Standing;
 use crate::seen::Seen;
 use crate::send::{Sending, Speaker, refused};
@@ -113,6 +113,25 @@ impl TelegramProvider {
     };
 
     reader.dialogs().await
+  }
+
+  // Every contact of the owner's account, as the reader lists them.
+  async fn reader_contacts(&self) -> Result<Vec<ReaderContact>, String> {
+    let Some(reader) = &self.reader else {
+      return Err(NO_READER.to_owned());
+    };
+
+    reader.contacts().await
+  }
+
+  // A room a conversation came to: the bot's where the bot is in it, and the owner's account's, read-only, where
+  // it is not (docs/telegram.md, 「Contacts and starting a conversation」).
+  async fn started_room(&self, chat_id: i64, title: Option<String>) -> ProviderRoom {
+    if self.telegram.bot_in(chat_id).await {
+      self.telegram.room_of(chat_id, title, self.active_voices())
+    } else {
+      self.telegram.account_room_of(chat_id, title)
+    }
   }
 
   // A send in the owner's own voice, through the reader while it has the account connected; never by the bot
@@ -208,6 +227,9 @@ impl ChatProvider for TelegramProvider {
     if !reading {
       can.remove(&ChatCapability::FetchMedia);
       can.remove(&ChatCapability::RoomList);
+      can.remove(&ChatCapability::ContactList);
+      can.remove(&ChatCapability::StartChat);
+      can.remove(&ChatCapability::StartGroup);
     }
 
     if !reading || self.standing.history().is_some() {
@@ -247,10 +269,27 @@ impl ChatProvider for TelegramProvider {
       .into_iter()
       .find(|room| room.chat_id == room_id);
 
-    Ok(match listed {
-      Some(room) => Some(self.telegram.account_room_of(room_id, room.title)),
-      None => self.telegram.has_seen(room_id).then(|| self.telegram.account_room_of(room_id, None)),
-    })
+    if let Some(room) = listed {
+      return Ok(Some(self.telegram.account_room_of(room_id, room.title)));
+    }
+
+    if self.telegram.has_seen(room_id) {
+      return Ok(Some(self.telegram.account_room_of(room_id, None)));
+    }
+
+    // A one-to-one with a contact stands before its first message, under the contact's number.
+    if self.telegram.private_room_of(room_id).is_none() {
+      return Ok(None);
+    }
+
+    let contact = self
+      .reader_contacts()
+      .await
+      .unwrap_or_default()
+      .into_iter()
+      .find(|contact| contact.id == room_id);
+
+    Ok(contact.map(|contact| self.telegram.account_room_of(room_id, Some(contact.name))))
   }
 
   async fn owner_room(&self) -> Result<Option<i64>, ChatFailure> {
@@ -291,6 +330,50 @@ impl ChatProvider for TelegramProvider {
     }
 
     Ok(rooms.into_values().collect())
+  }
+
+  async fn contacts(&self) -> Result<Vec<ChatContact>, ChatFailure> {
+    let contacts = self
+      .reader_contacts()
+      .await
+      .map_err(|why| format!("the owner's account's contacts were not read: {why}"))?;
+
+    Ok(
+      contacts
+        .into_iter()
+        .map(|contact| ChatContact {
+          id: contact.id,
+          name: contact.name,
+          kind: if contact.bot { ChatContactKind::Bot } else { ChatContactKind::Person },
+          room_id: contact.chat_id,
+        })
+        .collect(),
+    )
+  }
+
+  // A conversation started by the owner's account, never by the bot, which cannot start a one-to-one
+  // (docs/telegram.md, 「Contacts and starting a conversation」).
+  async fn start_chat(&self, start: ChatStart) -> Result<ChatStartResult, ChatFailure> {
+    let health = self.refresh_reader().await;
+    let Some(reader) = self.reader.as_ref().filter(|_| health.connected) else {
+      let why = health.reason.as_deref().unwrap_or(NO_READER);
+
+      return Ok(ChatStartResult::Refused(
+        POLICY.mode_down(&wire_name(&ChatVoice::HumanReader), Some(why)),
+      ));
+    };
+    let started = reader
+      .start(&start)
+      .await
+      .map_err(|why| format!("the owner's account did not start the conversation: {why}"))?;
+
+    Ok(match started {
+      ReaderStart::Started { chat_id, title } => {
+        ChatStartResult::Started(self.started_room(chat_id, title).await)
+      }
+      ReaderStart::NoContact(contact_id) => ChatStartResult::NoContact { contact_id },
+      ReaderStart::Refused(reason) => ChatStartResult::Refused(POLICY.refused(&reason)),
+    })
   }
 
   async fn send(&self, request: ChatSendRequest) -> Result<ChatSendResult, ChatFailure> {

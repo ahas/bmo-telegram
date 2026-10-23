@@ -1,11 +1,13 @@
 // The reader's routes, called by the service alone (docs/boundary-api.md, 「The reader's routes, called by the
-// service」): whether the owner's account is connected, the chats it is in, a picture or a file fetched through
-// it, and a send in the owner's voice. Every route takes the seam's token.
+// service」): whether the owner's account is connected, the chats it is in, its contacts and a conversation
+// started with them, a picture or a file fetched through it, and a send in the owner's voice. Every route takes
+// the seam's token.
 
 import { fetchFile, fetchPicture } from "./media";
 import { ownerRefusalName } from "./owner";
 
 import type { TelegramClient } from "telegram";
+import type { AccountContact, StartAsked, StartOutcome } from "./contacts";
 import type { AccountRoom } from "./dialogs";
 import type { Peers } from "./media";
 import type { AvatarKind } from "./store";
@@ -25,6 +27,10 @@ export interface RoutesDeps {
   client: () => TelegramClient | null;
   // Every chat the connected account is in.
   rooms: (client: TelegramClient) => Promise<AccountRoom[]>;
+  // Every contact of the connected account.
+  contacts: (client: TelegramClient) => Promise<AccountContact[]>;
+  // A conversation started on the connected account.
+  start: (client: TelegramClient, asked: StartAsked) => Promise<StartOutcome>;
   // Every profile picture the reader keeps.
   avatars: () => KeptAvatar[];
   // Why the account is not connected, where it is not.
@@ -58,6 +64,22 @@ function markupOf(value: unknown): string | null | undefined {
   if (value === null || value === undefined) return null;
 
   return isText(value) ? value : undefined;
+}
+
+// A start as it crosses: a one-to-one with a contact, or a group of contacts under a title; null where it is
+// neither.
+function startOf(body: Body): StartAsked | null {
+  const keys = Object.keys(body).sort().join(",");
+
+  if (keys === "contactId" && isNumber(body.contactId)) return { contactId: body.contactId };
+
+  const ids = body.contactIds;
+
+  if (keys === "contactIds,title" && isText(body.title) && Array.isArray(ids) && ids.every(isNumber)) {
+    return { title: body.title, contactIds: ids };
+  }
+
+  return null;
 }
 
 // A send in the owner's voice carried, a refusal of the account answered by its name.
@@ -161,6 +183,34 @@ export function readerHandler(deps: RoutesDeps): (request: Request) => Promise<R
 
       try {
         return json({ rooms: await deps.rooms(client) });
+      } catch (error) {
+        return failure("failed", error instanceof Error ? error.message : String(error), 500);
+      }
+    }
+
+    if (request.method === "GET" && pathname === "/reader/contacts") {
+      const client = deps.client();
+
+      if (client === null) return failure("not-ready", notConnected(), 503);
+
+      try {
+        return json({ contacts: await deps.contacts(client) });
+      } catch (error) {
+        return failure("failed", error instanceof Error ? error.message : String(error), 500);
+      }
+    }
+
+    if (request.method === "POST" && pathname === "/reader/start") {
+      const asked = startOf(((await request.json().catch(() => null)) ?? []) as Body);
+
+      if (asked === null) return failure("bad-request", "contactId (number), or title (string) and contactIds (numbers), is required", 400);
+
+      const client = deps.client();
+
+      if (client === null) return failure("not-ready", notConnected(), 503);
+
+      try {
+        return json(await deps.start(client, asked));
       } catch (error) {
         return failure("failed", error instanceof Error ? error.message : String(error), 500);
       }

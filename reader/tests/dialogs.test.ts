@@ -47,6 +47,8 @@ function served(connected: boolean): ReturnType<typeof Bun.serve> {
       owner,
       client: () => (connected ? account.client : null),
       rooms: roomLister(peers),
+      contacts: async () => [],
+      start: async () => ({ outcome: "refused", reason: "never asked" }),
       avatars: () => [],
       missing: () => "the account's values are not set",
     }),
@@ -98,6 +100,9 @@ describe("the rooms of the account", () => {
     now = 30_000;
     await list(account.client);
     expect(account.reads()).toBe(2);
+    list.forget();
+    await list(account.client);
+    expect(account.reads()).toBe(3);
   });
 
   test("are answered while the account is connected, and 503 not-ready while it is not", async () => {

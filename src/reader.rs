@@ -1,8 +1,8 @@
 //! The reader as the service reaches it over the seam (docs/boundary-api.md, 「The reader's routes, called by
-//! the service」): whether the owner's account is connected, the chats it is in, a picture or a file the Bot API
-//! will not hand the bot, and a send in the owner's own voice.
+//! the service」): whether the owner's account is connected, the chats it is in, its contacts and a conversation
+//! started with them, a picture or a file the Bot API will not hand the bot, and a send in the owner's own voice.
 
-use bmo_chat::{ChatAvatar, ChatAvatarKind, FileItem, MessageFile};
+use bmo_chat::{ChatAvatar, ChatAvatarKind, ChatStart, FileItem, MessageFile};
 use serde_json::{Value, json};
 
 use crate::compose::Part;
@@ -27,6 +27,25 @@ pub struct ReaderHealth {
 pub struct ReaderRoom {
   pub chat_id: i64,
   pub title: Option<String>,
+}
+
+/// One contact of the owner's account: its number, the name the account shows, whether it is a bot, and the
+/// one-to-one the account has with it, numbered as the service numbers rooms.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReaderContact {
+  pub id: i64,
+  pub name: String,
+  pub bot: bool,
+  pub chat_id: Option<i64>,
+}
+
+/// What a conversation started on the owner's account came to: its room and title, a number that is no contact,
+/// or Telegram's refusal in its own words.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReaderStart {
+  Started { chat_id: i64, title: Option<String> },
+  NoContact(i64),
+  Refused(String),
 }
 
 /// What a fetch through the owner's account came to: the file, a reason it could not be had, or no account
@@ -177,6 +196,71 @@ impl ReaderClient {
         Ok(ReaderRoom { chat_id, title })
       })
       .collect()
+  }
+
+  /// Every contact of the owner's account; a reader that does not answer, or answers no list, is the reason.
+  pub async fn contacts(&self) -> Result<Vec<ReaderContact>, String> {
+    let answer = self.wire.get("/reader/contacts").await?;
+
+    if !answer.ok() {
+      return Err(answer.reason());
+    }
+
+    let contacts = answer
+      .body
+      .get("contacts")
+      .and_then(Value::as_array)
+      .ok_or_else(|| "the reader's /reader/contacts answered no list of contacts".to_owned())?;
+
+    contacts
+      .iter()
+      .map(|one| {
+        let id = one
+          .get("id")
+          .and_then(Value::as_i64)
+          .ok_or_else(|| "the reader answered a contact with no number".to_owned())?;
+        let name = one.get("name").and_then(Value::as_str).unwrap_or_default().to_owned();
+        let bot = one.get("bot").and_then(Value::as_bool) == Some(true);
+        let chat_id = one.get("chatId").and_then(Value::as_i64);
+
+        Ok(ReaderContact {
+          id,
+          name,
+          bot,
+          chat_id,
+        })
+      })
+      .collect()
+  }
+
+  /// A conversation started on the owner's account; a reader that does not answer, or answers no outcome, is
+  /// the reason.
+  pub async fn start(&self, start: &ChatStart) -> Result<ReaderStart, String> {
+    let body = serde_json::to_value(start).map_err(|why| why.to_string())?;
+    let answer = self.wire.post("/reader/start", &body).await?;
+
+    if !answer.ok() {
+      return Err(answer.reason());
+    }
+
+    let body = answer.body;
+
+    match body.get("outcome").and_then(Value::as_str) {
+      Some("started") => Ok(ReaderStart::Started {
+        chat_id: body
+          .get("chatId")
+          .and_then(Value::as_i64)
+          .ok_or_else(|| "the reader started a conversation with no number".to_owned())?,
+        title: body.get("title").and_then(Value::as_str).map(str::to_owned),
+      }),
+      Some("no-contact") => Ok(ReaderStart::NoContact(
+        body.get("contactId").and_then(Value::as_i64).unwrap_or_default(),
+      )),
+      Some("refused") => Ok(ReaderStart::Refused(
+        body.get("reason").and_then(Value::as_str).unwrap_or_default().to_owned(),
+      )),
+      other => Err(format!("the reader's /reader/start answered an unknown outcome: {other:?}")),
+    }
   }
 
   async fn as_owner(&self, route: &str, body: &Value) -> Result<AsOwner<Value>, NotCarried> {

@@ -1,9 +1,9 @@
 # The Telegram provider's fixed API
 
-**고정됨 0.9.0.**
+**고정됨 0.10.0.**
 
 This service is a chat provider, so its public API is the chat protocol's provider routes, fixed by bmo-chat at
-0.1.0-rev.7. The service serves them through bmo-chat's provider server
+0.1.0-rev.8. The service serves them through bmo-chat's provider server
 and answers them itself; it adds no public route of its own. `docs/openapi.json` is the same contract in machine
 form, exactly as bmo-chat-plugin generates it from the published types, and the routes below are that document's.
 
@@ -29,6 +29,13 @@ the reader」).
 | `GET` | `/rooms` | a page of the rooms the bot account and the owner's account are in, each once, in ascending order of `id`, walked by `after` (a room) and `limit`, each as `GET /rooms/{roomId}` shapes a room; refused `unsupported-capability` while `roomList` is not declared |
 | `GET` | `/rooms/{roomId}` | what the provider knows of the room: `id`, `owns`, `identity` (null in a room the bot is not in), `kind`, `privateTo`, `title` and `modes` (`human-reader` alone in a room the bot is not in, which takes only the owner's own words; the declaration's active voices in a room of the bot's); 404 `not-found` where it knows nothing of it |
 | `GET` | `/owner` | `roomId`, the room to reach the owner in, or null |
+| `POST` | `/rooms` | 201, the room a conversation the owner's account started came to: a one-to-one with `contactId`, read-only unless the bot is in it, or a group of `contactIds` under `title`; 400 `bad-request` for neither shape, 404 `not-found` for a number that is not a contact, `platform` for what Telegram refuses; refused `unsupported-capability` while `startChat` or `startGroup` is not declared |
+
+## Contacts
+
+| Method | Path | Answer |
+|---|---|---|
+| `GET` | `/contacts` | a page of the owner's account's contacts in ascending order of `id`, walked by `after` and `limit`, each `id`, `name`, `kind` (`person` or `bot`) and `roomId`, the one-to-one the account has with it or null; refused `unsupported-capability` while `contactList` is not declared |
 
 ## Sends
 

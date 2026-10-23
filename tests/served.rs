@@ -35,6 +35,10 @@ const TOKEN: &str = "served-token";
 const RECEIVER_TOKEN: &str = "receiver-token";
 const ROOM: i64 = -100;
 const PERSON: i64 = 55;
+// A contact of the owner's account the account has no chat with yet, and the bot neither.
+const CONTACT: i64 = 66;
+// The group a start makes.
+const MADE_GROUP: i64 = -4_000_001;
 const OTHER_ROOM: i64 = -200;
 // A room nobody lists and the bot is not in.
 const UNKNOWN_ROOM: i64 = -300;
@@ -71,7 +75,7 @@ async fn bot_api() -> String {
 
       let answer = match method.as_str() {
         "getMe" => json!({ "ok": true, "result": { "id": BOT, "is_bot": true, "first_name": "Helper", "username": "helper_bot" } }),
-        "getChat" if chat == Some(PERSON) => not_found,
+        "getChat" if matches!(chat, Some(PERSON | CONTACT)) => not_found,
         "getChat" => json!({ "ok": true, "result": { "title": "Board room" } }),
         "getChatMember" if asked["user_id"] == json!(BOT) && matches!(chat, Some(ROOM | BOT_ROOM)) => {
           json!({ "ok": true, "result": { "status": "member", "user": { "id": BOT } } })
@@ -135,6 +139,28 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
           { "chatId": OWNER, "title": "Helper" },
           { "chatId": OTHER_ROOM, "title": null }
         ] }))
+      }),
+    )
+    .route(
+      "/reader/contacts",
+      get(|| async {
+        Json(json!({ "contacts": [
+          { "id": PERSON, "name": "Someone", "bot": false, "chatId": PERSON },
+          { "id": CONTACT, "name": "A contact", "bot": false, "chatId": null },
+          { "id": BOT, "name": "Helper", "bot": true, "chatId": OWNER }
+        ] }))
+      }),
+    )
+    .route(
+      "/reader/start",
+      post(|Json(body): Json<Value>| async move {
+        Json(match (body["contactId"].as_i64(), body["title"].as_str()) {
+          (Some(PERSON), _) => json!({ "outcome": "started", "chatId": PERSON, "title": "Someone" }),
+          (Some(CONTACT), _) => json!({ "outcome": "started", "chatId": CONTACT, "title": "A contact" }),
+          (Some(other), _) => json!({ "outcome": "no-contact", "contactId": other }),
+          (None, Some("Refused")) => json!({ "outcome": "refused", "reason": "USER_PRIVACY_RESTRICTED" }),
+          (None, title) => json!({ "outcome": "started", "chatId": MADE_GROUP, "title": title }),
+        })
       }),
     )
     .route(
@@ -319,6 +345,9 @@ async fn the_declaration_names_the_provider_its_modes_and_its_dialect() {
       "avatars",
       "history",
       "roomList",
+      "contactList",
+      "startChat",
+      "startGroup",
     ])
   );
 }
@@ -452,6 +481,84 @@ async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
 
   assert_eq!(status, 422);
   assert_eq!(refused["code"], "unsupported-capability");
+}
+
+/// The owner's account's contacts, listed through the reader seam and paged by bmo-chat's provider server in
+/// ascending order of number, each with its kind and the one-to-one the account has with it. Where no reader
+/// stands, `contactList` is not declared and the list is refused.
+#[tokio::test]
+async fn the_owner_s_account_s_contacts_are_listed_with_their_one_to_one() {
+  let served = stood(true).await;
+  served.provider.refresh_reader().await;
+
+  let (status, listed) = asked_get(&served.base, "/contacts?limit=2").await;
+
+  assert_eq!(status, 200);
+  assert_eq!(
+    listed,
+    json!({ "items": [
+      { "id": PERSON, "name": "Someone", "kind": "person", "roomId": PERSON },
+      { "id": CONTACT, "name": "A contact", "kind": "person", "roomId": null }
+    ], "more": true })
+  );
+
+  let (_, rest) = asked_get(&served.base, &format!("/contacts?after={CONTACT}")).await;
+
+  assert_eq!(rest["items"], json!([{ "id": BOT, "name": "Helper", "kind": "bot", "roomId": OWNER }]));
+
+  let down = stood(false).await;
+  down.provider.refresh_reader().await;
+
+  let (status, refused) = asked_get(&down.base, "/contacts").await;
+
+  assert_eq!((status, &refused["code"]), (422, &json!("unsupported-capability")));
+}
+
+/// A conversation started by the owner's account: a one-to-one with a contact is an owner-account room,
+/// read-only, the bot not being in it, and is known as a room before its first message; a group made is
+/// answered by its new number; a number that is no contact is not found, and what Telegram refuses is
+/// refused `platform`. Where no reader stands, neither shape is declared and the start is refused.
+#[tokio::test]
+async fn a_conversation_is_started_by_the_owner_s_account_and_read_only_where_the_bot_is_not_in_it() {
+  let served = stood(true).await;
+  served.provider.refresh_reader().await;
+  let read_only = |id: i64, title: &str, private_to: Value| {
+    json!({ "id": id, "owns": true, "identity": null, "kind": "group", "privateTo": private_to, "title": title,
+      "modes": ["human-reader"] })
+  };
+
+  let (status, room) = asked(&served.base, "/rooms", json!({ "contactId": CONTACT })).await;
+
+  assert_eq!((status, room), (201, read_only(CONTACT, "A contact", json!(CONTACT))));
+  assert_eq!(
+    asked_get(&served.base, &format!("/rooms/{CONTACT}")).await,
+    (200, read_only(CONTACT, "A contact", json!(CONTACT))),
+    "a contact's one-to-one is known before its first message"
+  );
+
+  let (status, room) =
+    asked(&served.base, "/rooms", json!({ "title": "Plans", "contactIds": [CONTACT, PERSON] })).await;
+
+  assert_eq!((status, room), (201, read_only(MADE_GROUP, "Plans", Value::Null)));
+
+  let (status, missing) = asked(&served.base, "/rooms", json!({ "contactId": 77 })).await;
+
+  assert_eq!((status, &missing["code"]), (404, &json!("not-found")));
+
+  let (status, refused) =
+    asked(&served.base, "/rooms", json!({ "title": "Refused", "contactIds": [CONTACT] })).await;
+
+  assert_eq!(
+    (status, refused),
+    (422, json!({ "code": "platform", "error": "Telegram: USER_PRIVACY_RESTRICTED" }))
+  );
+
+  let down = stood(false).await;
+  down.provider.refresh_reader().await;
+
+  let (status, refused) = asked(&down.base, "/rooms", json!({ "contactId": CONTACT })).await;
+
+  assert_eq!((status, &refused["code"]), (422, &json!("unsupported-capability")));
 }
 
 /// A message's picture fetched again through the reader seam: the bytes the owner's account hands over, under
