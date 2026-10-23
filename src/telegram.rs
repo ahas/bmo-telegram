@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use async_trait::async_trait;
 use bmo_chat::{ChatReceiver, GatheredPatch, MessageFile, ProviderRoom, RoomKind};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -20,6 +21,7 @@ use crate::kinds::Message;
 use crate::policy::POLICY;
 use crate::reader::ReaderClient;
 use crate::reading::{Reading, SAFE_INTEGER, read, read_edit};
+use crate::seam::Presence;
 use crate::seen::Seen;
 
 /// The bot account as its configuration gives it.
@@ -463,5 +465,12 @@ impl Telegram {
         }
       }
     }
+  }
+}
+
+#[async_trait]
+impl Presence for Telegram {
+  async fn bot_in(&self, chat_id: i64) -> bool {
+    Telegram::bot_in(self, chat_id).await
   }
 }

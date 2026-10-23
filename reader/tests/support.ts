@@ -49,7 +49,7 @@ export function keptService(options: { rooms?: HistoryRoom[] | string; seen?: { 
         ? { kept: options.kept ?? true }
         : {};
     },
-    listened: async () => true,
+    listened: async () => ({ listened: true, people: false }),
     rooms: async (): Promise<Rooms> =>
       typeof options.rooms === "string" ? { unanswered: options.rooms } : { rooms: options.rooms ?? [] },
     seen: async () => options.seen ?? { rooms: [], people: [] },

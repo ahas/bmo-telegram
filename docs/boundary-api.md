@@ -84,7 +84,8 @@ What the provider hands over:
   crosses, a fetch through `GET /rooms/{roomId}/messages/{messageId}/files` included, and with the kind of file
   it is as far as Telegram says (`docs/telegram.md`, 「Reading a room」).
 - **The room's title** crosses as the context's `roomTitle`, the room facts (`kind`, `identity`, `privateTo`)
-  with every hand-over, and the message's time in epoch milliseconds.
+  with every hand-over, and the message's time in epoch milliseconds. A hand-over from a room the bot is not in
+  carries no `identity`: the service takes off the one the reader gave before handing it on.
 
 Where the receiver does not answer, the provider's fallback is the boundary's: a room it says nothing of counts
 as listened, a room it answers 404 for is not listened to, and a `GET /rooms` that fails stands the history walk
@@ -131,7 +132,7 @@ handed to the receiver a second time.
 | Route | Body | Answer |
 |---|---|---|
 | `POST /reader/inbound` | `kind` `message` with `roomId`, `messageId` and a handed message as the protocol states it, or `kind` `gathered` with `roomId`, `messageId` and `patch` (`files`, or `gatherFailure`) | `{}` once the service has handed it on, and for a message whose origin is `history` `kept`; the receiver's failure in the error shape |
-| `POST /reader/listened` | `chatId` | `listened` (boolean), the receiver's answer or its fallback |
+| `POST /reader/listened` | `chatId` | `listened` (boolean), the receiver's answer or its fallback; `people` (boolean), whether a person's words in the room are the reader's to hand over: the bot is not in the room and the receiver asked for it to be read (`docs/telegram.md`, 「The rooms」) |
 | `GET /reader/rooms` | | `rooms`, each `chatId`, `oldestMessageId` and `oldestSentAt`, as the receiver answers them; 503 `not-ready` with the reason while the receiver does not say |
 | `GET /reader/seen` | | `rooms` and `people`: every room and sender the provider has handed a message of over or sent into |
 | `POST /reader/avatars` | `rooms`, `people` | `{}` once word of the changed pictures has gone to the receiver, or stood down |

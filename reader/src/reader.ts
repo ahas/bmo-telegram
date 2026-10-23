@@ -1,7 +1,8 @@
 // The live reading on the owner's account (docs/reader.md, 「What it is for」). Telegram never delivers
 // one bot's messages to another bot, so the bot account alone cannot see what other bots say in a shared
-// room. This reads every new message another bot writes in a room the receiver listens to and hands it to
-// the service, which hands it to the receiver as read in the `human-reader` mode.
+// room. This reads every new message another bot writes in a room the receiver listens to, and a person's in
+// a room the bot is not in where the service says it is the reader's, and hands it to the service, which hands
+// it to the receiver as read in the `human-reader` mode.
 
 import { fileIdOf, messageFileKind, messageHasPhoto, pictureOf, readerFileOf, seconds } from "./media";
 import { mtproto, mtprotoEvents, mtprotoSessions } from "./mtproto";
@@ -12,7 +13,7 @@ import type { Api, TelegramClient as Client } from "telegram";
 import type { NewMessageEvent } from "telegram/events";
 import type { AccountConfig } from "./config";
 import type { Peers } from "./media";
-import type { HandedContext, Service } from "./service";
+import type { HandedContext, RoomReading, Service } from "./service";
 
 export interface ReaderDeps {
   account: AccountConfig;
@@ -107,7 +108,18 @@ async function gather(deps: ReaderDeps, client: Client, message: Api.Message, ch
   }
 }
 
-/** One new message the account read, handed to the service where it is another bot's in a listened room. */
+/** Whether a message from `sender` is the reader's to hand over in a room the service says `room` of: another
+ * bot's but the provider's own wherever the room is listened to, a person's only where the service says the
+ * room's people are the reader's. */
+export function handsOver(sender: { id: number; bot: boolean }, room: RoomReading, botId: number | null): boolean {
+  if (!room.listened) {
+    return false;
+  }
+
+  return sender.bot ? sender.id !== botId : room.people;
+}
+
+/** One new message the account read, handed to the service where it is the reader's to hand over. */
 export async function ingest(deps: ReaderDeps, client: Client, event: NewMessageEvent): Promise<void> {
   const { Api } = mtproto();
   const message = event.message;
@@ -119,25 +131,28 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
   }
 
   const chatId = Number(eventChat.toString());
+  const room = await deps.service.listened(chatId);
 
-  if (!(await deps.service.listened(chatId))) {
+  if (!room.listened) {
     return;
   }
 
-  const chat = await message.getChat();
-  const roomTitle = chat instanceof Api.Chat || chat instanceof Api.Channel ? chat.title : undefined;
   const sender = await message.getSender();
 
-  if (!(sender instanceof Api.User) || sender.bot !== true) {
+  if (!(sender instanceof Api.User)) {
     return;
   }
 
   const senderId = Number(sender.id.toString());
 
-  // The provider's own bot is read by the bot account, so its words are not read in again here.
-  if (senderId === deps.peers.botId) {
+  // The provider's own bot is read by the bot account, so its words are not read in again here; a person's
+  // words are the bot account's to read wherever the bot is.
+  if (!handsOver({ id: senderId, bot: sender.bot === true }, room, deps.peers.botId)) {
     return;
   }
+
+  const chat = await message.getChat();
+  const roomTitle = chat instanceof Api.Chat || chat instanceof Api.Channel ? chat.title : undefined;
 
   const document = message.document;
   const file = document === undefined || document === null ? null : readerFileOf(document);

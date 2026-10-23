@@ -31,6 +31,13 @@ export interface HandedContext {
   tag?: string;
 }
 
+/** What the service says of reading a room: whether the receiver listens to it, and whether a person's words in
+ * it are the reader's to hand over — a room the bot is not in that the receiver asked to be read. */
+export interface RoomReading {
+  listened: boolean;
+  people: boolean;
+}
+
 export interface RoomFacts {
   kind: "owner" | "group";
   identity: number | null;
@@ -76,7 +83,7 @@ export interface Service {
   reachable(): Promise<boolean>;
   // A hand-over carried on to the receiver; a history line answers whether the receiver kept it.
   inbound(inbound: Inbound): Promise<{ kept?: boolean }>;
-  listened(chatId: number): Promise<boolean>;
+  listened(chatId: number): Promise<RoomReading>;
   rooms(): Promise<Rooms>;
   seen(): Promise<{ rooms: number[]; people: number[] }>;
   avatarsChanged(rooms: number[], people: number[]): Promise<void>;
@@ -111,9 +118,9 @@ export function serviceAt(port: number, token: string): Service {
     },
     inbound: async (inbound) => await (await call("POST", "/reader/inbound", inbound)).json() as { kept?: boolean },
     listened: async (chatId) => {
-      const answer = await (await call("POST", "/reader/listened", { chatId })).json() as { listened?: boolean };
+      const answer = await (await call("POST", "/reader/listened", { chatId })).json() as { listened?: boolean; people?: boolean };
 
-      return answer.listened !== false;
+      return { listened: answer.listened !== false, people: answer.people === true };
     },
     rooms: async () => {
       const response = await call("GET", "/reader/rooms", undefined, true);

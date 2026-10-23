@@ -92,6 +92,7 @@ async fn serve() -> Result<(), String> {
     receiver: receiver.clone(),
     seen: seen.clone(),
     standing: standing.clone(),
+    presence: telegram.clone(),
   });
   let sending = Sending {
     picture_root: config.picture_root,

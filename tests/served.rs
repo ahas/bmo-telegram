@@ -198,6 +198,7 @@ async fn stood(reader_standing: bool) -> Served {
     receiver: receiver.clone(),
     seen: seen.clone(),
     standing: standing.clone(),
+    presence: telegram.clone(),
   });
 
   let pictures = tempdir().expect("a temporary folder");

@@ -1,6 +1,6 @@
 # The Telegram provider's fixed API
 
-**고정됨 0.7.0.**
+**고정됨 0.8.0.**
 
 This service is a chat provider, so its public API is the chat protocol's provider routes, fixed by bmo-chat at
 0.1.0-rev.6 (the release its history numbers 1.0.0). The service serves them through bmo-chat's provider server

@@ -5,6 +5,7 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
+use async_trait::async_trait;
 use axum::Router;
 use axum::extract::{Request, State};
 use axum::middleware::{Next, from_fn_with_state};
@@ -12,7 +13,7 @@ use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use bmo_chat::{
   AvatarChange, ChatFailure, ChatReceiver, ErrorCode, GatheredPatch, HandedMessage, MessageOrigin,
-  RoomQuery, RoomsQuery, WireError,
+  ReceiverRoom, RoomQuery, RoomsQuery, WireError,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -65,12 +66,25 @@ impl Standing {
   }
 }
 
+/// Whether the bot account is in a room, as the provider knows it (docs/telegram.md, 「The rooms」).
+#[async_trait]
+pub trait Presence: Send + Sync {
+  async fn bot_in(&self, chat_id: i64) -> bool;
+}
+
 /// What the seam's routes stand on.
 pub struct Seam {
   pub token: String,
   pub receiver: Arc<dyn ChatReceiver>,
   pub seen: Arc<Seen>,
   pub standing: Arc<Standing>,
+  pub presence: Arc<dyn Presence>,
+}
+
+/// Whether the receiving side asked for a room to be read through the owner's account. bmo-chat's room as the
+/// receiving side answers it carries no such request, and `listened` is none, so no room is asked for.
+pub fn read_asked(_held: &ReceiverRoom) -> bool {
+  false
 }
 
 /// The seam's routes over `seam`.
@@ -125,9 +139,14 @@ async fn inbound(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Resp
     Inbound::Message {
       room_id,
       message_id,
-      message,
+      mut message,
     } => {
       let history = message.origin == MessageOrigin::History;
+
+      // No words of the provider's own stand in a room the bot is not in.
+      if !seam.presence.bot_in(room_id).await {
+        message.room.identity = None;
+      }
 
       if message.origin == MessageOrigin::Live {
         seam.seen.message(room_id, message.sender_id);
@@ -166,12 +185,15 @@ async fn listened(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Res
   let query = RoomQuery {
     via: VIA.to_owned(),
   };
-  let listened = match seam.receiver.room(room.chat_id, query).await {
-    Ok(held) => held.is_some_and(|held| held.listened),
-    Err(_) => true,
+  let (listened, asked) = match seam.receiver.room(room.chat_id, query).await {
+    Ok(held) => (held.as_ref().is_some_and(|held| held.listened), held.as_ref().is_some_and(read_asked)),
+    Err(_) => (true, false),
   };
+  // A person's words are the reader's to hand over only in a room the bot is not in that the receiving side
+  // asked to be read.
+  let people = asked && !seam.presence.bot_in(room.chat_id).await;
 
-  Json(json!({ "listened": listened })).into_response()
+  Json(json!({ "listened": listened, "people": people })).into_response()
 }
 
 // The rooms whose history may be walked, each with the oldest message the receiver holds of it.

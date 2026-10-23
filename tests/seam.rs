@@ -12,13 +12,25 @@ use axum::routing::{get, post};
 use bmo_chat::{FileItem, MessageFile, ReceiverRoom};
 use bmo_telegram::compose::Part;
 use bmo_telegram::reader::{AsOwner, OwnerSent, ReaderClient, ReaderFetch, ReaderRoom};
-use bmo_telegram::seam::{Seam, Standing, seam_router};
+use bmo_telegram::seam::{Presence, Seam, Standing, seam_router};
 use bmo_telegram::seen::Seen;
 use bmo_telegram::wire::Wire;
 use serde_json::{Value, json};
 use support::KeptReceiver;
 
 const TOKEN: &str = "seam-token";
+// The one room of the receiver's the bot is in.
+const BOT_ROOM: i64 = -1001;
+
+// The bot account, in `BOT_ROOM` alone.
+struct InBotRoom;
+
+#[async_trait::async_trait]
+impl Presence for InBotRoom {
+  async fn bot_in(&self, chat_id: i64) -> bool {
+    chat_id == BOT_ROOM
+  }
+}
 
 // A router served on the loopback at a port of its own, for as long as the test runs.
 async fn serve(router: Router) -> u16 {
@@ -243,6 +255,7 @@ async fn seam_over(receiver: Arc<KeptReceiver>) -> Served {
     receiver: receiver.clone(),
     seen,
     standing: standing.clone(),
+    presence: Arc::new(InBotRoom),
   };
   let port = serve(seam_router(Arc::new(seam))).await;
 
@@ -301,6 +314,9 @@ async fn what_the_reader_hands_over_goes_on_to_the_receiver_and_its_room_and_sen
     ["message", "message", "gathered"]
   );
   assert_eq!(handed[0].1["gathering"], true);
+  // A room the bot is in keeps the bot's number as its identity; one it is not in carries none.
+  assert_eq!(handed[0].1["room"]["identity"], 7_000_000_001_i64);
+  assert_eq!(handed[1].1["room"], json!({ "kind": "group" }));
   assert_eq!(handed[2].1["gatherFailure"], "The file could not be kept.");
   assert_eq!(
     seam.get("/reader/seen").await.unwrap().body,
@@ -312,11 +328,11 @@ async fn what_the_reader_hands_over_goes_on_to_the_receiver_and_its_room_and_sen
   assert_eq!((history.status, history.body), (200, json!({ "kept": true })));
   assert_eq!(
     seam.post("/reader/listened", &json!({ "chatId": -9 })).await.unwrap().body,
-    json!({ "listened": false })
+    json!({ "listened": false, "people": false })
   );
   assert_eq!(
     seam.post("/reader/listened", &json!({ "chatId": -1001 })).await.unwrap().body,
-    json!({ "listened": true })
+    json!({ "listened": true, "people": false })
   );
   assert_eq!(seam.get("/reader/rooms").await.unwrap().body["rooms"][0]["oldestMessageId"], 5);
   assert_eq!(
@@ -346,7 +362,7 @@ async fn where_the_receiver_does_not_answer_each_need_falls_back_as_the_boundary
 
   assert_eq!(
     seam.post("/reader/listened", &json!({ "chatId": -9 })).await.unwrap().body,
-    json!({ "listened": true })
+    json!({ "listened": true, "people": false })
   );
 
   let rooms = seam.get("/reader/rooms").await.unwrap();

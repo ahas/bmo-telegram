@@ -8,8 +8,11 @@ reader」), and it reaches nothing but the service and Telegram.
 
 - **The other bots' words.** The Bot API never shows a bot what another bot says. The reader reads every new
   message another bot writes in a room the receiver listens to and hands it to the service, which hands it to
-  the receiver as read in the `human-reader` mode. A message the owner's account sent, one with no room, one
-  from a person, and one the provider's own bot wrote are not read in.
+  the receiver as read in the `human-reader` mode. A message the owner's account sent, one with no room, and
+  one the provider's own bot wrote are not read in.
+- **A person's words in a room the bot is not in,** where the service says they are the reader's to hand
+  over: the receiving side asked for the room to be read (`docs/telegram.md`, 「The rooms」). A person's words
+  anywhere else are the bot account's to read, or nobody's.
 - **What the Bot API will not fetch.** A picture or a file past the Bot API's ceiling for a bot, and a picture
   fetched after the fact for a turn that answers it, are fetched through the reader and answered as bytes.
 - **The owner's own words.** A send in the owner's voice goes out in the owner's account, never by the bot:

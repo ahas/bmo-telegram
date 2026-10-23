@@ -51,6 +51,14 @@ their part stands (`GET /status`). The rooms `roomList` lists are the bot's and 
   provider's own, so it can be added, and it is the owner's account's alone: only the owner's own words, a send
   naming the voice `human-reader`, go into it. A send in any other voice, or naming none, is refused `platform`
   with the policy's `read_only`, whatever its verb, so nothing answers in such a room.
+- **A room the bot is not in is read through the owner's account only where the receiving side asks for it.**
+  Other bots' words are read wherever the room is listened to, as in any room. A person's words there are
+  read and handed over, as `live` in `human-reader`, only where the receiving side asked for the room to be
+  read, so the owner's other chats never flow. bmo-chat's room as the receiving side answers it says only
+  whether the room is listened to, which is no such request, and carries none of its own; so no room the bot
+  is not in has its people's words read.
+- **A hand-over from a room the bot is not in carries no `identity`** in its room facts, as the room's own
+  answer carries none.
 - **A room carries no modes of its own** in bmo-chat's room; the declaration's modes are the provider's. A room
   the bot is not in is told by its `identity`, null, since no words of the provider's own stand there but the
   owner's; a room of the bot's carries the bot's number.
