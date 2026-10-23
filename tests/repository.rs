@@ -284,14 +284,13 @@ fn no_directory_is_named_after_its_parent() {
   assert!(twins.is_empty(), "these paths repeat a directory inside itself: {twins:?}");
 }
 
-/// The one file allowed a Hangul line: its fixed marker.
+/// The fixed API, whose marker names the version it is fixed at.
 const FIXED_API: &str = "docs/api.md";
 
 #[test]
-fn no_hangul_in_tracked_files_but_the_fixed_marker() {
+fn no_hangul_in_tracked_files() {
   let found: Vec<String> = tracked_texts()
     .into_iter()
-    .filter(|(path, _)| path != FIXED_API)
     .filter(|(_, text)| text.chars().any(is_hangul))
     .map(|(path, _)| path)
     .collect();
@@ -299,18 +298,13 @@ fn no_hangul_in_tracked_files_but_the_fixed_marker() {
 }
 
 #[test]
-fn the_fixed_api_document_carries_only_the_fixed_marker_in_hangul() {
+fn the_fixed_api_document_carries_the_fixed_marker_of_its_version() {
   let text = text_of(FIXED_API).expect("docs/api.md is tracked");
-  let marked: Vec<&str> = text.lines().filter(|line| line.chars().any(is_hangul)).collect();
-
-  assert_eq!(marked.len(), 1, "lines holding Hangul: {marked:?}");
-
-  let line = marked[0];
-  let word: String = line.chars().skip(2).take_while(|&character| is_hangul(character)).collect();
   let version = fs::read_to_string(Path::new(ROOT).join("VERSION")).expect("VERSION is readable");
+  let marker = format!("**Fixed {}.**", version.trim());
+  let first = text.lines().skip(1).find(|line| !line.trim().is_empty());
 
-  assert_eq!(word.chars().count(), 3, "the marker is one word: {line:?}");
-  assert_eq!(line, format!("**{word} {}.**", version.trim()));
+  assert_eq!(first, Some(marker.as_str()), "the first line under the title is the fixed marker");
 }
 
 /// The names list, as `BMO_NAMES_LIST` names it: `words` matched as whole words ignoring case,

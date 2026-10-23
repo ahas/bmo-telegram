@@ -47,6 +47,9 @@ const BOT_ROOM: i64 = -400;
 // A room the provider has seen that the bot is no longer in and the owner's account does not list.
 const LEFT_ROOM: i64 = -500;
 const OWNER: i64 = 42;
+// People the owner's account has a one-to-one with and the bot has no chat with, more than one page of rooms
+// and more than one round of asking Telegram.
+const STRANGERS: std::ops::Range<i64> = 1_000..1_020;
 const BOT: i64 = 7_000_000_001_i64;
 const SENT_AT: i64 = 1_700_000_000_000;
 
@@ -58,7 +61,7 @@ async fn closed_port() -> u16 {
 }
 
 // The Bot API: who the bot is, the rooms it is in and what it calls them, and no updates at all. The bot is a
-// member of `ROOM` and `BOT_ROOM`, has no chat with `PERSON`, and is in no other room.
+// member of `ROOM` and `BOT_ROOM`, has no chat with `PERSON` or any of `STRANGERS`, and is in no other room.
 async fn bot_api() -> String {
   let router = Router::new().fallback(move |request: Request| {
     async move {
@@ -76,6 +79,7 @@ async fn bot_api() -> String {
       let answer = match method.as_str() {
         "getMe" => json!({ "ok": true, "result": { "id": BOT, "is_bot": true, "first_name": "Helper", "username": "helper_bot" } }),
         "getChat" if matches!(chat, Some(PERSON | CONTACT)) => not_found,
+        "getChat" if chat.is_some_and(|chat| STRANGERS.contains(&chat)) => not_found,
         "getChat" => json!({ "ok": true, "result": { "title": "Board room" } }),
         "getChatMember" if asked["user_id"] == json!(BOT) && matches!(chat, Some(ROOM | BOT_ROOM)) => {
           json!({ "ok": true, "result": { "status": "member", "user": { "id": BOT } } })
@@ -133,12 +137,15 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
     .route(
       "/reader/dialogs",
       get(|| async {
-        Json(json!({ "rooms": [
-          { "chatId": PERSON, "title": "Someone" },
-          { "chatId": ROOM, "title": "Board" },
-          { "chatId": OWNER, "title": "Helper" },
-          { "chatId": OTHER_ROOM, "title": null }
-        ] }))
+        let strangers = STRANGERS.map(|chat_id| json!({ "chatId": chat_id, "title": format!("Person {chat_id}") }));
+        let rooms = [
+          json!({ "chatId": PERSON, "title": "Someone" }),
+          json!({ "chatId": ROOM, "title": "Board" }),
+          json!({ "chatId": OWNER, "title": "Helper" }),
+          json!({ "chatId": OTHER_ROOM, "title": null }),
+        ];
+
+        Json(json!({ "rooms": rooms.into_iter().chain(strangers).collect::<Vec<_>>() }))
       }),
     )
     .route(
@@ -433,11 +440,12 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
   assert_eq!(owner_room, json!({ "roomId": OWNER }));
 }
 
-/// The bot's rooms and the owner's account's, listed through the reader seam and the Bot API and paged by
-/// bmo-chat's provider server in ascending order of room, each once: a chat the bot is also in is the bot's,
-/// under the account's title; a chat the bot is not in carries no number of the provider's own; a room of the
-/// bot's the account does not list is titled by the Bot API, and a room seen that the bot left is not listed.
-/// Where no reader stands, `roomList` is not declared and the list is refused.
+/// The bot's rooms and every chat of the owner's account, listed through the reader seam and the Bot API and
+/// paged by bmo-chat's provider server in ascending order of room, each once: a chat the bot is also in is the
+/// bot's, under the account's title; a chat the bot is not in, a one-to-one with someone the bot never spoke to
+/// among them, carries no number of the provider's own and takes the owner's voice alone; a room of the bot's
+/// the account does not list is titled by the Bot API, and a room seen that the bot left is not listed. Where
+/// no reader stands, `roomList` is not declared and the list is refused.
 #[tokio::test]
 async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
   let served = stood(true).await;
@@ -470,9 +478,35 @@ async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
       { "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER, "title": "Helper",
         "modes": ["bot-account", "human-reader"] },
       { "id": PERSON, "owns": true, "identity": null, "kind": "group", "privateTo": PERSON, "title": "Someone",
-        "modes": ["human-reader"] }
-    ], "more": false })
+        "modes": ["human-reader"] },
+      { "id": STRANGERS.start, "owns": true, "identity": null, "kind": "group", "privateTo": STRANGERS.start,
+        "title": format!("Person {}", STRANGERS.start), "modes": ["human-reader"] }
+    ], "more": true })
   );
+
+  let mut rest = vec![];
+  let mut after = STRANGERS.start;
+
+  loop {
+    let (status, page) = asked_get(&served.base, &format!("/rooms?after={after}&limit=7")).await;
+    let items = page["items"].as_array().expect("a page of rooms").clone();
+
+    assert_eq!(status, 200);
+    after = items.last().and_then(|room| room["id"].as_i64()).unwrap_or(after);
+    rest.extend(items);
+
+    if page["more"] != json!(true) {
+      break;
+    }
+  }
+
+  assert_eq!(rest.len(), STRANGERS.count() - 1);
+  assert!(rest.iter().zip(STRANGERS.skip(1)).all(|(room, chat_id)| {
+    room["id"] == json!(chat_id)
+      && room["privateTo"] == json!(chat_id)
+      && room["identity"].is_null()
+      && room["modes"] == json!(["human-reader"])
+  }));
 
   let down = stood(false).await;
   down.provider.refresh_reader().await;

@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
 import { accountRooms, roomLister } from "../src/dialogs";
+import { contactLister } from "../src/contacts";
 import { readerHandler } from "../src/routes";
 import { BOT_ID, OWNER_ID, ROOM_ID } from "./support";
 
@@ -17,22 +18,32 @@ const owner: OwnerAccount = {
   album: async () => [],
 };
 
-// An account whose dialog list is the one given, counting how often it is read.
-function accountWith(dialogs: { id: number; title?: string; self?: boolean }[]): { client: TelegramClient; reads: () => number } {
+// One dialog of the stand-in account: its number and title, and what its chat says of itself.
+interface Dialog {
+  id: number;
+  title?: string;
+  self?: boolean;
+  chat?: Record<string, unknown>;
+}
+
+// An account whose dialog list is the one given, counting how often it is read and keeping what each read asked.
+function accountWith(dialogs: Dialog[]): { client: TelegramClient; reads: () => number; asked: unknown[] } {
   let reads = 0;
+  const asked: unknown[] = [];
   const client = {
-    getDialogs: async () => {
+    getDialogs: async (params: unknown) => {
       reads += 1;
+      asked.push(params);
 
       return dialogs.map((dialog) => ({
         id: { toString: () => String(dialog.id) },
         title: dialog.title,
-        entity: { self: dialog.self === true },
+        entity: { className: "User", self: dialog.self === true, ...dialog.chat },
       }));
     },
   } as unknown as TelegramClient;
 
-  return { client, reads: () => reads };
+  return { client, reads: () => reads, asked };
 }
 
 function served(connected: boolean): ReturnType<typeof Bun.serve> {
@@ -74,10 +85,11 @@ describe("the rooms of the account", () => {
     expect(
       accountRooms(
         [
-          { id: OWNER_ID, title: "Saved Messages", self: true },
-          { id: BOT_ID, title: "Helper", self: false },
-          { id: ROOM_ID, title: "Board", self: false },
-          { id: 55, title: "", self: false },
+          { id: OWNER_ID, title: "Saved Messages", self: true, room: true },
+          { id: BOT_ID, title: "Helper", self: false, room: true },
+          { id: ROOM_ID, title: "Board", self: false, room: true },
+          { id: 55, title: "", self: false, room: true },
+          { id: -77, title: "Old board", self: false, room: false },
         ],
         peers,
       ),
@@ -85,6 +97,48 @@ describe("the rooms of the account", () => {
       { chatId: OWNER_ID, title: "Helper" },
       { chatId: ROOM_ID, title: "Board" },
       { chatId: 55, title: null },
+    ]);
+  });
+
+  test("lists every dialog asked whole, people, groups and the channels the account may post in", async () => {
+    // A list past the hundred dialogs Telegram answers in one page of its own, every kind among it.
+    const people = Array.from({ length: 140 }, (_, at) => ({ id: 1_000 + at, title: `Person ${at}` }));
+    const account = accountWith([
+      { id: OWNER_ID, title: "Saved Messages", self: true },
+      { id: BOT_ID, title: "Helper" },
+      ...people,
+      { id: -5, title: "Group", chat: { className: "Chat", migratedTo: null } },
+      { id: -6, title: "Became a supergroup", chat: { className: "Chat", migratedTo: { channelId: 9 } } },
+      { id: -1_000_000_000_009, title: "Supergroup", chat: { className: "Channel", megagroup: true } },
+      { id: -1_000_000_000_010, title: "Own channel", chat: { className: "Channel", broadcast: true, creator: true } },
+      { id: -1_000_000_000_011, title: "Posting", chat: { className: "Channel", broadcast: true, adminRights: { postMessages: true } } },
+      { id: -1_000_000_000_012, title: "Read only", chat: { className: "Channel", broadcast: true, adminRights: null } },
+    ]);
+    const rooms = await roomLister(peers)(account.client);
+
+    expect(account.asked).toEqual([{}]);
+    expect(rooms.length).toBe(1 + people.length + 4);
+    expect(rooms.map((room) => room.chatId)).toEqual([
+      OWNER_ID,
+      ...people.map((person) => person.id),
+      -5,
+      -1_000_000_000_009,
+      -1_000_000_000_010,
+      -1_000_000_000_011,
+    ]);
+  });
+
+  test("give a contact the one-to-one the account has with it", async () => {
+    const account = accountWith([{ id: 1_001, title: "Someone" }, { id: ROOM_ID, title: "Board" }]);
+    const entry = { firstName: null, lastName: null, username: null, bot: false, self: false, deleted: false };
+    const contacts = contactLister(peers, roomLister(peers), async () => [
+      { ...entry, id: 1_001, firstName: "Someone" },
+      { ...entry, id: 1_002, firstName: "Nobody yet" },
+    ]);
+
+    expect((await contacts(account.client)).map((contact) => [contact.id, contact.chatId])).toEqual([
+      [1_001, 1_001],
+      [1_002, null],
     ]);
   });
 

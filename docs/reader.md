@@ -64,9 +64,15 @@ reader」), and it reaches nothing but the service and Telegram.
 
 ## The rooms of the account
 
-- **Every chat in the account's dialog list** is listed on `GET /reader/dialogs`, archived ones included, each
-  under the number the service gives the room and with the title the account shows for it: a group's or a
-  channel's name, a person's name for a one-to-one.
+- **Every chat in the account's dialog list** is listed on `GET /reader/dialogs`, the whole list in every
+  folder, archived ones included, each under the number the service gives the room and with the title the
+  account shows for it: a group's or a channel's name, a person's name for a one-to-one. That is every
+  one-to-one, with a person or a bot, every group and supergroup, and every channel the account may post in,
+  whether or not the bot is in it and whether or not the receiver has ever seen it.
+- **Two dialogs are no room to speak in and are left out:** a basic group that became a supergroup, which is
+  listed as the supergroup it became, and a channel the account can only read, being neither its creator nor
+  an administrator who may post. The list is asked of Telegram whole and these two are left out by the reader
+  itself, by what each dialog's chat says of it, not by the MTProto client's own filters.
 - **The owner's one-to-one with the bot** is the chat with the bot as the account sees it, and is listed under
   the owner's number, as the service numbers that room. The account's own saved messages are no room of the
   provider's and are not listed.

@@ -17,7 +17,7 @@ use bmo_chat::{
 };
 use serde::Serialize;
 use telegram_dialect::TelegramHtml;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 
 use crate::owner::OwnerVoice;
 use crate::policy::POLICY;
@@ -29,6 +29,9 @@ use crate::telegram::Telegram;
 
 /// Why the owner's account is not read by where no reader stands behind the service.
 pub const NO_READER: &str = "no reader stands behind the service";
+
+// How many rooms Telegram is asked about at once when the rooms are listed.
+const ASKED_AT_ONCE: usize = 8;
 
 /// The provider: the bot account, how it speaks, the reader behind it and where each of the reader's parts
 /// stands.
@@ -122,6 +125,30 @@ impl TelegramProvider {
     };
 
     reader.contacts().await
+  }
+
+  // Whether the bot is in each of `chat_ids`, Telegram asked `ASKED_AT_ONCE` rooms at a time; a room whose asking
+  // came to no answer counts as one the bot is not in.
+  async fn bot_in_each(&self, chat_ids: &[i64]) -> BTreeMap<i64, bool> {
+    let mut present = BTreeMap::new();
+
+    for some in chat_ids.chunks(ASKED_AT_ONCE) {
+      let mut asking = JoinSet::new();
+
+      for &chat_id in some {
+        let telegram = self.telegram.clone();
+
+        asking.spawn(async move { (chat_id, telegram.bot_in(chat_id).await) });
+      }
+
+      while let Some(answer) = asking.join_next().await {
+        if let Ok((chat_id, bot_in)) = answer {
+          present.insert(chat_id, bot_in);
+        }
+      }
+    }
+
+    present
   }
 
   // A room a conversation came to: the bot's where the bot is in it, and the owner's account's, read-only, where
@@ -296,23 +323,32 @@ impl ChatProvider for TelegramProvider {
     Ok(Some(self.telegram.owner_id()))
   }
 
-  // The bot's rooms and the owner's account's, each once (docs/telegram.md, 「The rooms」): a chat the account
-  // lists is the bot's where the bot is in it and read-only where it is not; a room of the bot's the account
-  // does not list is titled as Telegram tells the bot.
+  // The bot's rooms and every chat of the owner's account, each once (docs/telegram.md, 「The rooms」): a chat the
+  // account lists is the bot's where the bot is in it and read-only where it is not; a room of the bot's the
+  // account does not list is titled as Telegram tells the bot.
   async fn account_rooms(&self) -> Result<Vec<ProviderRoom>, ChatFailure> {
     let dialogs = self
       .dialogs()
       .await
       .map_err(|why| format!("the owner's account's rooms were not read: {why}"))?;
-    let mut rooms = BTreeMap::new();
-    let voices = self.active_voices();
+    let mut titles = BTreeMap::new();
 
     for ReaderRoom { chat_id, title } in dialogs {
-      if rooms.contains_key(&chat_id) {
-        continue;
-      }
+      titles.entry(chat_id).or_insert(title);
+    }
 
-      let room = if self.telegram.bot_in(chat_id).await {
+    let bot_rooms: BTreeSet<i64> = std::iter::once(self.telegram.owner_id())
+      .chain(self.telegram.seen_rooms())
+      .filter(|chat_id| !titles.contains_key(chat_id))
+      .collect();
+    let asked: Vec<i64> = titles.keys().chain(&bot_rooms).copied().collect();
+    let present = self.bot_in_each(&asked).await;
+    let bot_in = |chat_id: &i64| present.get(chat_id).copied().unwrap_or(false);
+    let voices = self.active_voices();
+    let mut rooms = BTreeMap::new();
+
+    for (chat_id, title) in titles {
+      let room = if bot_in(&chat_id) {
         self.telegram.room_of(chat_id, title, voices.clone())
       } else {
         self.telegram.account_room_of(chat_id, title)
@@ -321,12 +357,8 @@ impl ChatProvider for TelegramProvider {
       rooms.insert(chat_id, room);
     }
 
-    let bot_rooms = std::iter::once(self.telegram.owner_id()).chain(self.telegram.seen_rooms());
-
-    for chat_id in bot_rooms {
-      if !rooms.contains_key(&chat_id) && self.telegram.bot_in(chat_id).await {
-        rooms.insert(chat_id, self.telegram.bot_room(chat_id, voices.clone()).await);
-      }
+    for chat_id in bot_rooms.into_iter().filter(bot_in) {
+      rooms.insert(chat_id, self.telegram.bot_room(chat_id, voices.clone()).await);
     }
 
     Ok(rooms.into_values().collect())

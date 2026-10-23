@@ -66,8 +66,10 @@ owner's account's alone (「Contacts and starting a conversation」).
 - **The list** holds the bot's rooms, the owner's one-to-one and every room seen that the bot is in, and every
   chat of the owner's account (`docs/reader.md`, 「The rooms of the account」), each room once: a chat the bot is
   also in is the bot's, under the account's title for it, and a room of the bot's the account does not list is
-  titled as Telegram tells the bot. Each is shaped as `GET /rooms/{roomId}` answers it. Whether the bot is in each
-  room is asked of Telegram one room after another, each answer kept as above.
+  titled as Telegram tells the bot. Each is shaped as `GET /rooms/{roomId}` answers it: a one-to-one, with a
+  person or a bot, carries that one's number as `privateTo`, and every other chat, group, supergroup or channel,
+  is `group` with no `privateTo`. Whether the bot is in each room is asked of Telegram eight rooms at a time,
+  each answer kept as above, so walking the pages of a long list asks Telegram about each room once.
 
 ### Contacts and starting a conversation
 
