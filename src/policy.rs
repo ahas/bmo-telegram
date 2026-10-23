@@ -47,6 +47,7 @@ pub struct Refusals {
   pub mode_down: String,
   pub mode_missing: String,
   pub owner_verb: String,
+  pub read_only: String,
 }
 
 /// A picture's placeholder, why one did not go, and how one is redrawn.
@@ -168,6 +169,11 @@ impl Policy {
   /// A send in the owner's own account of a verb it does not carry.
   pub fn owner_verb(&self, verb: &str) -> ChatRefusal {
     self.platform(fill(&self.refusals.owner_verb, &[("verb", verb)]))
+  }
+
+  /// A send in any voice but the owner's own into a room the bot is not in.
+  pub fn read_only(&self) -> ChatRefusal {
+    self.platform(self.refusals.read_only.clone())
   }
 
   /// A send Telegram refused, in Telegram's own description of it.

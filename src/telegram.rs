@@ -2,8 +2,10 @@
 //! update turned into what the receiver is handed over — the words at once, a picture with its bytes, a file
 //! promised and gathered after. The room questions the chat protocol asks are answered here too.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use bmo_chat::{ChatReceiver, GatheredPatch, MessageFile, ProviderRoom, RoomKind};
 use serde::Deserialize;
@@ -34,6 +36,8 @@ pub struct Telegram {
   echoes: Arc<Echoes>,
   // Why the bot account is not reading yet, or null once it is.
   standing: Mutex<Option<String>>,
+  // Whether Telegram said the bot is in a room, and when it said so.
+  presence: Mutex<HashMap<i64, (bool, Instant)>>,
 }
 
 /// One update the Bot API delivered.
@@ -52,6 +56,18 @@ struct Me {
 
 /// Why the bot account cannot run at all.
 pub const TOKEN_MISSING: &str = "BMO_BOT_TOKEN not set";
+
+/// How long Telegram's answer to whether the bot is in a room stands before it is asked again.
+pub const PRESENCE_FRESH: Duration = Duration::from_secs(600);
+
+// Whether Telegram's answer for a member of a group says the member is in it.
+fn member(answer: &Value) -> bool {
+  match answer.get("status").and_then(Value::as_str) {
+    Some("creator" | "administrator" | "member") => true,
+    Some("restricted") => answer.get("is_member").and_then(Value::as_bool) == Some(true),
+    _ => false,
+  }
+}
 
 impl Telegram {
   /// The bot account with its token, asking the Bot API at `api`, the owner's number, the reader where one
@@ -78,6 +94,7 @@ impl Telegram {
       seen,
       echoes: Arc::default(),
       standing: Mutex::new(Some("the bot account has not been read yet".to_owned())),
+      presence: Mutex::default(),
     }
   }
 
@@ -117,8 +134,62 @@ impl Telegram {
   }
 
   /// Whether a room is one this provider has handed a message of over or sent into.
-  pub fn owns_room(&self, chat_id: i64) -> bool {
-    chat_id == self.owner_id || self.seen.has_room(chat_id)
+  pub fn has_seen(&self, chat_id: i64) -> bool {
+    self.seen.has_room(chat_id)
+  }
+
+  /// Whether the bot account is in a room (docs/telegram.md, 「The rooms」): the owner's one-to-one always, any
+  /// other as Telegram last said within `PRESENCE_FRESH`, asked again past it; where Telegram cannot be asked,
+  /// a room the provider has seen.
+  pub async fn bot_in(&self, chat_id: i64) -> bool {
+    if chat_id == self.owner_id {
+      return true;
+    }
+
+    let kept = self.presence.lock().unwrap_or_else(PoisonError::into_inner).get(&chat_id).copied();
+
+    if let Some((present, _)) = kept.filter(|(_, at)| at.elapsed() < PRESENCE_FRESH) {
+      return present;
+    }
+
+    match self.ask_presence(chat_id).await {
+      Some(present) => {
+        self
+          .presence
+          .lock()
+          .unwrap_or_else(PoisonError::into_inner)
+          .insert(chat_id, (present, Instant::now()));
+        present
+      }
+      None => self.has_seen(chat_id),
+    }
+  }
+
+  // Telegram asked whether the bot is in a room: a group by the bot's own membership, a one-to-one by whether
+  // the bot has a chat with its person. Null where Telegram gave no answer either way.
+  async fn ask_presence(&self, chat_id: i64) -> Option<bool> {
+    let answer = if chat_id > 0 {
+      self.api.answered("getChat", &json!({ "chat_id": chat_id })).await
+    } else {
+      self
+        .api
+        .answered("getChatMember", &json!({ "chat_id": chat_id, "user_id": self.me() }))
+        .await
+    };
+    let answer = answer.ok()?;
+
+    match (answer.ok, answer.error_code) {
+      (true, _) if chat_id > 0 => Some(true),
+      (true, _) => Some(answer.result.as_ref().is_some_and(member)),
+      // The chat is not one the bot has, or the bot is not or no longer a member.
+      (false, Some(400 | 403)) => Some(false),
+      _ => None,
+    }
+  }
+
+  // A message the bot account read in a room lets go of what Telegram last said of the bot there.
+  fn forget_presence(&self, chat_id: i64) {
+    self.presence.lock().unwrap_or_else(PoisonError::into_inner).remove(&chat_id);
   }
 
   /// What Telegram calls a room, or null where it cannot or will not say.
@@ -126,12 +197,6 @@ impl Telegram {
     let chat: Value = self.api.call("getChat", &json!({ "chat_id": chat_id })).await.ok()?;
 
     chat.get("title").and_then(Value::as_str).map(str::to_owned)
-  }
-
-  /// What the provider knows of a room: its number space, the number the bot's words carry there, the person
-  /// of a one-to-one and what Telegram calls it. Null where the room is none this provider has seen.
-  pub async fn room(&self, chat_id: i64) -> Option<ProviderRoom> {
-    self.owns_room(chat_id).then(|| self.room_of(chat_id, None))
   }
 
   /// A room of the provider's own as the protocol shapes it, under `title`: the number the bot's words carry
@@ -147,13 +212,23 @@ impl Telegram {
     }
   }
 
-  /// The room as the protocol answers it, its title asked of Telegram where the room is known.
-  pub async fn provider_room(&self, chat_id: i64) -> Option<ProviderRoom> {
-    let mut room = self.room(chat_id).await?;
+  /// A room of the owner's account the bot is not in, as the protocol shapes it under `title`: no number of the
+  /// provider's own speaks there, so its identity is null.
+  pub fn account_room_of(&self, chat_id: i64, title: Option<String>) -> ProviderRoom {
+    ProviderRoom {
+      identity: None,
+      ..self.room_of(chat_id, title)
+    }
+  }
 
-    room.title = self.room_title(chat_id).await;
+  /// Every room the provider has seen.
+  pub fn seen_rooms(&self) -> Vec<i64> {
+    self.seen.sighted().rooms.into_iter().collect()
+  }
 
-    Some(room)
+  /// A room the bot is in as the protocol answers it, its title asked of Telegram.
+  pub async fn bot_room(&self, chat_id: i64) -> ProviderRoom {
+    self.room_of(chat_id, self.room_title(chat_id).await)
   }
 
   /// The Bot API this account asks.
@@ -219,6 +294,8 @@ impl Telegram {
     let message: Message = serde_json::from_value(raw.clone()).map_err(|why| why.to_string())?;
     let chat_id = message.chat.id;
     let message_id = message.message_id;
+
+    self.forget_presence(chat_id);
 
     // The owner's own message, sent in the owner's voice: the sender holds it already.
     if message.from.as_ref().is_some_and(|from| from.id == self.owner_id) {
@@ -298,6 +375,8 @@ impl Telegram {
     let message: Message = serde_json::from_value(raw.clone()).map_err(|why| why.to_string())?;
     let chat_id = message.chat.id;
     let message_id = message.message_id;
+
+    self.forget_presence(chat_id);
 
     if !self.listened(chat_id) {
       return Ok(());

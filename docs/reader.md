@@ -18,7 +18,7 @@ reader」), and it reaches nothing but the service and Telegram.
   has no line under is refused `unreachable`. Each send answers the numbers its messages went out as and the
   words Telegram holds for each, by which the service knows the bot account's sight of them as their echo.
 - **The rooms of the account.** Every chat the owner's account is in is listed, for a person to choose a room
-  among them.
+  among them; one the bot is not in is read-only (`docs/telegram.md`, 「The rooms」).
 - **History.** The past messages of the rooms the receiver names are walked back and handed over as history.
 - **Profile pictures.** The pictures of every room and every sender the provider has seen are kept current.
 

@@ -36,8 +36,8 @@ fixed contract and `docs/openapi.json` carries it.
 | `GET /declaration` | the provider's declaration (`docs/telegram.md`, 「The declaration」) |
 | `GET /health` | `ready` once the bot account's connection is open; the reason while it is not |
 | `POST /sends` | one send, any of the twelve verbs (`docs/telegram.md`, 「Sends」) |
-| `GET /rooms` | a page of the rooms the owner's account is in, asked of the reader (`docs/reader.md`, 「The rooms of the account」); refused `unsupported-capability` while `roomList` is not declared |
-| `GET /rooms/{roomId}` | what the provider knows of the room: whose it is, the bot's number, its kind, its person and its title |
+| `GET /rooms` | a page of the bot's rooms and the rooms the owner's account is in, the latter asked of the reader (`docs/telegram.md`, 「The rooms」); refused `unsupported-capability` while `roomList` is not declared |
+| `GET /rooms/{roomId}` | what the provider knows of the room: whose it is, the bot's number where the bot is in it and null where it is not, its kind, its person and its title |
 | `GET /owner` | the owner's one-to-one, numbered by the owner |
 | `GET /rooms/{roomId}/messages/{messageId}/files` | the pictures and files a message carried, fetched again through the reader under the ids they crossed with |
 | `POST /dialect/readings` | the `telegram-html` dialect reading markdown |
@@ -109,11 +109,13 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `POST /owner/say` | `chatId`, `text` (the plain words), `markup` (the dialect's HTML, or null), `silent` (boolean), `replyToMessageId` (number or null) | `messageId` and `text`, the words as Telegram holds them; or `refused` (`unavailable` or `unreachable`) with `error` |
 | `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption` (the plain words), `captionMarkup` (the dialect's HTML, or null), `replyToMessageId` | `ids`, the message numbers in the order the files went, and `texts`, the words each holds as Telegram holds them; or `refused` with `error` |
 
-The service answers `GET /rooms` from `/reader/dialogs`: each chat as a room of the provider's own, with the
-bot's number as the identity, `owner` for the owner's one-to-one and `group` for any other, the person of a
+The service answers `GET /rooms` from `/reader/dialogs` and the rooms the bot is in (`docs/telegram.md`, 「The
+rooms」): each room once, as a room of the provider's own, with the bot's number as the identity where the bot is
+in it and null where it is not, `owner` for the owner's one-to-one and `group` for any other, the person of a
 one-to-one as `privateTo`, and the account's title for it. The mode a room was added in is the receiver's, so
 no room carries one. bmo-chat's provider server orders and pages the list; a reader that does not answer it is
-a failure of the route.
+a failure of the route. Whether the bot is in a room is asked of the Bot API: `getChatMember` with the bot's own
+number for a group, `getChat` for a one-to-one.
 
 A picture or a file past the Bot API's ceiling for a bot is fetched by `/reader/picture` or `/reader/file`. A
 send in the owner's own voice, one naming the voice `human-reader`, goes by `/owner/say` and `/owner/album`,

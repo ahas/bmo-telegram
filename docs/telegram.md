@@ -31,13 +31,34 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
   shows a bot, and the bytes behind a picture or a file past the Bot API's ceiling, **and speaks the owner's own
   words**: a send in its voice goes out in the owner's account, never by the bot (「The owner's voice」). Such a
   send can be pinned to a message, since the account finds the line by the message's number.
+- **No room is answered as the owner.** The provider declares no `human-avatar` mode, so a room is never added to
+  be answered in the owner's account; the owner's account carries the owner's own words alone.
 
 ### Capabilities
 
 All twelve send verbs, and `replyTo`, `fetchMedia`, `avatars`, `history` and `roomList`. The last four are the
 owner's account's: each is declared only while the reader mode is active, and `history` and `avatars` only while
-their part stands (`GET /status`). The rooms `roomList` lists are the chats of the owner's account
-(`docs/reader.md`, 「The rooms of the account」).
+their part stands (`GET /status`). The rooms `roomList` lists are the bot's and the owner's account's
+(「The rooms」).
+
+### The rooms
+
+- **A room is the bot's where the bot account is in it:** the owner's one-to-one, and any room Telegram says the
+  bot is a member of. Telegram is asked once for a room and its answer stands for ten minutes; a message the bot
+  account reads in a room lets go of the answer kept for it, so a room the bot has just joined is asked again.
+  Where Telegram cannot be asked, a room the provider has seen stands as the bot's.
+- **A room of the owner's account the bot is not in is read-only.** It is listed and answered as a room of the
+  provider's own, so it can be added, and it is the owner's account's alone: only the owner's own words, a send
+  naming the voice `human-reader`, go into it. A send in any other voice, or naming none, is refused `platform`
+  with the policy's `read_only`, whatever its verb, so nothing answers in such a room.
+- **A room carries no modes of its own** in bmo-chat's room; the declaration's modes are the provider's. A room
+  the bot is not in is told by its `identity`, null, since no words of the provider's own stand there but the
+  owner's; a room of the bot's carries the bot's number.
+- **The list** holds the bot's rooms, the owner's one-to-one and every room seen that the bot is in, and every
+  chat of the owner's account (`docs/reader.md`, 「The rooms of the account」), each room once: a chat the bot is
+  also in is the bot's, under the account's title for it, and a room of the bot's the account does not list is
+  titled as Telegram tells the bot. Each is shaped as `GET /rooms/{roomId}` answers it. Whether the bot is in each
+  room is asked of Telegram one room after another, each answer kept as above.
 
 ## Reading a room
 
@@ -133,6 +154,7 @@ English lines of `policy/telegram.toml`, each the detail of a `platform` refusal
 | a sticker where no set is configured | `platform` | `sticker_unset` |
 | a send asked to be spoken in a mode that is not running, the owner's voice while the reader does not have the account connected among them, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
 | a send in the owner's own voice of a verb other than `text`, `photo`, `album`, `document` and `audio` | `platform` | `owner_verb` |
+| a send in any voice but the owner's own into a room the bot is not in (「The rooms」) | `platform` | `read_only` |
 | any other refusal Telegram gives | `platform` | Telegram's own description |
 | every picture of a send missed | `no-picture-sent` | each picture with its reason, below |
 

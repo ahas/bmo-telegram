@@ -3,7 +3,7 @@
 //! message's picture or file fetched again through the owner's account, and the profile pictures it keeps. The
 //! bot account reads and speaks; the reader stands behind it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -21,7 +21,7 @@ use tokio::task::JoinHandle;
 
 use crate::owner::OwnerVoice;
 use crate::policy::POLICY;
-use crate::reader::{ReaderClient, ReaderFetch, ReaderHealth};
+use crate::reader::{ReaderClient, ReaderFetch, ReaderHealth, ReaderRoom};
 use crate::seam::Standing;
 use crate::seen::Seen;
 use crate::send::{Sending, Speaker, refused};
@@ -94,6 +94,15 @@ impl TelegramProvider {
   /// Whether the owner's account was connected when the reader was last asked.
   pub fn reader_health(&self) -> ReaderHealth {
     self.reader_health.lock().unwrap_or_else(PoisonError::into_inner).clone()
+  }
+
+  // Every chat of the owner's account, as the reader lists them.
+  async fn dialogs(&self) -> Result<Vec<ReaderRoom>, String> {
+    let Some(reader) = &self.reader else {
+      return Err(NO_READER.to_owned());
+    };
+
+    reader.dialogs().await
   }
 
   // A send in the owner's own voice, through the reader while it has the account connected; never by the bot
@@ -216,28 +225,61 @@ impl ChatProvider for TelegramProvider {
   }
 
   async fn room(&self, room_id: i64) -> Result<Option<ProviderRoom>, ChatFailure> {
-    Ok(self.telegram.provider_room(room_id).await)
+    if self.telegram.bot_in(room_id).await {
+      return Ok(Some(self.telegram.bot_room(room_id).await));
+    }
+
+    // A room the bot is not in is the owner's account's: one the account lists, under its title, or one seen.
+    let listed = self
+      .dialogs()
+      .await
+      .unwrap_or_default()
+      .into_iter()
+      .find(|room| room.chat_id == room_id);
+
+    Ok(match listed {
+      Some(room) => Some(self.telegram.account_room_of(room_id, room.title)),
+      None => self.telegram.has_seen(room_id).then(|| self.telegram.account_room_of(room_id, None)),
+    })
   }
 
   async fn owner_room(&self) -> Result<Option<i64>, ChatFailure> {
     Ok(Some(self.telegram.owner_id()))
   }
 
+  // The bot's rooms and the owner's account's, each once (docs/telegram.md, 「The rooms」): a chat the account
+  // lists is the bot's where the bot is in it and read-only where it is not; a room of the bot's the account
+  // does not list is titled as Telegram tells the bot.
   async fn account_rooms(&self) -> Result<Vec<ProviderRoom>, ChatFailure> {
-    let Some(reader) = &self.reader else {
-      return Err(NO_READER.into());
-    };
-    let dialogs = reader
+    let dialogs = self
       .dialogs()
       .await
       .map_err(|why| format!("the owner's account's rooms were not read: {why}"))?;
+    let mut rooms = BTreeMap::new();
 
-    Ok(
-      dialogs
-        .into_iter()
-        .map(|room| self.telegram.room_of(room.chat_id, room.title))
-        .collect(),
-    )
+    for ReaderRoom { chat_id, title } in dialogs {
+      if rooms.contains_key(&chat_id) {
+        continue;
+      }
+
+      let room = if self.telegram.bot_in(chat_id).await {
+        self.telegram.room_of(chat_id, title)
+      } else {
+        self.telegram.account_room_of(chat_id, title)
+      };
+
+      rooms.insert(chat_id, room);
+    }
+
+    let bot_rooms = std::iter::once(self.telegram.owner_id()).chain(self.telegram.seen_rooms());
+
+    for chat_id in bot_rooms {
+      if !rooms.contains_key(&chat_id) && self.telegram.bot_in(chat_id).await {
+        rooms.insert(chat_id, self.telegram.bot_room(chat_id).await);
+      }
+    }
+
+    Ok(rooms.into_values().collect())
   }
 
   async fn send(&self, request: ChatSendRequest) -> Result<ChatSendResult, ChatFailure> {
@@ -246,6 +288,11 @@ impl ChatProvider for TelegramProvider {
         label: self.label().to_owned(),
         speaker: speaker.clone(),
       }));
+    }
+
+    // A room the bot is not in takes the owner's own words alone (docs/telegram.md, 「The rooms」).
+    if request.mode != Some(ChatVoice::HumanReader) && !self.telegram.bot_in(request.room_id).await {
+      return Ok(refused(POLICY.read_only()));
     }
 
     match request.mode {

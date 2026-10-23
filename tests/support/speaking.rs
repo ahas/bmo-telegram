@@ -218,6 +218,11 @@ pub async fn bot_sends(stand_in: Arc<BotSends>) -> String {
         return std::future::pending::<Response>().await;
       }
 
+      // Whether the bot is in a room is no send: the bot is a member of every group the sends go to.
+      if method == "getChatMember" {
+        return Json(json!({ "ok": true, "result": { "status": "member" } })).into_response();
+      }
+
       let uploaded = request
         .headers()
         .get(CONTENT_TYPE)

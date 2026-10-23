@@ -36,6 +36,12 @@ const RECEIVER_TOKEN: &str = "receiver-token";
 const ROOM: i64 = -100;
 const PERSON: i64 = 55;
 const OTHER_ROOM: i64 = -200;
+// A room nobody lists and the bot is not in.
+const UNKNOWN_ROOM: i64 = -300;
+// A room the bot is in that the owner's account does not list, seen by the provider.
+const BOT_ROOM: i64 = -400;
+// A room the provider has seen that the bot is no longer in and the owner's account does not list.
+const LEFT_ROOM: i64 = -500;
 const OWNER: i64 = 42;
 const BOT: i64 = 7_000_000_001_i64;
 const SENT_AT: i64 = 1_700_000_000_000;
@@ -47,13 +53,17 @@ async fn closed_port() -> u16 {
   listener.local_addr().expect("a bound address").port()
 }
 
-// The Bot API: who the bot is, what it calls a room, and no updates at all.
+// The Bot API: who the bot is, the rooms it is in and what it calls them, and no updates at all. The bot is a
+// member of `ROOM` and `BOT_ROOM`, has no chat with `PERSON`, and is in no other room.
 async fn bot_api() -> String {
   let router = Router::new().fallback(move |request: Request| {
     async move {
       let path = request.uri().path().to_owned();
       let method = path.rsplit('/').next().unwrap_or_default().to_owned();
-      let _asked = axum::body::to_bytes(request.into_body(), usize::MAX).await;
+      let asked = axum::body::to_bytes(request.into_body(), usize::MAX).await.unwrap_or_default();
+      let asked: Value = serde_json::from_slice(&asked).unwrap_or(Value::Null);
+      let chat = asked["chat_id"].as_i64();
+      let not_found = json!({ "ok": false, "error_code": 400, "description": "Bad Request: chat not found" });
 
       if method == "getUpdates" {
         return std::future::pending::<Response>().await;
@@ -61,7 +71,15 @@ async fn bot_api() -> String {
 
       let answer = match method.as_str() {
         "getMe" => json!({ "ok": true, "result": { "id": BOT, "is_bot": true, "first_name": "Helper", "username": "helper_bot" } }),
+        "getChat" if chat == Some(PERSON) => not_found,
         "getChat" => json!({ "ok": true, "result": { "title": "Board room" } }),
+        "getChatMember" if asked["user_id"] == json!(BOT) && matches!(chat, Some(ROOM | BOT_ROOM)) => {
+          json!({ "ok": true, "result": { "status": "member", "user": { "id": BOT } } })
+        }
+        "getChatMember" if chat == Some(LEFT_ROOM) => {
+          json!({ "ok": true, "result": { "status": "left", "user": { "id": BOT } } })
+        }
+        "getChatMember" => not_found,
         _ => json!({ "ok": true, "result": true }),
       };
 
@@ -141,6 +159,7 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
 struct Served {
   base: String,
   provider: Arc<TelegramProvider>,
+  seen: Arc<Seen>,
   file_ids: Arc<FileIds>,
   kept: Arc<Kept>,
   asked: Arc<Mutex<Vec<Value>>>,
@@ -193,7 +212,7 @@ async fn stood(reader_standing: bool) -> Served {
     telegram,
     Sending::default(),
     Some(reader),
-    seen,
+    seen.clone(),
     standing,
     avatars,
   ));
@@ -216,6 +235,7 @@ async fn stood(reader_standing: bool) -> Served {
   Served {
     base: format!("http://127.0.0.1:{}", serve(app).await),
     provider,
+    seen,
     file_ids,
     kept: handed,
     asked,
@@ -337,8 +357,10 @@ async fn the_service_is_ready_with_and_without_the_reader_behind_it() {
   );
 }
 
-/// Every room question the protocol asks, answered through the served routes: the owner's one-to-one is the
-/// provider's own, a one-to-one is numbered by its person, and the title comes from the Bot API.
+/// Every room question the protocol asks, answered through the served routes: the owner's one-to-one and a
+/// room the bot is in are the provider's own under the bot's number, titled by the Bot API; a chat of the owner's
+/// account the bot is not in is the provider's own with no number of its own, titled by the account; a one-to-one
+/// is numbered by its person; a room nobody lists and the bot is not in is not found.
 #[tokio::test]
 async fn every_room_route_answers_for_a_room_the_provider_reads() {
   let served = stood(true).await;
@@ -352,7 +374,24 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
       "title": "Board room" })
   );
 
-  let (status, unknown) = asked_get(&served.base, &format!("/rooms/{ROOM}")).await;
+  let (status, bot_room) = asked_get(&served.base, &format!("/rooms/{ROOM}")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(
+    bot_room,
+    json!({ "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board room" })
+  );
+
+  let (status, person) = asked_get(&served.base, &format!("/rooms/{PERSON}")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(
+    person,
+    json!({ "id": PERSON, "owns": true, "identity": null, "kind": "group", "privateTo": PERSON,
+      "title": "Someone" })
+  );
+
+  let (status, unknown) = asked_get(&served.base, &format!("/rooms/{UNKNOWN_ROOM}")).await;
 
   assert_eq!(status, 404);
   assert_eq!(unknown["code"], "not-found");
@@ -363,34 +402,39 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
   assert_eq!(owner_room, json!({ "roomId": OWNER }));
 }
 
-/// The rooms of the owner's account, listed through the reader seam and paged by bmo-chat's provider server in
-/// ascending order of room: each a room of the provider's own, with the bot's number, its kind, the person of a
-/// one-to-one and the account's title for it. Where no reader stands, `roomList` is not declared and the list is
-/// refused.
+/// The bot's rooms and the owner's account's, listed through the reader seam and the Bot API and paged by
+/// bmo-chat's provider server in ascending order of room, each once: a chat the bot is also in is the bot's,
+/// under the account's title; a chat the bot is not in carries no number of the provider's own; a room of the
+/// bot's the account does not list is titled by the Bot API, and a room seen that the bot left is not listed.
+/// Where no reader stands, `roomList` is not declared and the list is refused.
 #[tokio::test]
-async fn the_rooms_of_the_owner_s_account_are_paged_from_the_reader() {
+async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
   let served = stood(true).await;
   served.provider.refresh_reader().await;
+  served.seen.room(BOT_ROOM);
+  served.seen.room(LEFT_ROOM);
+  served.seen.room(ROOM);
 
-  let (status, first) = asked_get(&served.base, "/rooms?limit=2").await;
+  let (status, first) = asked_get(&served.base, "/rooms?limit=3").await;
 
   assert_eq!(status, 200);
   assert_eq!(
     first,
     json!({ "items": [
-      { "id": OTHER_ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": null },
+      { "id": BOT_ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board room" },
+      { "id": OTHER_ROOM, "owns": true, "identity": null, "kind": "group", "privateTo": null, "title": null },
       { "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board" }
     ], "more": true })
   );
 
-  let (status, next) = asked_get(&served.base, &format!("/rooms?after={ROOM}&limit=2")).await;
+  let (status, next) = asked_get(&served.base, &format!("/rooms?after={ROOM}&limit=3")).await;
 
   assert_eq!(status, 200);
   assert_eq!(
     next,
     json!({ "items": [
       { "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER, "title": "Helper" },
-      { "id": PERSON, "owns": true, "identity": BOT, "kind": "group", "privateTo": PERSON, "title": "Someone" }
+      { "id": PERSON, "owns": true, "identity": null, "kind": "group", "privateTo": PERSON, "title": "Someone" }
     ], "more": false })
   );
 
@@ -456,6 +500,64 @@ async fn a_send_as_the_owner_goes_through_the_reader() {
     asked.last().unwrap().clone(),
     json!({ "chatId": ROOM, "text": words, "markup": null, "silent": false, "replyToMessageId": null })
   );
+}
+
+/// A room of the owner's account the bot is not in is read-only: a send in any voice but the owner's own, or
+/// naming none, is refused `platform` whatever its verb, and the owner's own words go through the reader. The
+/// declaration carries no `human-avatar` mode, so no room is answered as the owner. A room the bot is in still
+/// takes the bot's sends.
+#[tokio::test]
+async fn a_room_the_bot_is_not_in_takes_only_the_owner_s_own_words() {
+  let served = stood(true).await;
+  served.provider.refresh_reader().await;
+
+  let (_status, declaration) = asked_get(&served.base, "/declaration").await;
+  let voices: Vec<&Value> =
+    declaration["modes"].as_array().unwrap().iter().map(|mode| &mode["voice"]).collect();
+
+  assert_eq!(voices, [&json!("bot-account"), &json!("human-reader")]);
+
+  for mode in [Value::Null, json!("bot-account"), json!("human-avatar")] {
+    for (kind, fields) in [("text", json!({ "text": "an answer" })), ("typing", json!({ "on": true }))] {
+      for room in [OTHER_ROOM, PERSON] {
+        let (status, refused) = asked(
+          &served.base,
+          "/sends",
+          json!({ "roomId": room, "kind": kind, "fields": fields, "mode": mode }),
+        )
+        .await;
+
+        assert_eq!(status, 422, "{mode} {kind} {room}");
+        assert_eq!(refused["code"], "platform", "{mode} {kind} {room}");
+        assert_eq!(
+          refused["error"],
+          "Telegram: The bot is not in this room: it is the owner's account's alone, and takes only the owner's own words.",
+        );
+      }
+    }
+  }
+
+  assert!(served.asked.lock().unwrap().is_empty(), "the reader was asked nothing");
+
+  let (status, answer) = asked(
+    &served.base,
+    "/sends",
+    json!({ "roomId": OTHER_ROOM, "kind": "text", "fields": { "text": "the owner's words" }, "mode": "human-reader" }),
+  )
+  .await;
+
+  assert_eq!(status, 201);
+  assert_eq!(answer, json!({ "messageId": 900, "missed": [] }));
+  assert_eq!(served.asked.lock().unwrap().len(), 1, "the owner's words went through the reader");
+
+  let (status, _answer) = asked(
+    &served.base,
+    "/sends",
+    json!({ "roomId": ROOM, "kind": "typing", "fields": { "on": true } }),
+  )
+  .await;
+
+  assert_eq!(status, 201, "a room the bot is in takes the bot's sends");
 }
 
 /// The repository's own routes beside the protocol's: what stands of each part, the profile pictures the

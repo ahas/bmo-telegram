@@ -29,6 +29,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     mode_down,
     mode_missing,
     owner_verb,
+    read_only,
   } = refusals;
   let Pictures {
     mark,
@@ -99,6 +100,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     mode_down,
     mode_missing,
     owner_verb,
+    read_only,
     mark,
     refused,
     failed,

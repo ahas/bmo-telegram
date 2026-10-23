@@ -1,6 +1,6 @@
 # The Telegram provider's fixed API
 
-**고정됨 0.6.0.**
+**고정됨 0.7.0.**
 
 This service is a chat provider, so its public API is the chat protocol's provider routes, fixed by bmo-chat at
 0.1.0-rev.6 (the release its history numbers 1.0.0). The service serves them through bmo-chat's provider server
@@ -26,8 +26,8 @@ the reader」).
 
 | Method | Path | Answer |
 |---|---|---|
-| `GET` | `/rooms` | a page of the rooms the owner's account is in, in ascending order of `id`, walked by `after` (a room) and `limit`, each as `GET /rooms/{roomId}` shapes a room; refused `unsupported-capability` while `roomList` is not declared |
-| `GET` | `/rooms/{roomId}` | what the provider knows of the room: `id`, `owns`, `identity`, `kind`, `privateTo` and `title`; 404 `not-found` where it knows nothing of it |
+| `GET` | `/rooms` | a page of the rooms the bot account and the owner's account are in, each once, in ascending order of `id`, walked by `after` (a room) and `limit`, each as `GET /rooms/{roomId}` shapes a room; refused `unsupported-capability` while `roomList` is not declared |
+| `GET` | `/rooms/{roomId}` | what the provider knows of the room: `id`, `owns`, `identity` (null in a room the bot is not in, which takes only the owner's own words), `kind`, `privateTo` and `title`; 404 `not-found` where it knows nothing of it |
 | `GET` | `/owner` | `roomId`, the room to reach the owner in, or null |
 
 ## Sends
