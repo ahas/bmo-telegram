@@ -16,7 +16,7 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 | `dialect` | `telegram-html`, below |
 | `shows` | null |
 | `numbering` | `native` for rooms, people and messages: Telegram's own numbers, used as they are |
-| `speakers` | false: every send goes out as the one bot account |
+| `speakers` | false: a send names no speaker; it goes out as the bot account, or as the owner's in the owner's voice |
 
 ### Modes
 
@@ -27,9 +27,10 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 
 - **The bot account reads every message of every room it is in,** and is what the provider runs on with
   nothing else configured.
-- **The owner's account is read only.** It sees the other bots' words, which the Bot API never shows a bot,
-  and the bytes behind a picture or a file past the Bot API's ceiling. A send in its voice can still be pinned
-  to a message, since it finds the line by the message's number.
+- **The owner's account reads what the bot account cannot,** the other bots' words, which the Bot API never
+  shows a bot, and the bytes behind a picture or a file past the Bot API's ceiling, **and speaks the owner's own
+  words**: a send in its voice goes out in the owner's account, never by the bot (「The owner's voice」). Such a
+  send can be pinned to a message, since the account finds the line by the message's number.
 
 ### Capabilities
 
@@ -81,6 +82,8 @@ part stands (`GET /status`).
   supergroup's number is no message, and the reading goes on.
 - **The bot's own messages** are not read back in: a file it sent is the sender's to keep, and a pin it made
   is nobody's word.
+- **A message a send in the owner's voice went out as** is not read back in either: the sender holds it
+  already, so the bot account's sight of it is that send's echo (「The owner's voice」).
 
 ## Sends
 
@@ -114,6 +117,8 @@ own fault — is the send's failure, in the protocol's error shape, and is never
   path is sent. The file and the root are both resolved to where they really stand before either is read, so a
   symbolic link inside the root that reaches a file outside it is `outside-data-root`.
 - **What went is not kept here.** Keeping a copy of a send is the sender's, under the number the result gives.
+  The provider notes only, for a few minutes, the messages a send in the owner's voice went out as, to know
+  their echo (「The owner's voice」).
 
 ### Refusals
 
@@ -125,8 +130,8 @@ English lines of `policy/telegram.toml`, each the detail of a `platform` refusal
 | an act on a message Telegram no longer has, or will never let change again | `platform`, marked `gone` | `message_gone`, with Telegram's own description |
 | a sticker the configured set does not carry | `platform` | `sticker_missing` |
 | a sticker where no set is configured | `platform` | `sticker_unset` |
-| a send asked to be spoken in a mode that is not running, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
-| a send in the owner's own voice of a verb other than `text` and `album` | `platform` | `owner_verb` |
+| a send asked to be spoken in a mode that is not running, the owner's voice while the reader does not have the account connected among them, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
+| a send in the owner's own voice of a verb other than `text`, `photo`, `album`, `document` and `audio` | `platform` | `owner_verb` |
 | any other refusal Telegram gives | `platform` | Telegram's own description |
 | every picture of a send missed | `no-picture-sent` | each picture with its reason, below |
 
@@ -137,20 +142,43 @@ failed and one left out of an album that went are `platform`, with the policy's 
 
 ### The owner's voice
 
-A send with `as` `human-reader` goes out in the owner's own account, through the reader. It takes two verbs:
+A send is the owner's own words when it names the voice `human-reader`, as the chat protocol names a send in the
+owner's own words; a send carries no sender of its own. Such a send goes out in the owner's own account,
+through the reader, so the room reads it as the owner's, never as the bot's. A send that names no voice, or
+`bot-account`, goes as the bot's.
 
-- **`text`**: the owner's words as they stand, cut into the pieces Telegram takes, each after the last pause
-  that fits, and a run with no pause between whole characters.
-- **`album`**: files go as the albums Telegram takes: pictures and videos together, documents together,
-  sounds together, a GIF alone, each album up to Telegram's ceiling, in the order their first file came. An
-  item named by an address is read as a picture of the bot's is. The caption goes with the first album, its
-  line breaks each a single line feed and its ends trimmed. A file that holds nothing, or one past the
-  `[owner]` ceiling, is missed with the policy's `empty_file` or `too_large`; an album the account refuses is
-  missed by every file in it, and stops none after it.
+- **The same message the bot's send makes.** The owner's account sends what the bot account would have sent
+  for the same send, in the owner's name:
+  - **`text`**: the markdown in the parts the dialect divides it into, each in the dialect's markup, folded
+    where the send asks for a fold, and as its plain text where Telegram refuses the markup; without a
+    notification where `silent`. The first part answers `replyTo`. A part that does not go ends the send there.
+  - **`photo`**, **`document`** and **`audio`**: the one file, a document kept whole as a file whatever its
+    name, a sound under the type its first bytes read as, the photo's caption in the dialect's markup.
+  - **`album`**: files go as the albums Telegram takes: pictures and videos together, documents together,
+    sounds together, a GIF alone, each album up to Telegram's ceiling, in the order their first file came. An
+    item named by an address is read as a picture of the bot's is. The caption goes with the first album in
+    the dialect's markup, its line breaks each a single line feed and its ends trimmed. A file that holds
+    nothing, or one past the `[owner]` ceiling, is missed with the policy's `empty_file` or `too_large`; an
+    album the account refuses is missed by every file in it, and stops none after it. The first album answers
+    `replyTo`.
+  - Any other verb is refused with the policy's `owner_verb`.
 - **A reply** is named by the send's `replyToMessageId`, the message's number as the protocol carries it. The
   reader finds that number's line on the owner's account and answers it; where the account has no line under
   that number, the send is refused `unreachable` rather than sent without the reference the caller asked for.
-- **While the reader does not have the account connected**, the send is refused with the reader's reason.
+- **While the reader does not have the account connected**, or no reader stands behind the service, the send
+  is refused `platform` with the policy's `mode_down` and the reader's reason. It is never sent by the bot
+  instead.
+- **The number a send answers** is the one the owner's account gave the first message it went out as. In a
+  supergroup or a channel that is the number everyone knows the message by; in any other room each account
+  numbers its own messages, and the bot account knows the message by another.
+- **Its echo is not handed over.** The bot account sees in its rooms what the owner's account sends there, as
+  a message from the owner's number, `BMO_OWNER_ID`. Each message a send in the owner's voice went out as is
+  noted, in memory and for five minutes, by its room, the number the owner's account gave it and the words
+  Telegram holds for it. A message the bot account reads from the owner's number that answers a note is that
+  send's echo: the note is let go and the message is not handed over, since the sender holds it already. In a
+  supergroup or a channel the number answers the note; in any other room the words do, the oldest note first.
+  A message from the owner that comes while a send in the owner's voice into its room is still going waits for
+  that send, ten seconds at most, before it is matched.
 
 ## The dialect: `telegram-html`
 

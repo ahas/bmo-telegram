@@ -5,6 +5,7 @@
 use bmo_chat::{ChatAvatar, ChatAvatarKind, FileItem, MessageFile};
 use serde_json::{Value, json};
 
+use crate::compose::Part;
 use crate::wire::Wire;
 
 /// The reader on the loopback, behind the seam's token.
@@ -35,6 +36,14 @@ pub enum ReaderFetch {
 pub enum AsOwner<T> {
   Sent(T),
   Refused { name: String, error: String },
+}
+
+/// One message a send in the owner's voice went out as: the number the account gave it, where it named one,
+/// and the words Telegram holds for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnerSent {
+  pub message_id: Option<i64>,
+  pub words: String,
 }
 
 /// Why the reader did not carry a send at all.
@@ -154,18 +163,23 @@ impl ReaderClient {
     })
   }
 
-  /// One piece of words said in a room in the owner's voice, answering the message named: the message it
-  /// went out as.
+  /// One part of words said in a room in the owner's voice, in its markup where it has one, without a
+  /// notification where `silent`, answering the message named: the message it went out as.
   pub async fn owner_say(
     &self,
     chat_id: i64,
-    text: &str,
+    part: &Part,
+    silent: bool,
     reply_to: Option<i64>,
-  ) -> Result<AsOwner<Option<i64>>, NotCarried> {
-    let body = json!({ "chatId": chat_id, "text": text, "replyToMessageId": reply_to });
+  ) -> Result<AsOwner<OwnerSent>, NotCarried> {
+    let body = json!({ "chatId": chat_id, "text": part.plain, "markup": part.markup, "silent": silent,
+      "replyToMessageId": reply_to });
     let sent = self.as_owner("/owner/say", &body).await?;
 
-    Ok(map_sent(sent, |answer| answer.get("messageId").and_then(Value::as_i64)))
+    Ok(map_sent(sent, |answer| OwnerSent {
+      message_id: answer.get("messageId").and_then(Value::as_i64),
+      words: answer.get("text").and_then(Value::as_str).unwrap_or_default().to_owned(),
+    }))
   }
 
   /// One album of files sent in a room in the owner's voice, with its caption and the message it answers: the
@@ -174,18 +188,29 @@ impl ReaderClient {
     &self,
     chat_id: i64,
     files: &[FileItem],
-    caption: &str,
+    caption: &Part,
     reply_to: Option<i64>,
-  ) -> Result<AsOwner<Vec<Option<i64>>>, NotCarried> {
-    let body =
-      json!({ "chatId": chat_id, "files": files, "caption": caption, "replyToMessageId": reply_to });
+  ) -> Result<AsOwner<Vec<OwnerSent>>, NotCarried> {
+    let body = json!({ "chatId": chat_id, "files": files, "caption": caption.plain,
+      "captionMarkup": caption.markup, "replyToMessageId": reply_to });
     let sent = self.as_owner("/owner/album", &body).await?;
 
     Ok(map_sent(sent, |answer| {
+      let texts = answer.get("texts").and_then(Value::as_array).cloned().unwrap_or_default();
+
       answer
         .get("ids")
         .and_then(Value::as_array)
-        .map(|ids| ids.iter().map(Value::as_i64).collect())
+        .map(|ids| {
+          ids
+            .iter()
+            .enumerate()
+            .map(|(at, id)| OwnerSent {
+              message_id: id.as_i64(),
+              words: texts.get(at).and_then(Value::as_str).unwrap_or_default().to_owned(),
+            })
+            .collect()
+        })
         .unwrap_or_default()
     }))
   }

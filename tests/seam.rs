@@ -9,7 +9,8 @@ use axum::Router;
 use axum::response::Json;
 use axum::routing::{get, post};
 use bmo_chat::{FileItem, MessageFile, ReceiverRoom};
-use bmo_telegram::reader::{AsOwner, ReaderClient, ReaderFetch};
+use bmo_telegram::compose::Part;
+use bmo_telegram::reader::{AsOwner, OwnerSent, ReaderClient, ReaderFetch};
 use bmo_telegram::seam::{Seam, Standing, seam_router};
 use bmo_telegram::seen::Seen;
 use bmo_telegram::wire::Wire;
@@ -78,7 +79,7 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
         if refused {
           Json(json!({ "refused": "unreachable", "error": "no message to reply to" }))
         } else {
-          Json(json!({ "messageId": 900 }))
+          Json(json!({ "messageId": 900, "text": "words as held" }))
         }
       }),
     )
@@ -86,7 +87,7 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
       "/owner/album",
       post(move |Json(body): Json<Value>| async move {
         album(body);
-        Json(json!({ "ids": [901, null] }))
+        Json(json!({ "ids": [901, null], "texts": ["a caption"] }))
       }),
     )
 }
@@ -121,22 +122,39 @@ async fn the_reader_is_asked_for_its_health_its_fetches_its_pictures_and_the_own
     reader.file(5, 7, 1).await,
     ReaderFetch::NoReader("the owner's account is not connected".to_owned())
   );
-  assert_eq!(reader.owner_say(5, "words", Some(3)).await, Ok(AsOwner::Sent(Some(900))));
+  let part = |plain: &str, markup: Option<&str>| Part {
+    plain: plain.to_owned(),
+    markup: markup.map(str::to_owned),
+  };
+  let sent = |message_id: Option<i64>, words: &str| OwnerSent {
+    message_id,
+    words: words.to_owned(),
+  };
+
   assert_eq!(
-    reader.owner_say(5, "unreachable", Some(3)).await,
+    reader.owner_say(5, &part("words", Some("<b>words</b>")), true, Some(3)).await,
+    Ok(AsOwner::Sent(sent(Some(900), "words as held")))
+  );
+  assert_eq!(
+    reader.owner_say(5, &part("unreachable", None), false, Some(3)).await,
     Ok(AsOwner::Refused {
       name: "unreachable".to_owned(),
       error: "no message to reply to".to_owned()
     })
   );
   assert_eq!(
-    reader.owner_album(5, &[file.clone(), file], "a caption", None).await,
-    Ok(AsOwner::Sent(vec![Some(901), None]))
+    reader.owner_album(5, &[file.clone(), file], &part("a caption", None), None).await,
+    Ok(AsOwner::Sent(vec![sent(Some(901), "a caption"), sent(None, "")]))
   );
 
   let asked = asked.lock().unwrap().clone();
 
-  assert_eq!(asked[0], json!({ "chatId": 5, "text": "words", "replyToMessageId": 3 }));
+  assert_eq!(
+    asked[0],
+    json!({ "chatId": 5, "text": "words", "markup": "<b>words</b>", "silent": true, "replyToMessageId": 3 })
+  );
+  assert_eq!(asked[2]["caption"], "a caption");
+  assert_eq!(asked[2]["captionMarkup"], Value::Null);
   assert_eq!(
     asked[2]["files"][0],
     json!({ "name": "a.pdf", "mime": "application/pdf", "bytes": "AQI=" })
@@ -164,7 +182,12 @@ async fn a_reader_that_does_not_answer_has_no_account_to_ask_and_carries_no_send
 
   assert!(!reader.health().await.connected);
   assert!(matches!(reader.picture(5, 6, None).await, ReaderFetch::Unavailable(_)));
-  assert!(reader.owner_say(5, "words", None).await.is_err());
+  let words = Part {
+    plain: "words".to_owned(),
+    markup: None,
+  };
+
+  assert!(reader.owner_say(5, &words, false, None).await.is_err());
 }
 
 struct Served {

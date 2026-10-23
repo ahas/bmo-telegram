@@ -1,7 +1,7 @@
 // What is sent in the owner's own voice, through the owner's account (docs/telegram.md, 「The owner's
-// voice」): one piece of words, and one album of files, each answering an earlier message where it names
-// one. The service divides a send into the pieces and albums Telegram takes before it asks; this is what
-// the account is told for each.
+// voice」): one part of words, and one album of files, each answering an earlier message where it names
+// one, in the markup the service gives as HTML. The service divides a send into the parts and albums
+// Telegram takes before it asks; this is what the account is told for each, and what each went out as.
 
 import { accountMessageId, resolveEntity } from "./history";
 import { peerOf } from "./media";
@@ -114,12 +114,31 @@ export interface OwnerFile {
   bytes: Uint8Array;
 }
 
-// One album — or one file alone — on its way into a room in the owner's voice.
+// One part of words on its way into a room in the owner's voice: the plain words, and the dialect's HTML
+// where they carry marks.
+export interface OwnerWords {
+  chatId: number;
+  text: string;
+  markup: string | null;
+  silent: boolean;
+  replyToMessageId: number | null;
+}
+
+// One album — or one file alone — on its way into a room in the owner's voice, its caption plain and in the
+// dialect's HTML where it carries marks.
 export interface OwnerAlbum {
   chatId: number;
   files: OwnerFile[];
   caption: string;
+  captionMarkup: string | null;
   replyToMessageId: number | null;
+}
+
+// One message a send went out as: the number the account gave it, where Telegram named it, and the words
+// Telegram holds for it.
+export interface OwnerSent {
+  id: number | null;
+  text: string;
 }
 
 export class ReaderUnavailable extends Error {
@@ -134,10 +153,16 @@ export class ReplyUnreachable extends Error {
   }
 }
 
-/** What is sent in the owner's voice: one piece of words, and one album of files. */
+/** What is sent in the owner's voice: one part of words, and one album of files. */
 export interface OwnerAccount {
-  say(chatId: number, text: string, replyToMessageId: number | null): Promise<number>;
-  album(album: OwnerAlbum): Promise<(number | null)[]>;
+  say(words: OwnerWords): Promise<OwnerSent>;
+  album(album: OwnerAlbum): Promise<OwnerSent[]>;
+}
+
+// How the account reads what it is given: the service's markup as HTML, plain words as they stand. The
+// client's own default would read them as markdown.
+function parseModeOf(markup: string | null): "html" | false {
+  return markup === null ? false : "html";
 }
 
 // Where the account sends into a room: the account, the peer and the number of the message it answers. The
@@ -179,11 +204,22 @@ async function readerTarget(
 /** The owner's account as this process's own connection to it, asked for at each send. */
 export function heldOwnerAccount(client: () => TelegramClient | null, peers: Peers): OwnerAccount {
   return {
-    say: async (chatId, text, replyToMessageId) => {
-      const target = await readerTarget(client(), peers, chatId, replyToMessageId);
-      const sent = await target.client.sendMessage(target.entity, { message: text, replyTo: target.replyTo });
+    // The markup where there is one, and the plain words where the account refuses it.
+    say: async (words) => {
+      const target = await readerTarget(client(), peers, words.chatId, words.replyToMessageId);
+      const send = (message: string, markup: string | null) =>
+        target.client.sendMessage(target.entity, { message, replyTo: target.replyTo, parseMode: parseModeOf(markup), silent: words.silent });
+      let sent;
 
-      return sent.id;
+      try {
+        sent = await send(words.markup ?? words.text, words.markup);
+      } catch (error) {
+        if (words.markup === null) throw error;
+
+        sent = await send(words.text, null);
+      }
+
+      return { id: sent.id, text: sent.message ?? "" };
     },
 
     // An album of one is a file sent alone, which alone may be an animation.
@@ -193,13 +229,15 @@ export function heldOwnerAccount(client: () => TelegramClient | null, peers: Pee
       const uploads = album.files.map(
         (file, at) => new (mtprotoUploads().CustomFile)(attachmentName(kinds[at]!, file.name, file.mime), file.bytes.length, "", Buffer.from(file.bytes)),
       );
-      const caption = album.caption === "" ? undefined : album.caption;
+      const caption = album.caption === "" ? undefined : (album.captionMarkup ?? album.caption);
+      const parseMode = parseModeOf(album.captionMarkup);
 
       if (uploads.length === 1) {
         const options = attachmentSendOptions(kinds[0]!);
         const sent = await account.sendFile(entity, {
           file: uploads[0]!,
           caption,
+          parseMode,
           replyTo,
           forceDocument: options.forceDocument,
           supportsStreaming: options.supportsStreaming,
@@ -207,7 +245,7 @@ export function heldOwnerAccount(client: () => TelegramClient | null, peers: Pee
           workers: 1,
         });
 
-        return [sent.id];
+        return [{ id: sent.id, text: sent.message ?? "" }];
       }
 
       const options = albumSendOptions(kinds);
@@ -216,12 +254,13 @@ export function heldOwnerAccount(client: () => TelegramClient | null, peers: Pee
       const sent = (await account.sendFile(entity, {
         file: uploads,
         caption,
+        parseMode,
         replyTo,
         forceDocument: options.forceDocument,
         supportsStreaming: options.supportsStreaming,
-      })) as unknown as ({ id: number } | undefined)[];
+      })) as unknown as ({ id: number; message?: string } | undefined)[];
 
-      return album.files.map((_, at) => sent[at]?.id ?? null);
+      return album.files.map((_, at) => ({ id: sent[at]?.id ?? null, text: sent[at]?.message ?? "" }));
     },
   };
 }

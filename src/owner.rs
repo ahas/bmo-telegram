@@ -1,19 +1,23 @@
-//! A send in the owner's own voice (docs/telegram.md, 「The owner's voice」): words cut into the pieces Telegram
-//! takes and files gathered into the albums it takes, each sent through the reader over the seam. What the
-//! owner's account refuses comes back as the reader said it.
+//! A send in the owner's own voice (docs/telegram.md, 「The owner's voice」): the words in the parts and the
+//! markup the bot's send would take, and files gathered into the albums Telegram takes, each sent through the
+//! reader over the seam and noted, so the bot account's sight of it is known as its echo. What the owner's
+//! account refuses comes back as the reader said it.
 
 use std::path::Path;
 
 use bmo_chat::{
-  AlbumItem, ChatFailure, ChatRefusal, ChatSendResult, ChatSent, FileItem, MissedPicture,
+  AlbumItem, ChatRefusal, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, FileItem, MissedPicture,
   MissedPictureReason,
 };
 use telegram_dialect::ALBUM_LIMIT;
 use telegram_dialect::js;
-use telegram_dialect::telegram::{TEXT_LIMIT, plain_parts};
 
+use crate::compose::{caption, text_parts};
+use crate::echoes::Echoes;
+use crate::files::audio_type;
 use crate::pictures::Picture;
 use crate::policy::{POLICY, fill};
+use crate::provider::wire_name;
 use crate::reader::{AsOwner, ReaderClient};
 use crate::send::{Sent, Speaker, refused};
 
@@ -131,26 +135,6 @@ fn owner_refused(name: &str, error: &str) -> ChatRefusal {
   }
 }
 
-/// The owner's words said in the room through the reader, piece by piece as a client sends a long paste: the
-/// message the first piece went out as.
-pub async fn say(reader: &ReaderClient, chat_id: i64, text: &str, reply_to: Option<i64>) -> Sent {
-  let mut first = None;
-
-  for part in plain_parts(text, TEXT_LIMIT) {
-    match reader.owner_say(chat_id, &part, reply_to).await? {
-      AsOwner::Sent(went) => {
-        first.get_or_insert(went);
-      }
-      AsOwner::Refused { name, error } => return Ok(refused(owner_refused(&name, &error))),
-    }
-  }
-
-  Ok(ChatSendResult::Sent(ChatSent {
-    message_id: first.flatten(),
-    missed: Vec::new(),
-  }))
-}
-
 // One item of the owner's album as a file: one handed over as it is, one named by an address read where a
 // picture of the bot's may be read from.
 async fn file_of(
@@ -173,72 +157,162 @@ async fn file_of(
   Ok(FileItem { name, mime, bytes })
 }
 
-/// The owner's files sent through the reader as the albums Telegram takes, the caption with the first. A file
-/// that holds nothing or is past the ceiling is missed before anything goes; an album the account would not
-/// take is missed by every file in it and stops none after it. The message the first file went out as.
-pub async fn album(
-  speaker: &Speaker,
-  reader: &ReaderClient,
-  chat_id: i64,
-  items: &[AlbumItem],
-  caption: Option<&str>,
-  reply_to: Option<i64>,
-) -> Result<ChatSendResult, ChatFailure> {
-  let root = speaker.sending.picture_root.as_deref();
-  let caption = caption_of(caption);
-  let mut missed = Vec::new();
-  let mut files = Vec::new();
+/// The owner's voice as one send uses it: the bot account's sending, for where a picture is read from and the
+/// record of rooms sent into; the reader the owner's account is reached through; and the notes of what went.
+pub struct OwnerVoice<'a> {
+  pub speaker: &'a Speaker,
+  pub reader: &'a ReaderClient,
+  pub echoes: &'a Echoes,
+}
 
-  for item in items {
-    match file_of(speaker, root, item).await {
-      Ok(file) => match refusal(&file.name, file.bytes.len() as u64) {
-        Some(detail) => missed.push(MissedPicture {
-          address: file.name.clone(),
-          reason: MissedPictureReason::Platform { detail },
-        }),
-        None => files.push(file),
-      },
-      Err(one) => missed.push(one),
+impl OwnerVoice<'_> {
+  /// One send in the owner's voice: words, a picture, a file, a sound or an album, each as the bot's send would
+  /// carry it; any other verb refused.
+  pub async fn send(&self, request: &ChatSendRequest) -> Sent {
+    let room = request.room_id;
+    let reply_to = request.reply_to_message_id;
+
+    match &request.send {
+      ChatSend::Text { text, silent, fold } => self.say(room, text, *silent, *fold, reply_to).await,
+      ChatSend::Album { items, caption } => self.album(room, items, caption.as_deref(), reply_to).await,
+      ChatSend::Photo { image_url, caption } => {
+        let items = [AlbumItem::Address {
+          address: image_url.clone(),
+        }];
+
+        self.album(room, &items, caption.as_deref(), reply_to).await
+      }
+      // A document is kept whole as a file, whatever its name says it is.
+      ChatSend::Document { bytes, file_name } => {
+        let items = [AlbumItem::File(FileItem {
+          name: file_name.clone(),
+          mime: "application/octet-stream".to_owned(),
+          bytes: bytes.clone(),
+        })];
+
+        self.album(room, &items, None, reply_to).await
+      }
+      ChatSend::Audio { audio, file_name } => {
+        let items = [AlbumItem::File(FileItem {
+          name: file_name.clone(),
+          mime: audio_type(audio).1.to_owned(),
+          bytes: audio.clone(),
+        })];
+
+        self.album(room, &items, None, reply_to).await
+      }
+      other => Ok(refused(POLICY.owner_verb(&wire_name(&other.kind())))),
     }
   }
 
-  let mut first: Option<i64> = None;
-  let mut went_any = false;
+  /// The owner's markdown said in the room through the reader in the parts the dialect divides it into, each in
+  /// its markup and as its plain text where the account refuses the markup, the first answering the message
+  /// named: the message the first part went out as. A part that does not go ends the send there.
+  pub async fn say(
+    &self,
+    chat_id: i64,
+    markdown: &str,
+    silent: bool,
+    fold: bool,
+    reply_to: Option<i64>,
+  ) -> Sent {
+    let mut first = None;
 
-  for (at, album) in albums(&files, |file| kind_of(&file.mime, &file.name), ALBUM_LIMIT).iter().enumerate()
-  {
-    let caption = if at == 0 { caption.as_str() } else { "" };
+    for part in text_parts(markdown, fold) {
+      let pinned = if first.is_none() { reply_to } else { None };
 
-    match reader.owner_album(chat_id, album, caption, reply_to).await? {
-      AsOwner::Sent(ids) => {
-        went_any = true;
-        first = first.or(ids.into_iter().flatten().next());
-      }
-      AsOwner::Refused { name, error } => {
-        let detail = match owner_refused(&name, &error) {
-          ChatRefusal::Platform { detail, .. } => detail,
-          other => other.to_string(),
-        };
-
-        missed.extend(album.iter().map(|file| MissedPicture {
-          address: file.name.clone(),
-          reason: MissedPictureReason::Platform {
-            detail: detail.clone(),
-          },
-        }));
+      match self.reader.owner_say(chat_id, &part, silent, pinned).await? {
+        AsOwner::Sent(went) => {
+          self.echoes.sent(chat_id, went.message_id, &went.words);
+          self.speaker.spoke_in(chat_id);
+          first.get_or_insert(went.message_id);
+        }
+        AsOwner::Refused { name, error } => return Ok(refused(owner_refused(&name, &error))),
       }
     }
+
+    Ok(ChatSendResult::Sent(ChatSent {
+      message_id: first.flatten(),
+      missed: Vec::new(),
+    }))
   }
 
-  if !went_any && !missed.is_empty() {
-    return Ok(refused(ChatRefusal::NoPictureSent {
-      label: POLICY.telegram.label.clone(),
+  /// The owner's files sent through the reader as the albums Telegram takes, the caption in its markup and the
+  /// reply with the first. A file that holds nothing or is past the ceiling is missed before anything goes; an
+  /// album the account would not take is missed by every file in it and stops none after it. The message the
+  /// first file went out as.
+  pub async fn album(
+    &self,
+    chat_id: i64,
+    items: &[AlbumItem],
+    caption_field: Option<&str>,
+    reply_to: Option<i64>,
+  ) -> Sent {
+    let speaker = self.speaker;
+    let root = speaker.sending.picture_root.as_deref();
+    let first_caption = caption(&caption_of(caption_field));
+    let bare = caption("");
+    let mut missed = Vec::new();
+    let mut files = Vec::new();
+
+    for item in items {
+      match file_of(speaker, root, item).await {
+        Ok(file) => match refusal(&file.name, file.bytes.len() as u64) {
+          Some(detail) => missed.push(MissedPicture {
+            address: file.name.clone(),
+            reason: MissedPictureReason::Platform { detail },
+          }),
+          None => files.push(file),
+        },
+        Err(one) => missed.push(one),
+      }
+    }
+
+    let mut first: Option<i64> = None;
+    let mut went_any = false;
+
+    for (at, album) in
+      albums(&files, |file| kind_of(&file.mime, &file.name), ALBUM_LIMIT).iter().enumerate()
+    {
+      let (said, pinned) = if at == 0 { (&first_caption, reply_to) } else { (&bare, None) };
+
+      match self.reader.owner_album(chat_id, album, said, pinned).await? {
+        AsOwner::Sent(went) => {
+          went_any = true;
+          self.speaker.spoke_in(chat_id);
+
+          for one in &went {
+            self.echoes.sent(chat_id, one.message_id, &one.words);
+          }
+
+          first = first.or(went.into_iter().find_map(|one| one.message_id));
+        }
+        AsOwner::Refused { name, error } => {
+          let detail = match owner_refused(&name, &error) {
+            ChatRefusal::Platform { detail, .. } => detail,
+            other => other.to_string(),
+          };
+
+          missed.extend(album.iter().map(|file| MissedPicture {
+            address: file.name.clone(),
+            reason: MissedPictureReason::Platform {
+              detail: detail.clone(),
+            },
+          }));
+        }
+      }
+    }
+
+    if !went_any && !missed.is_empty() {
+      return Ok(refused(ChatRefusal::NoPictureSent {
+        label: POLICY.telegram.label.clone(),
+        missed,
+      }));
+    }
+
+    Ok(ChatSendResult::Sent(ChatSent {
+      message_id: first,
       missed,
-    }));
+    }))
   }
-
-  Ok(ChatSendResult::Sent(ChatSent {
-    message_id: first,
-    missed,
-  }))
 }

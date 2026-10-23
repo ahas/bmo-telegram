@@ -401,7 +401,7 @@ async fn a_send_as_the_owner_goes_through_the_reader() {
 
   assert_eq!(
     asked.last().unwrap().clone(),
-    json!({ "chatId": ROOM, "text": words, "replyToMessageId": null })
+    json!({ "chatId": ROOM, "text": words, "markup": null, "silent": false, "replyToMessageId": null })
   );
 }
 

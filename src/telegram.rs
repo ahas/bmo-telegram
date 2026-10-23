@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use crate::albums::AlbumNames;
 use crate::bot_api::BotApi;
+use crate::echoes::Echoes;
 use crate::file_ids::FileIds;
 use crate::gather::Gatherer;
 use crate::kinds::Message;
@@ -29,6 +30,8 @@ pub struct Telegram {
   gatherer: Arc<Gatherer>,
   seen: Arc<Seen>,
   file_ids: Arc<FileIds>,
+  // What the sends in the owner's voice went out as, so their echo is not handed over.
+  echoes: Arc<Echoes>,
   // Why the bot account is not reading yet, or null once it is.
   standing: Mutex<Option<String>>,
 }
@@ -73,6 +76,7 @@ impl Telegram {
       me: AtomicI64::new(me),
       albums: Mutex::default(),
       seen,
+      echoes: Arc::default(),
       standing: Mutex::new(Some("the bot account has not been read yet".to_owned())),
     }
   }
@@ -151,6 +155,11 @@ impl Telegram {
     &self.api
   }
 
+  /// The notes of what the sends in the owner's voice went out as.
+  pub fn echoes(&self) -> &Arc<Echoes> {
+    &self.echoes
+  }
+
   /// The id a message's picture or file crossed with, where this account handed one over.
   pub fn file_id_of(&self, chat_id: i64, message_id: i64) -> Option<String> {
     self.file_ids.of(chat_id, message_id)
@@ -199,11 +208,21 @@ impl Telegram {
   }
 
   /// One new message: handed over as it reads, its picture with it, its file and assets promised and gathered
-  /// after.
+  /// after; the echo of a send in the owner's voice is not handed over.
   pub async fn message(&self, receiver: Arc<dyn ChatReceiver>, raw: Value) -> Result<(), String> {
     let message: Message = serde_json::from_value(raw.clone()).map_err(|why| why.to_string())?;
     let chat_id = message.chat.id;
     let message_id = message.message_id;
+
+    // The owner's own message, sent in the owner's voice: the sender holds it already.
+    if message.from.as_ref().is_some_and(|from| from.id == self.owner_id) {
+      let words = message.text.as_deref().or(message.caption.as_deref()).unwrap_or_default();
+
+      if self.echoes.echo(chat_id, message_id, words).await {
+        return Ok(());
+      }
+    }
+
     let listened = self.listened(chat_id);
     let assets = listened && Gatherer::has_assets(&raw);
     let mut reading = read(&message, self.me(), self.owner_id, listened);

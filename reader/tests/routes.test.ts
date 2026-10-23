@@ -13,12 +13,16 @@ const token = "seam-token";
 const ownerAsked: unknown[] = [];
 
 const owner: OwnerAccount = {
-  say: async (chatId, text, replyToMessageId) => {
-    ownerAsked.push({ chatId, text, replyToMessageId });
+  say: async (words) => {
+    ownerAsked.push(words);
 
-    return 900;
+    return { id: 900, text: words.text };
   },
-  album: async (album) => album.files.map((_, at) => (at === 0 ? 901 : null)),
+  album: async (album) => {
+    ownerAsked.push({ ...album, files: album.files.map((file) => file.name) });
+
+    return album.files.map((_, at) => (at === 0 ? { id: 901, text: album.caption } : { id: null, text: "" }));
+  },
 };
 
 const server = Bun.serve({
@@ -57,8 +61,29 @@ describe("the reader's door", () => {
     expect(await health.json()).toEqual({ connected: false, reason: "the account's values are not set" });
     expect((await call("/elsewhere", {}))[0]).toBe(404);
     expect((await call("/owner/say", { text: "no room" }))[0]).toBe(400);
-    expect(await call("/owner/say", { chatId: 5, text: "words", replyToMessageId: null })).toEqual([200, { messageId: 900 }]);
-    expect(ownerAsked).toEqual([{ chatId: 5, text: "words", replyToMessageId: null }]);
+    expect((await call("/owner/say", { chatId: 5, text: "words", markup: 7, replyToMessageId: null }))[0]).toBe(400);
+    expect(await call("/owner/say", { chatId: 5, text: "words", replyToMessageId: null })).toEqual([200, { messageId: 900, text: "words" }]);
+    expect(await call("/owner/say", { chatId: 5, text: "bold", markup: "<b>bold</b>", silent: true, replyToMessageId: 3 })).toEqual([
+      200,
+      { messageId: 900, text: "bold" },
+    ]);
+    expect(
+      await call("/owner/album", {
+        chatId: 5,
+        files: [
+          { name: "a.jpg", mime: "image/jpeg", bytes: "AQI=" },
+          { name: "b.jpg", mime: "image/jpeg", bytes: "AQI=" },
+        ],
+        caption: "seen",
+        captionMarkup: "<i>seen</i>",
+        replyToMessageId: null,
+      }),
+    ).toEqual([200, { ids: [901, null], texts: ["seen", ""] }]);
+    expect(ownerAsked).toEqual([
+      { chatId: 5, text: "words", markup: null, silent: false, replyToMessageId: null },
+      { chatId: 5, text: "bold", markup: "<b>bold</b>", silent: true, replyToMessageId: 3 },
+      { chatId: 5, files: ["a.jpg", "b.jpg"], caption: "seen", captionMarkup: "<i>seen</i>", replyToMessageId: null },
+    ]);
 
     const avatars = await fetch(`http://127.0.0.1:${server.port}/reader/avatars`, { headers: { authorization: `Bearer ${token}` } });
 

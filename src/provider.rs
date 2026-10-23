@@ -12,14 +12,14 @@ use async_trait::async_trait;
 use bmo_chat::{
   ChatAvatar, ChatAvatarKind, ChatCapability, ChatDialect, ChatFailure, ChatHealth, ChatMediaRequest,
   ChatMediaResult, ChatModeStanding, ChatNumberRanges, ChatNumberSpace, ChatNumbering, ChatPicture,
-  ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal, ChatSend, ChatSendRequest,
-  ChatSendResult, ChatVoice, MessageFile, ProviderRoom,
+  ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal, ChatSendRequest, ChatSendResult,
+  ChatVoice, MessageFile, ProviderRoom,
 };
 use serde::Serialize;
 use telegram_dialect::TelegramHtml;
 use tokio::task::JoinHandle;
 
-use crate::owner;
+use crate::owner::OwnerVoice;
 use crate::policy::POLICY;
 use crate::reader::{ReaderClient, ReaderFetch, ReaderHealth};
 use crate::seam::Standing;
@@ -43,8 +43,8 @@ pub struct TelegramProvider {
   avatars: PathBuf,
 }
 
-// The name a voice or a verb crosses the wire by.
-fn wire_name(value: &impl Serialize) -> String {
+/// The name a voice or a verb crosses the wire by.
+pub fn wire_name(value: &impl Serialize) -> String {
   serde_json::to_value(value)
     .ok()
     .and_then(|named| named.as_str().map(str::to_owned))
@@ -96,7 +96,8 @@ impl TelegramProvider {
     self.reader_health.lock().unwrap_or_else(PoisonError::into_inner).clone()
   }
 
-  // A send in the owner's own voice: words and albums alone, through the reader, while it is connected.
+  // A send in the owner's own voice, through the reader while it has the account connected; never by the bot
+  // instead. It is going into its room until it is answered, so its echo waits for it.
   async fn as_owner(&self, request: &ChatSendRequest) -> Result<ChatSendResult, ChatFailure> {
     let health = self.refresh_reader().await;
     let Some(reader) = self.reader.as_ref().filter(|_| health.connected) else {
@@ -104,24 +105,15 @@ impl TelegramProvider {
 
       return Ok(refused(POLICY.mode_down(&wire_name(&ChatVoice::HumanReader), Some(why))));
     };
+    let echoes = self.telegram.echoes();
+    let _going = echoes.going(request.room_id);
+    let voice = OwnerVoice {
+      speaker: &self.speaker,
+      reader,
+      echoes,
+    };
 
-    match &request.send {
-      ChatSend::Text { text, .. } => {
-        owner::say(reader, request.room_id, text, request.reply_to_message_id).await
-      }
-      ChatSend::Album { items, caption } => {
-        owner::album(
-          &self.speaker,
-          reader,
-          request.room_id,
-          items,
-          caption.as_deref(),
-          request.reply_to_message_id,
-        )
-        .await
-      }
-      other => Ok(refused(POLICY.owner_verb(&wire_name(&other.kind())))),
-    }
+    voice.send(request).await
   }
 }
 

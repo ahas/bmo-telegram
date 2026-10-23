@@ -104,14 +104,17 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `GET /reader/avatars` | | `avatars`, each `kind` (`room` or `person`), `id` and `takenAt` (when the kept picture was taken) |
 | `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null) | `outcome`: `fetched` with `id`, `name`, `mime`, `bytes`, a message file under the owner's account's id; `unavailable` with `reason`; `no-reader` with `reason` |
 | `POST /reader/file` | `chatId`, `messageId`, `sentAt` | the same outcomes |
-| `POST /owner/say` | `chatId`, `text`, `replyToMessageId` (number or null) | `messageId`; or `refused` (`unavailable` or `unreachable`) with `error` |
-| `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption`, `replyToMessageId` | `ids`, the message numbers in the order the files went; or `refused` with `error` |
+| `POST /owner/say` | `chatId`, `text` (the plain words), `markup` (the dialect's HTML, or null), `silent` (boolean), `replyToMessageId` (number or null) | `messageId` and `text`, the words as Telegram holds them; or `refused` (`unavailable` or `unreachable`) with `error` |
+| `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption` (the plain words), `captionMarkup` (the dialect's HTML, or null), `replyToMessageId` | `ids`, the message numbers in the order the files went, and `texts`, the words each holds as Telegram holds them; or `refused` with `error` |
 
 A picture or a file past the Bot API's ceiling for a bot is fetched by `/reader/picture` or `/reader/file`. A
-send in the owner's own voice goes by `/owner/say` and `/owner/album`, divided by the service first into the
-pieces and albums Telegram takes (`docs/telegram.md`, 「The owner's voice」). The reader finds a reply by the
-message's number on the owner's account, and refuses an `unreachable` one where that account has no line under
-it.
+send in the owner's own voice, one naming the voice `human-reader`, goes by `/owner/say` and `/owner/album`,
+divided by the service first into the parts, markup and albums the bot's send would take (`docs/telegram.md`,
+「The owner's voice」). The reader sends the markup as HTML where one is given, and `/owner/say` the plain
+words where the account refuses it. It finds a reply by the message's number on the owner's account, and
+refuses an `unreachable` one where that account has no line under it. The service notes each message the send
+went out as, under the number and the words the reader answered, so that the bot account's sight of it is not
+handed to the receiver a second time.
 
 ### The service's routes, called by the reader
 

@@ -49,6 +49,14 @@ function replyOf(value: unknown): number | null | undefined {
   return isNumber(value) ? value : undefined;
 }
 
+// The markup a send in the owner's voice carries: null where none is given, undefined where what was given
+// is not text.
+function markupOf(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return null;
+
+  return isText(value) ? value : undefined;
+}
+
 // A send in the owner's voice carried, a refusal of the account answered by its name.
 async function asOwner(send: () => Promise<Body>): Promise<Response> {
   try {
@@ -82,32 +90,44 @@ function routes(deps: RoutesDeps): Record<string, (body: Body) => Promise<Respon
 
     "/owner/say": async (body) => {
       const replyToMessageId = replyOf(body.replyToMessageId);
+      const markup = markupOf(body.markup);
 
-      if (!isNumber(body.chatId) || !isText(body.text) || replyToMessageId === undefined) {
-        return failure("bad-request", "chatId (number), text (string) and a replyToMessageId or null are required", 400);
+      if (!isNumber(body.chatId) || !isText(body.text) || replyToMessageId === undefined || markup === undefined) {
+        return failure("bad-request", "chatId (number), text (string), a markup or null and a replyToMessageId or null are required", 400);
       }
 
-      const { chatId, text } = body;
+      const words = { chatId: body.chatId, text: body.text, markup, silent: body.silent === true, replyToMessageId };
 
-      return await asOwner(async () => ({ messageId: await deps.owner.say(chatId, text, replyToMessageId) }));
+      return await asOwner(async () => {
+        const sent = await deps.owner.say(words);
+
+        return { messageId: sent.id, text: sent.text };
+      });
     },
 
     "/owner/album": async (body) => {
       const replyToMessageId = replyOf(body.replyToMessageId);
       const files = Array.isArray(body.files) ? (body.files as Body[]) : null;
 
-      if (!isNumber(body.chatId) || files === null || !files.every((file) => isText(file.name) && isText(file.mime) && isText(file.bytes)) || replyToMessageId === undefined) {
-        return failure("bad-request", "chatId (number), files ({ name, mime, bytes }) and a replyToMessageId or null are required", 400);
+      const captionMarkup = markupOf(body.captionMarkup);
+
+      if (!isNumber(body.chatId) || files === null || !files.every((file) => isText(file.name) && isText(file.mime) && isText(file.bytes)) || replyToMessageId === undefined || captionMarkup === undefined) {
+        return failure("bad-request", "chatId (number), files ({ name, mime, bytes }), a captionMarkup or null and a replyToMessageId or null are required", 400);
       }
 
       const album = {
         chatId: body.chatId,
         files: files.map((file) => ({ name: file.name as string, mime: file.mime as string, bytes: new Uint8Array(Buffer.from(file.bytes as string, "base64")) })),
         caption: isText(body.caption) ? body.caption : "",
+        captionMarkup,
         replyToMessageId,
       };
 
-      return await asOwner(async () => ({ ids: await deps.owner.album(album) }));
+      return await asOwner(async () => {
+        const sent = await deps.owner.album(album);
+
+        return { ids: sent.map((one) => one.id), texts: sent.map((one) => one.text) };
+      });
     },
   };
 }

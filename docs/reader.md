@@ -12,9 +12,11 @@ reader」), and it reaches nothing but the service and Telegram.
   from a person, and one the provider's own bot wrote are not read in.
 - **What the Bot API will not fetch.** A picture or a file past the Bot API's ceiling for a bot, and a picture
   fetched after the fact for a turn that answers it, are fetched through the reader and answered as bytes.
-- **The owner's own words.** A send in the owner's voice goes out in the owner's account, as a phone sends it.
-  A reply the send names is found on the account by the message's number; one it has no line under is refused
-  `unreachable`.
+- **The owner's own words.** A send in the owner's voice goes out in the owner's account, never by the bot:
+  the words and the files the bot's send would carry, its markup sent as HTML, the words sent plain where the
+  account refuses the markup. A reply the send names is found on the account by the message's number; one it
+  has no line under is refused `unreachable`. Each send answers the numbers its messages went out as and the
+  words Telegram holds for each, by which the service knows the bot account's sight of them as their echo.
 - **History.** The past messages of the rooms the receiver names are walked back and handed over as history.
 - **Profile pictures.** The pictures of every room and every sender the provider has seen are kept current.
 
