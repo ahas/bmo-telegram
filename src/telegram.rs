@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use bmo_chat::{ChatReceiver, GatheredPatch, MessageFile, ProviderRoom, RoomKind};
+use bmo_chat::{ChatReceiver, ChatVoice, GatheredPatch, MessageFile, ProviderRoom, RoomKind};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -201,9 +201,9 @@ impl Telegram {
     chat.get("title").and_then(Value::as_str).map(str::to_owned)
   }
 
-  /// A room of the provider's own as the protocol shapes it, under `title`: the number the bot's words carry
-  /// there, its kind and the person of a one-to-one.
-  pub fn room_of(&self, chat_id: i64, title: Option<String>) -> ProviderRoom {
+  /// A room of the bot's as the protocol shapes it, under `title` and taking `modes`: the number the bot's words
+  /// carry there, its kind and the person of a one-to-one.
+  pub fn room_of(&self, chat_id: i64, title: Option<String>, modes: Vec<ChatVoice>) -> ProviderRoom {
     ProviderRoom {
       id: chat_id,
       owns: true,
@@ -211,15 +211,17 @@ impl Telegram {
       kind: self.room_kind(chat_id),
       private_to: self.private_room_of(chat_id),
       title,
+      modes: Some(modes),
     }
   }
 
-  /// A room of the owner's account the bot is not in, as the protocol shapes it under `title`: no number of the
-  /// provider's own speaks there, so its identity is null.
+  /// A room of the owner's account the bot is not in, as the protocol shapes it under `title`: read-only, taking
+  /// the owner's own voice alone, and with no number of the provider's own speaking there, so its identity is
+  /// null.
   pub fn account_room_of(&self, chat_id: i64, title: Option<String>) -> ProviderRoom {
     ProviderRoom {
       identity: None,
-      ..self.room_of(chat_id, title)
+      ..self.room_of(chat_id, title, vec![ChatVoice::HumanReader])
     }
   }
 
@@ -228,9 +230,9 @@ impl Telegram {
     self.seen.sighted().rooms.into_iter().collect()
   }
 
-  /// A room the bot is in as the protocol answers it, its title asked of Telegram.
-  pub async fn bot_room(&self, chat_id: i64) -> ProviderRoom {
-    self.room_of(chat_id, self.room_title(chat_id).await)
+  /// A room the bot is in as the protocol answers it, taking `modes`, its title asked of Telegram.
+  pub async fn bot_room(&self, chat_id: i64, modes: Vec<ChatVoice>) -> ProviderRoom {
+    self.room_of(chat_id, self.room_title(chat_id).await, modes)
   }
 
   /// The Bot API this account asks.

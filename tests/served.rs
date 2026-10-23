@@ -372,7 +372,7 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
   assert_eq!(
     owner,
     json!({ "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER,
-      "title": "Board room" })
+      "title": "Board room", "modes": ["bot-account", "human-reader"] })
   );
 
   let (status, bot_room) = asked_get(&served.base, &format!("/rooms/{ROOM}")).await;
@@ -380,7 +380,8 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
   assert_eq!(status, 200);
   assert_eq!(
     bot_room,
-    json!({ "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board room" })
+    json!({ "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board room",
+      "modes": ["bot-account", "human-reader"] })
   );
 
   let (status, person) = asked_get(&served.base, &format!("/rooms/{PERSON}")).await;
@@ -389,7 +390,7 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
   assert_eq!(
     person,
     json!({ "id": PERSON, "owns": true, "identity": null, "kind": "group", "privateTo": PERSON,
-      "title": "Someone" })
+      "title": "Someone", "modes": ["human-reader"] })
   );
 
   let (status, unknown) = asked_get(&served.base, &format!("/rooms/{UNKNOWN_ROOM}")).await;
@@ -422,9 +423,12 @@ async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
   assert_eq!(
     first,
     json!({ "items": [
-      { "id": BOT_ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board room" },
-      { "id": OTHER_ROOM, "owns": true, "identity": null, "kind": "group", "privateTo": null, "title": null },
-      { "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board" }
+      { "id": BOT_ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board room",
+        "modes": ["bot-account", "human-reader"] },
+      { "id": OTHER_ROOM, "owns": true, "identity": null, "kind": "group", "privateTo": null, "title": null,
+        "modes": ["human-reader"] },
+      { "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board",
+        "modes": ["bot-account", "human-reader"] }
     ], "more": true })
   );
 
@@ -434,8 +438,10 @@ async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
   assert_eq!(
     next,
     json!({ "items": [
-      { "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER, "title": "Helper" },
-      { "id": PERSON, "owns": true, "identity": null, "kind": "group", "privateTo": PERSON, "title": "Someone" }
+      { "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER, "title": "Helper",
+        "modes": ["bot-account", "human-reader"] },
+      { "id": PERSON, "owns": true, "identity": null, "kind": "group", "privateTo": PERSON, "title": "Someone",
+        "modes": ["human-reader"] }
     ], "more": false })
   );
 

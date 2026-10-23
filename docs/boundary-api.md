@@ -69,7 +69,7 @@ with the receiver's token, as the protocol states it. It holds no client of its 
 | Route | What it carries |
 |---|---|
 | `GET /rooms?via=telegram` | a page of the rooms whose past the reader may walk back, each with the oldest message the receiver holds and when it was sent |
-| `GET /rooms/{roomId}?via=telegram` | whether the receiver listens to a room, and its oldest message; 404 `not-found` reads as a room it does not listen to |
+| `GET /rooms/{roomId}?via=telegram` | whether the receiver listens to a room, whether it asked for the room to be read (`read`), and its oldest message; 404 `not-found` reads as a room it does not listen to and did not ask to be read |
 | `PUT /rooms/{roomId}/messages/{messageId}` | a message, whatever its origin: `live`, `edit` or `history`, with its files where they are already gathered, or `gathering` where they follow |
 | `PATCH /rooms/{roomId}/messages/{messageId}` | the files a message's gathering promised, or why they were not kept |
 | `POST /avatar-changes` | the rooms and people whose kept profile picture changed |
@@ -113,8 +113,8 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 The service answers `GET /rooms` from `/reader/dialogs` and the rooms the bot is in (`docs/telegram.md`, 「The
 rooms」): each room once, as a room of the provider's own, with the bot's number as the identity where the bot is
 in it and null where it is not, `owner` for the owner's one-to-one and `group` for any other, the person of a
-one-to-one as `privateTo`, and the account's title for it. The mode a room was added in is the receiver's, so
-no room carries one. bmo-chat's provider server orders and pages the list; a reader that does not answer it is
+one-to-one as `privateTo`, the account's title for it, and as `modes` the declaration's active voices where the
+bot is in it and `human-reader` alone where it is not. The mode a room was added in is the receiver's. bmo-chat's provider server orders and pages the list; a reader that does not answer it is
 a failure of the route. Whether the bot is in a room is asked of the Bot API: `getChatMember` with the bot's own
 number for a group, `getChat` for a one-to-one.
 

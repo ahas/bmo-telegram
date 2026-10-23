@@ -96,6 +96,16 @@ impl TelegramProvider {
     self.reader_health.lock().unwrap_or_else(PoisonError::into_inner).clone()
   }
 
+  // The voices a room of the bot's is read by and may be sent in: the declaration's active ones.
+  fn active_voices(&self) -> Vec<ChatVoice> {
+    self
+      .modes()
+      .into_iter()
+      .filter(|mode| mode.standing == ChatModeStanding::Active)
+      .map(|mode| mode.voice)
+      .collect()
+  }
+
   // Every chat of the owner's account, as the reader lists them.
   async fn dialogs(&self) -> Result<Vec<ReaderRoom>, String> {
     let Some(reader) = &self.reader else {
@@ -226,7 +236,7 @@ impl ChatProvider for TelegramProvider {
 
   async fn room(&self, room_id: i64) -> Result<Option<ProviderRoom>, ChatFailure> {
     if self.telegram.bot_in(room_id).await {
-      return Ok(Some(self.telegram.bot_room(room_id).await));
+      return Ok(Some(self.telegram.bot_room(room_id, self.active_voices()).await));
     }
 
     // A room the bot is not in is the owner's account's: one the account lists, under its title, or one seen.
@@ -256,6 +266,7 @@ impl ChatProvider for TelegramProvider {
       .await
       .map_err(|why| format!("the owner's account's rooms were not read: {why}"))?;
     let mut rooms = BTreeMap::new();
+    let voices = self.active_voices();
 
     for ReaderRoom { chat_id, title } in dialogs {
       if rooms.contains_key(&chat_id) {
@@ -263,7 +274,7 @@ impl ChatProvider for TelegramProvider {
       }
 
       let room = if self.telegram.bot_in(chat_id).await {
-        self.telegram.room_of(chat_id, title)
+        self.telegram.room_of(chat_id, title, voices.clone())
       } else {
         self.telegram.account_room_of(chat_id, title)
       };
@@ -275,7 +286,7 @@ impl ChatProvider for TelegramProvider {
 
     for chat_id in bot_rooms {
       if !rooms.contains_key(&chat_id) && self.telegram.bot_in(chat_id).await {
-        rooms.insert(chat_id, self.telegram.bot_room(chat_id).await);
+        rooms.insert(chat_id, self.telegram.bot_room(chat_id, voices.clone()).await);
       }
     }
 

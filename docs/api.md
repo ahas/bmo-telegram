@@ -1,9 +1,9 @@
 # The Telegram provider's fixed API
 
-**고정됨 0.8.0.**
+**고정됨 0.9.0.**
 
 This service is a chat provider, so its public API is the chat protocol's provider routes, fixed by bmo-chat at
-0.1.0-rev.6 (the release its history numbers 1.0.0). The service serves them through bmo-chat's provider server
+0.1.0-rev.7. The service serves them through bmo-chat's provider server
 and answers them itself; it adds no public route of its own. `docs/openapi.json` is the same contract in machine
 form, exactly as bmo-chat-plugin generates it from the published types, and the routes below are that document's.
 
@@ -27,7 +27,7 @@ the reader」).
 | Method | Path | Answer |
 |---|---|---|
 | `GET` | `/rooms` | a page of the rooms the bot account and the owner's account are in, each once, in ascending order of `id`, walked by `after` (a room) and `limit`, each as `GET /rooms/{roomId}` shapes a room; refused `unsupported-capability` while `roomList` is not declared |
-| `GET` | `/rooms/{roomId}` | what the provider knows of the room: `id`, `owns`, `identity` (null in a room the bot is not in, which takes only the owner's own words), `kind`, `privateTo` and `title`; 404 `not-found` where it knows nothing of it |
+| `GET` | `/rooms/{roomId}` | what the provider knows of the room: `id`, `owns`, `identity` (null in a room the bot is not in), `kind`, `privateTo`, `title` and `modes` (`human-reader` alone in a room the bot is not in, which takes only the owner's own words; the declaration's active voices in a room of the bot's); 404 `not-found` where it knows nothing of it |
 | `GET` | `/owner` | `roomId`, the room to reach the owner in, or null |
 
 ## Sends

@@ -290,6 +290,7 @@ async fn what_the_reader_hands_over_goes_on_to_the_receiver_and_its_room_and_sen
   *receiver.rooms.lock().unwrap() = vec![ReceiverRoom {
     id: -1001,
     listened: true,
+    read: false,
     oldest_message_id: Some(5),
     oldest_sent_at: Some(1_700_000_000_000),
   }];
@@ -346,6 +347,42 @@ async fn what_the_reader_hands_over_goes_on_to_the_receiver_and_its_room_and_sen
   assert_eq!(served.standing.history(), None);
   assert_eq!(served.standing.avatars(), None);
   assert_eq!(served.receiver.avatar_changes.lock().unwrap().clone()[0].room_ids, vec![-1001]);
+}
+
+/// A person's words are the reader's to hand over only in a room the bot is not in whose `read` the receiving
+/// side answers true; being listened to is no such request (docs/telegram.md, 「The rooms」).
+#[tokio::test]
+async fn a_person_s_words_are_handed_over_only_where_the_receiver_asked_for_a_room_the_bot_is_not_in() {
+  let (receiver, _heard) = KeptReceiver::new();
+  let held = |id, read| ReceiverRoom {
+    id,
+    listened: true,
+    read,
+    oldest_message_id: None,
+    oldest_sent_at: None,
+  };
+
+  *receiver.rooms.lock().unwrap() = vec![held(BOT_ROOM, true), held(-1004, true), held(-1005, false)];
+
+  let served = seam_over(receiver).await;
+  let seam = Wire::loopback(served.port, TOKEN);
+  let people = async |chat_id: i64| {
+    let answer = seam.post("/reader/listened", &json!({ "chatId": chat_id })).await.unwrap().body;
+    (answer["listened"].clone(), answer["people"].clone())
+  };
+
+  assert_eq!(
+    people(BOT_ROOM).await,
+    (json!(true), json!(false)),
+    "the bot's own room is read by the bot"
+  );
+  assert_eq!(people(-1004).await, (json!(true), json!(true)), "a room the receiver asked to be read");
+  assert_eq!(people(-1005).await, (json!(true), json!(false)), "a room listened to but not asked for");
+  assert_eq!(
+    people(-1006).await,
+    (json!(false), json!(false)),
+    "a room the receiver holds nothing of"
+  );
 }
 
 #[tokio::test]

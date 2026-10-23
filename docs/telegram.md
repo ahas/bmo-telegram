@@ -48,20 +48,20 @@ their part stands (`GET /status`). The rooms `roomList` lists are the bot's and 
   account reads in a room lets go of the answer kept for it, so a room the bot has just joined is asked again.
   Where Telegram cannot be asked, a room the provider has seen stands as the bot's.
 - **A room of the owner's account the bot is not in is read-only.** It is listed and answered as a room of the
-  provider's own, so it can be added, and it is the owner's account's alone: only the owner's own words, a send
-  naming the voice `human-reader`, go into it. A send in any other voice, or naming none, is refused `platform`
+  provider's own, so it can be added, and it is the owner's account's alone: its `modes` are `human-reader`
+  alone, and only the owner's own words, a send naming that voice, go into it. A send in any other voice, or naming none, is refused `platform`
   with the policy's `read_only`, whatever its verb, so nothing answers in such a room.
 - **A room the bot is not in is read through the owner's account only where the receiving side asks for it.**
   Other bots' words are read wherever the room is listened to, as in any room. A person's words there are
   read and handed over, as `live` in `human-reader`, only where the receiving side asked for the room to be
-  read, so the owner's other chats never flow. bmo-chat's room as the receiving side answers it says only
-  whether the room is listened to, which is no such request, and carries none of its own; so no room the bot
-  is not in has its people's words read.
+  read, so the owner's other chats never flow. The request is the `read` of the room as the receiving side
+  answers it; whether the room is listened to is no such request, and a receiving side that does not answer, or
+  holds nothing of the room, asks for nothing.
 - **A hand-over from a room the bot is not in carries no `identity`** in its room facts, as the room's own
   answer carries none.
-- **A room carries no modes of its own** in bmo-chat's room; the declaration's modes are the provider's. A room
-  the bot is not in is told by its `identity`, null, since no words of the provider's own stand there but the
-  owner's; a room of the bot's carries the bot's number.
+- **A room's `modes`** are the voices the declaration has active in a room of the bot's, and `human-reader`
+  alone in a room the bot is not in. Its `identity` is the bot's number in a room of the bot's, and null in one
+  the bot is not in, since no words of the provider's own stand there but the owner's.
 - **The list** holds the bot's rooms, the owner's one-to-one and every room seen that the bot is in, and every
   chat of the owner's account (`docs/reader.md`, 「The rooms of the account」), each room once: a chat the bot is
   also in is the bot's, under the account's title for it, and a room of the bot's the account does not list is

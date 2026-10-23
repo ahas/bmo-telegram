@@ -1521,6 +1521,17 @@
             "$ref": "#/components/schemas/RoomKind",
             "description": "`owner` when the room is the owner's private chat on this platform, else `group`."
           },
+          "modes": {
+            "default": null,
+            "description": "The voices the room is read by and may be sent in, each one of the declaration's modes; null where the\nprovider does not say, which stands for every mode the declaration lists. `human-reader` alone makes the\nroom read-only.",
+            "items": {
+              "$ref": "#/components/schemas/ChatVoice"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "owns": {
             "description": "Whether the room is one of this provider's.",
             "type": "boolean"
@@ -1547,7 +1558,8 @@
           "identity",
           "kind",
           "privateTo",
-          "title"
+          "title",
+          "modes"
         ],
         "type": "object"
       },
@@ -1613,7 +1625,7 @@
   "info": {
     "description": "The routes a chat provider serves and the receiving side calls, as the chat protocol defines them: the declaration, health, sends, a room, the account owner's room, a message's files fetched again, the dialect's readings and checks, and kept profile pictures. Paths are relative to the base address the caller is configured with, and a service may mount them under a prefix of its own. Bodies are JSON, except a profile picture, which is answered as its own bytes; bytes inside JSON are base64. Times are integers of epoch milliseconds. Every failure, a refusal among them, is answered in the error shape with its status, so a 2xx answer is always the route's success. The sends, a room, the owner and a message's files answer 503 `not-ready` while the provider is not ready. A caller offers a request again only when the connection was refused, so a request that reached a listener is never made twice. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`.",
     "title": "bmo-chat provider routes",
-    "version": "0.1.0-rev.6"
+    "version": "0.1.0-rev.7"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2010,7 +2022,7 @@
             "$ref": "#/components/responses/NotReady"
           }
         },
-        "summary": "What the provider knows of a room: whether it owns it, the account's identity in it, owner or group, the one person of a one-to-one, and its title; `not-found` where it knows nothing of it.",
+        "summary": "What the provider knows of a room: whether it owns it, the account's identity in it, owner or group, the one person of a one-to-one, its title, and the voices it is read by and may be sent in; `not-found` where it knows nothing of it.",
         "tags": [
           "rooms"
         ],
@@ -2357,7 +2369,7 @@
       "route": "GET /rooms"
     },
     {
-      "description": "What the provider knows of a room: whether it owns it, the account's identity in it, whether it is the owner's private chat, the one person of a one-to-one, and its title.",
+      "description": "What the provider knows of a room: whether it owns it, the account's identity in it, whether it is the owner's private chat, the one person of a one-to-one, its title, and the voices it is read by and may be sent in.",
       "input": {
         "description": "One room, by its number.",
         "properties": {

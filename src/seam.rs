@@ -81,10 +81,10 @@ pub struct Seam {
   pub presence: Arc<dyn Presence>,
 }
 
-/// Whether the receiving side asked for a room to be read through the owner's account. bmo-chat's room as the
-/// receiving side answers it carries no such request, and `listened` is none, so no room is asked for.
-pub fn read_asked(_held: &ReceiverRoom) -> bool {
-  false
+/// Whether the receiving side asked for a room to be read through the owner's account: its `read`. Being
+/// listened to is no such request.
+pub fn read_asked(held: &ReceiverRoom) -> bool {
+  held.read
 }
 
 /// The seam's routes over `seam`.
