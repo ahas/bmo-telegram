@@ -37,10 +37,10 @@ deployed), `rustfmt.toml` and `CLAUDE.md`.
 
 ## Version
 
-- **One version for the whole repository,** the workspace's, in semver. `VERSION` holds it, the workspace's
-  version equals it, and the reader's `package.json` carries it.
-- **A major change is a change to a contract a consumer reads;** an addition no existing consumer reads is a
-  minor change, anything else a patch.
+- **One version for the whole repository,** the workspace's. `VERSION` holds it, the workspace's version
+  equals it, and the reader's `package.json` carries it.
+- **It moves only at a release the owner declares,** as bmo-chat's `docs/conventions.md` 「Versions」 states.
+  A commit, a deploy, a fix or a contract change moves none, and a deployment is told apart by its commit.
 
 ## Build and test
 

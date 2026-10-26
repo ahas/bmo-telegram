@@ -1,7 +1,5 @@
 # The Telegram provider's fixed API
 
-**Fixed 0.11.1.**
-
 This service is a chat provider, so its public API is the chat protocol's provider routes, fixed by bmo-chat at
 0.1.0-rev.8. The service serves them through bmo-chat's provider server
 and answers them itself; it adds no public route of its own. `docs/openapi.json` is the same contract in machine
