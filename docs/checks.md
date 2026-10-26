@@ -19,6 +19,8 @@ personal-data check. Each runs with the root package's tests.
   the Cargo and bun suites and the three base libraries.
 - **Hangul.** No tracked file holds a Hangul character: every word this provider writes or matches on is
   English.
+- **The fixed marker.** `docs/api.md` opens its body with the fixed marker, `Fixed at` and the version `VERSION`
+  holds, in bold and ending in a full stop, so the fixed API names the version it is fixed at.
 - **Personal data.** No tracked file holds a mail address outside the reserved example domains, a home path
   outside the neutral role names, a telephone number, a token, or a private network address. A loopback
   address passes. `docs/PERSONAL-DATA.md` states the rule, and `tests/personal_data.rs` reads every tracked

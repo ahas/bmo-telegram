@@ -284,6 +284,9 @@ fn no_directory_is_named_after_its_parent() {
   assert!(twins.is_empty(), "these paths repeat a directory inside itself: {twins:?}");
 }
 
+/// The fixed API, whose marker names the version it is fixed at.
+const FIXED_API: &str = "docs/api.md";
+
 #[test]
 fn no_hangul_in_tracked_files() {
   let found: Vec<String> = tracked_texts()
@@ -292,6 +295,16 @@ fn no_hangul_in_tracked_files() {
     .map(|(path, _)| path)
     .collect();
   assert!(found.is_empty(), "tracked files holding Hangul: {found:?}");
+}
+
+#[test]
+fn the_fixed_api_document_carries_the_fixed_marker_of_its_version() {
+  let text = text_of(FIXED_API).expect("docs/api.md is tracked");
+  let version = fs::read_to_string(Path::new(ROOT).join("VERSION")).expect("VERSION is readable");
+  let marker = format!("**Fixed at {}.**", version.trim());
+  let first = text.lines().skip(1).find(|line| !line.trim().is_empty());
+
+  assert_eq!(first, Some(marker.as_str()), "the first line under the title is the fixed marker");
 }
 
 /// The names list, as `BMO_NAMES_LIST` names it: `words` matched as whole words ignoring case,
