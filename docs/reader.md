@@ -8,11 +8,18 @@ reader」), and it reaches nothing but the service and Telegram.
 
 - **The other bots' words.** The Bot API never shows a bot what another bot says. The reader reads every new
   message another bot writes in a room the receiver listens to and hands it to the service, which hands it to
-  the receiver as read in the `human-reader` mode. A message the owner's account sent, one with no room, and
-  one the provider's own bot wrote are not read in.
+  the receiver as read in the `human-reader` mode. A message with no room, and one the provider's own bot
+  wrote, are not read in.
 - **A person's words in a room the bot is not in,** where the service says they are the reader's to hand
   over: the receiving side asked for the room to be read (`docs/telegram.md`, 「The rooms」). A person's words
   anywhere else are the bot account's to read, or nobody's.
+- **The owner's own words in such a room,** whatever device they were typed on, are handed over as anyone's
+  are, as the owner's: under the owner's number, `BMO_OWNER_ID`, the number the bot account knows the owner
+  by. Only the messages the reader's own sends went out as are not, since the sender holds them already: each
+  is noted in memory, by its room and the number the account gave it, for five minutes and at most two
+  hundred to a room, and a message of the owner's that comes while a send into its room is still going waits
+  for that send, ten seconds at most, before it is matched. In a room the bot is in, the owner's words are the
+  bot account's to read, and the reader hands none of them over.
 - **What the Bot API will not fetch.** A picture or a file past the Bot API's ceiling for a bot, and a picture
   fetched after the fact for a turn that answers it, are fetched through the reader and answered as bytes.
 - **The owner's own words.** A send in the owner's voice goes out in the owner's account, never by the bot:
@@ -114,10 +121,20 @@ reader」), and it reaches nothing but the service and Telegram.
   lowest number reached and whether the top of the room's history was reached. A walk resumes where it left off,
   and pauses between pages of a hundred.
 - **What a line out of the history says.** A picture says so, whether or not it was captioned; a message that
-  is only words is handed over exactly as it was said.
+  is only words is handed over exactly as it was said. Every line with words or a picture is handed over,
+  whoever said it, the owner's own under the owner's number.
 - **By hand,** `bun run history --room <chat> [--max <messages>]` in `reader/` walks one room's history while
   the reader's own process is stopped; a room the receiver does not name is refused before the account is
   asked anything.
+- **A room's recent past is filled by hand,** `bun run history --room <chat> --days <days>`, while the
+  reader's own process is stopped: every line said in those last days, newest first, is handed over as
+  history under the number the live reading gives it, so the receiver keeps the lines it lacks and leaves the
+  ones it holds, the copies of what it sent into the room among them. Only a room the account numbers as the
+  live reading does is filled: a supergroup or a channel, or a room whose people are the reader's to hand
+  over; any other is refused before its past is read, and so is a room the receiver does not name. The span
+  reaches no further back than the room's live reading: what the walk handed over below the receiver's first
+  message stands under the walk's numbers, and a fill reaching it would hand it over again. The walk's
+  progress is left as it stands.
 
 ## Profile pictures
 

@@ -9,6 +9,7 @@ import { mtproto, mtprotoUploads } from "./mtproto";
 
 import type { TelegramClient } from "telegram";
 import type { Peers } from "./media";
+import type { OwnSends } from "./sends";
 
 // The kinds a room receives a file as.
 export type AttachmentKind = "photo" | "animation" | "video" | "audio" | "document";
@@ -201,9 +202,10 @@ async function readerTarget(
   return { client, entity, replyTo: own };
 }
 
-/** The owner's account as this process's own connection to it, asked for at each send. */
-export function heldOwnerAccount(client: () => TelegramClient | null, peers: Peers): OwnerAccount {
-  return {
+/** The owner's account as this process's own connection to it, asked for at each send; every message a send
+ * goes out as is noted in `sends`, so the live reading does not hand it over again. */
+export function heldOwnerAccount(client: () => TelegramClient | null, peers: Peers, sends: OwnSends): OwnerAccount {
+  const account: OwnerAccount = {
     // The markup where there is one, and the plain words where the account refuses it.
     say: async (words) => {
       const target = await readerTarget(client(), peers, words.chatId, words.replyToMessageId);
@@ -262,6 +264,11 @@ export function heldOwnerAccount(client: () => TelegramClient | null, peers: Pee
 
       return album.files.map((_, at) => ({ id: sent[at]?.id ?? null, text: sent[at]?.message ?? "" }));
     },
+  };
+
+  return {
+    say: async (words) => await sends.sending(words.chatId, () => account.say(words), (sent) => [sent.id]),
+    album: async (album) => await sends.sending(album.chatId, () => account.album(album), (sent) => sent.map((one) => one.id)),
   };
 }
 

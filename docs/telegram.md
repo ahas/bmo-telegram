@@ -61,9 +61,12 @@ owner's account's alone (「Contacts and starting a conversation」).
 - **A room the bot is not in is read through the owner's account only where the receiving side asks for it.**
   Other bots' words are read wherever the room is listened to, as in any room. A person's words there are
   read and handed over, as `live` in `human-reader`, only where the receiving side asked for the room to be
-  read, so the owner's other chats never flow. The request is the `read` of the room as the receiving side
-  answers it; whether the room is listened to is no such request, and a receiving side that does not answer, or
-  holds nothing of the room, asks for nothing.
+  read, so the owner's other chats never flow. Both sides of such a room are handed over: the owner's own
+  words there, typed wherever the owner typed them, go as the owner's, under `BMO_OWNER_ID`, but for the
+  messages a send in the owner's voice went out as, which the sender holds already (`docs/reader.md`, 「What
+  it is for」). The request is the `read` of the room as the receiving side answers it; whether the room is
+  listened to is no such request, and a receiving side that does not answer, or holds nothing of the room,
+  asks for nothing.
 - **A hand-over from a room the bot is not in carries no `identity`** in its room facts, as the room's own
   answer carries none.
 - **A room's `modes`** are the voices the declaration has active in a room of the bot's, and `human-reader`

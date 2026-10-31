@@ -12,6 +12,7 @@ import { lockOnceFree, takeLock } from "./lock";
 import { heldOwnerAccount } from "./owner";
 import { startReader } from "./reader";
 import { readerHandler } from "./routes";
+import { OwnSends } from "./sends";
 import { serviceAt } from "./service";
 import { ReaderStore } from "./store";
 
@@ -27,6 +28,7 @@ const peers = { ownerId: settings.ownerId, botId: settings.botId };
 const service = serviceAt(settings.servicePort, settings.token);
 const rooms = roomLister(peers);
 const contacts = contactLister(peers, rooms);
+const sends = new OwnSends();
 let client: TelegramClient | null = null;
 let store: ReaderStore | null = null;
 let missing: string | null = settings.account === null ? accountMissing : null;
@@ -40,7 +42,7 @@ const server = Bun.serve({
   fetch: readerHandler({
     token: settings.token,
     peers,
-    owner: heldOwnerAccount(() => client, peers),
+    owner: heldOwnerAccount(() => client, peers, sends),
     client: () => client,
     rooms,
     contacts,
@@ -75,7 +77,7 @@ async function open(): Promise<void> {
   store = new ReaderStore(where.store);
 
   try {
-    client = await startReader({ account, peers, service });
+    client = await startReader({ account, peers, service, sends });
     missing = null;
     console.log("reader: the owner's account is connected and reading other bots' messages");
     startHistory({ client, peers, service, store });

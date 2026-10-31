@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  FillUnnumbered,
+  fillNamedRoom,
   historyMessageId,
   historyMessageText,
   historyRooms,
@@ -154,5 +156,82 @@ describe("which rooms the account walks", () => {
     await expect(walkRoom({ client: unresolvingClient(asked), peers, service, store: new ReaderStore(":memory:") }, room)).rejects.toBeInstanceOf(PeerUnresolved);
     expect(asked).toEqual([]);
     expect(service.handed).toEqual([]);
+  });
+});
+
+// A room's recent past (docs/reader.md, 「The history walk」): handed over under the live reading's numbers,
+// the owner's own lines among them, in a room the account numbers as the live reading does.
+describe("a room's recent past", () => {
+  const since = 1_700_000_000_000;
+  const linesClient = (asked: unknown[]) => {
+    const { Api } = mtproto();
+    const lines = [
+      new Api.Message({ id: 30, message: "the newest", date: 1_700_000_300 } as never),
+      new Api.Message({ id: 29, out: true, message: "the owner's own", date: 1_700_000_200 } as never),
+      new Api.Message({ id: 28, message: "", date: 1_700_000_100 } as never),
+      new Api.Message({ id: 20, message: "before the span", date: 1_699_999_000 } as never),
+    ];
+
+    for (const line of lines) {
+      Object.assign(line, { getSender: async () => new Api.User({ id: 1n, firstName: line.out === true ? "Owner" : "Person" } as never) });
+    }
+
+    return {
+      getEntity: async (peer: number) => ({ id: peer }),
+      getDialogs: async () => [],
+      iterMessages: async function* (entity: unknown, options: unknown) {
+        asked.push(entity, options);
+        yield* lines;
+      },
+    } as unknown as TelegramClient;
+  };
+  const named = (chatId: number) => [{ chatId, oldestMessageId: -999_000_000, oldestSentAt: 1 }];
+
+  test("a room whose people are the reader's is filled under the live numbers, the owner's lines as the owner's", async () => {
+    const chatId = 5_000_000_123;
+    const asked: unknown[] = [];
+    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: true }) };
+    const store = new ReaderStore(":memory:");
+
+    const outcome = await fillNamedRoom({ client: linesClient(asked), peers, service, store }, chatId, since);
+
+    expect(outcome).toEqual({ handed: 2, kept: 2, reachedTop: false });
+    expect(
+      service.handed.map((one) => (one.kind === "message" ? [one.messageId, one.message.senderId, one.message.origin] : null)),
+    ).toEqual([
+      [30, null, "history"],
+      [29, OWNER_ID, "history"],
+    ]);
+    expect(store.historyProgress(chatId)).toBeNull();
+  });
+
+  test("a supergroup is filled whoever reads its people", async () => {
+    const chatId = -1000000000003;
+    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: false }) };
+
+    const outcome = await fillNamedRoom({ client: linesClient([]), peers, service, store: new ReaderStore(":memory:") }, chatId, since);
+
+    expect(outcome.handed).toBe(2);
+  });
+
+  test("a room the bot account numbers is refused before its past is read", async () => {
+    const chatId = -5000000002;
+    const asked: unknown[] = [];
+    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: false }) };
+
+    await expect(fillNamedRoom({ client: linesClient(asked), peers, service, store: new ReaderStore(":memory:") }, chatId, since)).rejects.toBeInstanceOf(
+      FillUnnumbered,
+    );
+    expect(asked).toEqual([]);
+    expect(service.handed).toEqual([]);
+  });
+
+  test("a room the receiver does not name is refused", async () => {
+    const asked: unknown[] = [];
+
+    await expect(fillNamedRoom({ client: linesClient(asked), peers, service: keptService(), store: new ReaderStore(":memory:") }, 5_000_000_123, since)).rejects.toBeInstanceOf(
+      HistoryUnreadable,
+    );
+    expect(asked).toEqual([]);
   });
 });

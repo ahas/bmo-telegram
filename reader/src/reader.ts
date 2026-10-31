@@ -1,8 +1,8 @@
 // The live reading on the owner's account (docs/reader.md, 「What it is for」). Telegram never delivers
 // one bot's messages to another bot, so the bot account alone cannot see what other bots say in a shared
 // room. This reads every new message another bot writes in a room the receiver listens to, and a person's in
-// a room the bot is not in where the service says it is the reader's, and hands it to the service, which hands
-// it to the receiver as read in the `human-reader` mode.
+// a room the bot is not in where the service says it is the reader's, the owner's own there among them, and
+// hands it to the service, which hands it to the receiver as read in the `human-reader` mode.
 
 import { fileIdOf, messageFileKind, messageHasPhoto, pictureOf, readerFileOf, seconds } from "./media";
 import { mtproto, mtprotoEvents, mtprotoSessions } from "./mtproto";
@@ -13,12 +13,14 @@ import type { Api, TelegramClient as Client } from "telegram";
 import type { NewMessageEvent } from "telegram/events";
 import type { AccountConfig } from "./config";
 import type { Peers } from "./media";
+import type { OwnSends } from "./sends";
 import type { HandedContext, RoomReading, Service } from "./service";
 
 export interface ReaderDeps {
   account: AccountConfig;
   peers: Peers;
   service: Service;
+  sends: OwnSends;
 }
 
 const kinds = POLICY.kinds;
@@ -110,10 +112,19 @@ async function gather(deps: ReaderDeps, client: Client, message: Api.Message, ch
 
 /** Whether a message from `sender` is the reader's to hand over in a room the service says `room` of: another
  * bot's but the provider's own wherever the room is listened to, a person's only where the service says the
- * room's people are the reader's. */
-export function handsOver(sender: { id: number; bot: boolean }, room: RoomReading, botId: number | null): boolean {
+ * room's people are the reader's, and the owner's own (`out`) there too, but for one the reader's own send
+ * went out as (`ownSend`). */
+export function handsOver(
+  sender: { id: number; bot: boolean; out?: boolean; ownSend?: boolean },
+  room: RoomReading,
+  botId: number | null,
+): boolean {
   if (!room.listened) {
     return false;
+  }
+
+  if (sender.out === true) {
+    return room.people && sender.ownSend !== true;
   }
 
   return sender.bot ? sender.id !== botId : room.people;
@@ -126,7 +137,7 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
   const text = message.message;
   const eventChat = event.chatId;
 
-  if (message.out === true || eventChat === undefined) {
+  if (eventChat === undefined) {
     return;
   }
 
@@ -143,11 +154,15 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
     return;
   }
 
-  const senderId = Number(sender.id.toString());
+  // The account's own message is the owner's, under the number the bot account knows the owner by; one the
+  // reader's own send went out as is the sender's already.
+  const out = message.out === true;
+  const ownSend = out && room.people && (await deps.sends.isOwn(chatId, message.id));
+  const senderId = out ? deps.peers.ownerId : Number(sender.id.toString());
 
   // The provider's own bot is read by the bot account, so its words are not read in again here; a person's
-  // words are the bot account's to read wherever the bot is.
-  if (!handsOver({ id: senderId, bot: sender.bot === true }, room, deps.peers.botId)) {
+  // words, the owner's among them, are the bot account's to read wherever the bot is.
+  if (!handsOver({ id: senderId, bot: !out && sender.bot === true, out, ownSend }, room, deps.peers.botId)) {
     return;
   }
 
@@ -243,7 +258,7 @@ export async function startReader(deps: ReaderDeps): Promise<Client> {
     } catch (error) {
       console.error("reader ingest failed:", error);
     }
-  }, new (mtprotoEvents().NewMessage)({ incoming: true }));
+  }, new (mtprotoEvents().NewMessage)({}));
 
   return client;
 }
