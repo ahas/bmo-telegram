@@ -14,6 +14,12 @@ fn the_dialect_declares_telegram_s_limits_and_folds() {
   assert_eq!(declared.limits.file_bytes, Some(20_000_000));
   assert!(declared.foldable);
   assert!(declared.writing.starts_with("This room shows formatting."));
+  assert!(
+    declared
+      .writing
+      .contains("folds into an expandable quote only where its send asks for a fold"),
+    "the writer is told the fold is asked, never decided by length"
+  );
 }
 
 #[test]

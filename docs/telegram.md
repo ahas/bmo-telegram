@@ -253,8 +253,8 @@ The agent's markdown becomes Telegram's HTML. The dialect has:
 | Member | Value |
 |---|---|
 | `limits` | text 4096, caption 1024 (both counted in UTF-16 units), album 10 pictures, file 20,000,000 bytes |
-| `writing` | "This room shows formatting. Write markdown as the answer-shape rulebook describes: the send path turns it into this platform's own markup and escapes what has to be escaped, so never write a tag yourself. A long answer may be folded, which the formatting gate decides." |
-| `foldable` | true: a long answer folds into an expandable quote |
+| `writing` | "This room shows formatting. Write markdown as the answer-shape rulebook describes: the send path turns it into this platform's own markup and escapes what has to be escaped, so never write a tag yourself. An answer folds into an expandable quote only where its send asks for a fold." |
+| `foldable` | true: an answer whose send asks for a fold folds into an expandable quote, its lead and a short closing line left open |
 | `convert` | markdown in, the HTML markup, the same words plain, and whether the markup says more than the plain text |
 | `parts` | the markdown divided at block boundaries into pieces each of which fits one message |
 | `fault` | an English reason where the markup is not sound HTML Telegram reads: a character left unescaped, a tag Telegram does not take, a tag left open, one closed that was never opened, two crossed, one nested where it may not be |
