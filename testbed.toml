@@ -10,8 +10,16 @@ languages = ["cargo", "bun"]
 setup = ["cd reader && bun install --frozen-lockfile"]
 
 [check]
-quick = ["layout", "dependencies", "cargo-profile"]
+quick = ["layout", "dependencies", "cargo-profile", "shared-versions"]
 base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui"]
+
+# The repository whose root holds the shared versions the manifests and the lock hold to.
+[check.shared_versions]
+repository = "bmo-chat"
+
+[check.shared_versions.exceptions.reqwest]
+reason = "A file goes up to the Bot API as a multipart form, which reqwest's multipart feature builds; the shared line has no multipart body."
+line = 'reqwest = { version = "0.13.5", features = ["json", "multipart", "query", "stream"] }'
 
 [[check.step]]
 id = "check"
