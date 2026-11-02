@@ -45,7 +45,7 @@ fn a_refused_caption_is_read_off_telegram_s_description() {
 }
 
 #[test]
-fn an_album_the_flood_limit_refused_waits_as_asked_but_never_past_a_minute() {
+fn an_album_the_flood_limit_refused_waits_as_long_as_telegram_asks() {
   let answered = |text: &str| serde_json::from_str::<Answered>(text).expect("an answer");
 
   assert_eq!(
@@ -54,7 +54,7 @@ fn an_album_the_flood_limit_refused_waits_as_asked_but_never_past_a_minute() {
   );
   assert_eq!(
     flood_wait(&answered(r#"{"ok":false,"error_code":429,"parameters":{"retry_after":600}}"#)),
-    None
+    Some(Duration::from_secs(600))
   );
   assert_eq!(flood_wait(&answered(r#"{"ok":false,"error_code":400,"description":"bad"}"#)), None);
 }

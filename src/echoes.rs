@@ -12,9 +12,6 @@ use tokio::time::Instant;
 /// How long a note waits for its echo.
 pub const KEPT_FOR: Duration = Duration::from_secs(300);
 
-/// How long a message from the owner waits for a send in the owner's voice into its room that is still going.
-pub const WAITED_FOR: Duration = Duration::from_secs(10);
-
 // The most notes kept at once; the oldest goes first.
 const MOST: usize = 512;
 
@@ -129,11 +126,9 @@ impl Echoes {
   }
 
   /// Whether a message the bot account read from the owner is the echo of a send in the owner's voice: the
-  /// note it answers is let go. While such a send into its room is still going, it waits for that send, no
-  /// longer than `WAITED_FOR`.
+  /// note it answers is let go. While such a send into its room is still going, it waits for that send to end,
+  /// gone out or failed.
   pub async fn echo(&self, room: i64, id: i64, words: &str) -> bool {
-    let deadline = Instant::now() + WAITED_FOR;
-
     loop {
       let mut settled = std::pin::pin!(self.settled.notified());
 
@@ -154,9 +149,7 @@ impl Echoes {
         }
       }
 
-      if tokio::time::timeout_at(deadline, settled).await.is_err() {
-        return false;
-      }
+      settled.await;
     }
   }
 }

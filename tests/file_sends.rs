@@ -4,7 +4,7 @@
 mod support;
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use bmo_chat::{ChatSend, ChatSendResult};
 use bmo_telegram::policy::POLICY;
@@ -98,7 +98,7 @@ async fn a_voice_goes_with_the_first_part_of_its_reading_as_its_caption_and_the_
 }
 
 #[tokio::test]
-async fn a_caption_telegram_will_not_read_goes_again_without_it_and_a_flood_limit_is_waited_out() {
+async fn a_caption_telegram_will_not_read_goes_again_bare_and_every_flood_limit_is_waited_out() {
   let bot = BotSends::new();
   let speaker = speaker(bot.clone(), Sending::default()).await;
   let once = Arc::new(AtomicBool::new(false));
@@ -112,16 +112,16 @@ async fn a_caption_telegram_will_not_read_goes_again_without_it_and_a_flood_limi
   assert_eq!(bot.methods(), ["sendVoice", "sendVoice", "sendMessage", "sendMessage"]);
   assert!(bot.bodies()[1].get("caption").is_none());
 
-  let flooded = Arc::new(AtomicBool::new(false));
+  let flooded = Arc::new(AtomicUsize::new(0));
 
   bot.answering(move |asked| {
-    (asked.method == "sendMessage" && !flooded.swap(true, Ordering::SeqCst)).then(|| {
+    (asked.method == "sendMessage" && flooded.fetch_add(1, Ordering::SeqCst) < 3).then(|| {
       json!({ "ok": false, "error_code": 429, "description": "Too Many Requests: retry after 0",
         "parameters": { "retry_after": 0 } })
     })
   });
   send(&speaker, None, voice(None, Some(reading()))).await.unwrap();
-  assert_eq!(bot.methods(), ["sendVoice", "sendMessage", "sendMessage"]);
+  assert_eq!(bot.methods(), ["sendVoice", "sendMessage", "sendMessage", "sendMessage", "sendMessage"]);
 }
 
 #[tokio::test]

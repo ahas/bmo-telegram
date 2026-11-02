@@ -74,22 +74,12 @@ pub fn groups<T>(pictures: &[T]) -> Vec<&[T]> {
   pictures.chunks(size).collect()
 }
 
-// How often an album the room's flood limit refused is asked again after the wait Telegram names, and the
-// longest wait taken: a run of albums meets that limit where one message never does, and a wait past a minute
-// holds the sender longer than the album is worth.
-const FLOOD_WAITS: usize = 2;
-const LONGEST_FLOOD_WAIT: Duration = Duration::from_secs(60);
-
-// How long a picture's web address is waited on.
-const FETCH_WAIT: Duration = Duration::from_secs(60);
-
-/// The wait a refusal asks for, where it is the flood limit's and short enough to take.
+/// The wait a refusal asks for, where it is the flood limit's: a run of albums meets that limit where one
+/// message never does, and the album is asked again after the wait Telegram names, however long.
 pub fn flood_wait(answered: &Answered) -> Option<Duration> {
   let wait = answered.parameters.as_ref().and_then(|parameters| parameters.retry_after)?;
 
-  (!answered.ok && answered.error_code == Some(429))
-    .then(|| Duration::from_secs(wait))
-    .filter(|wait| *wait <= LONGEST_FLOOD_WAIT)
+  (!answered.ok && answered.error_code == Some(429)).then(|| Duration::from_secs(wait))
 }
 
 /// One picture a send may carry: by the address it was given as, read from the web, from a file under the
@@ -303,7 +293,7 @@ impl Speaker {
         Ok((bytes, kind))
       }
       Source::Web => {
-        let answer = self.web.get(address).timeout(FETCH_WAIT).send().await.map_err(|_| unreached())?;
+        let answer = self.web.get(address).send().await.map_err(|_| unreached())?;
 
         if !answer.status().is_success() {
           return Err(unreached());
@@ -550,8 +540,6 @@ impl Speaker {
 
     for captioned in tries(caption) {
       for &uploaded in ways(by_address) {
-        let mut waited = 0;
-
         loop {
           let tried = if uploaded {
             self.album_uploaded(chat_id, group, captioned, reply_to).await
@@ -563,10 +551,7 @@ impl Speaker {
             Ok(went) => return Ok(went),
             Err(Tried {
               wait: Some(wait), ..
-            }) if waited < FLOOD_WAITS => {
-              tokio::time::sleep(wait).await;
-              waited += 1;
-            }
+            }) => tokio::time::sleep(wait).await,
             Err(tried) => {
               fault = Some(tried.why);
               break;

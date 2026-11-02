@@ -18,8 +18,8 @@ reader」), and it reaches nothing but the service and Telegram.
   by. Only the messages the reader's own sends went out as are not, since the sender holds them already: each
   is noted in memory, by its room and the number the account gave it, for five minutes and at most two
   hundred to a room, and a message of the owner's that comes while a send into its room is still going waits
-  for that send, ten seconds at most, before it is matched. In a room the bot is in, the owner's words are the
-  bot account's to read, and the reader hands none of them over.
+  for that send to end, gone out or failed, before it is matched. In a room the bot is in, the owner's words
+  are the bot account's to read, and the reader hands none of them over.
 - **What the Bot API will not fetch.** A picture or a file past the Bot API's ceiling for a bot, and a picture
   fetched after the fact for a turn that answers it, are fetched through the reader and answered as bytes.
 - **The owner's own words.** A send in the owner's voice goes out in the owner's account, never by the bot:
@@ -62,6 +62,10 @@ reader」), and it reaches nothing but the service and Telegram.
   process is gone is free.
 - **It opens the account once the service answers and the lock is its own,** asking again every two seconds
   and saying once that it waits.
+- **The connection is kept, and a flood wait is slept through.** A connection Telegram drops, or one that
+  does not open, is tried again as often as it takes, and the client's own pings tell a Telegram that has gone.
+  A request Telegram answers with a flood wait sleeps the wait it names, however long, and is asked again as
+  often as Telegram names one.
 - **The session is written by the login script,** `bun run login` in `reader/`, which asks for the phone
   number, the code Telegram sends and the account's password where one is set, and prints the session to put
   in `BMO_TG_SESSION`.

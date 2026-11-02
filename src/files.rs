@@ -155,7 +155,8 @@ impl Speaker {
   }
 
   // One part of a voice's reading, sent quietly as a reply to the voice. A long reading can meet the room's
-  // flood limit; Telegram then names the wait, and only that part is asked again after it, twice at most.
+  // flood limit; Telegram then names the wait, and only that part is asked again after it, as often as Telegram
+  // names one, until it goes.
   async fn transcript_part(&self, chat_id: i64, voice: i64, markup: &str) -> Result<(), String> {
     let body = json!({
       "chat_id": chat_id,
@@ -165,16 +166,13 @@ impl Speaker {
       "disable_notification": true,
       "link_preview_options": { "is_disabled": true },
     });
-    let mut attempt = 0;
-
     loop {
       let answered: Answered = self.call("sendMessage", &body).await.map_err(|why| why.to_string())?;
       let wait = answered.parameters.as_ref().and_then(|parameters| parameters.retry_after);
 
       match wait {
-        Some(wait) if !answered.ok && answered.error_code == Some(429) && attempt < 2 => {
+        Some(wait) if !answered.ok && answered.error_code == Some(429) => {
           tokio::time::sleep(Duration::from_secs(wait)).await;
-          attempt += 1;
         }
         _ if message_id(&answered).is_some() => return Ok(()),
         _ => {

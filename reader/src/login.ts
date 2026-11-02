@@ -16,7 +16,7 @@ if (Number.isNaN(apiId) || apiHash === "") {
 }
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
-const client = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 5 });
+const client = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: Infinity });
 
 await client.start({
   phoneNumber: () => rl.question("Phone number, with its country code (+...): "),

@@ -49,18 +49,26 @@ impl std::fmt::Display for Unanswered {
 // How long to wait before asking again where the Bot API says nothing of it.
 const AGAIN: Duration = Duration::from_secs(3);
 
-// A long poll waits this long for an update; a call is let go a little after.
-const CALL_TIMEOUT: Duration = Duration::from_secs(60);
+// How long a connection lies quiet before its other end is probed, how often a probe goes, and how many go
+// unanswered before the other end is taken as gone.
+const KEEPALIVE: Duration = Duration::from_secs(15);
+const KEEPALIVE_PROBES: u32 = 3;
+
+/// A client whose calls wait for their answer, however long, and end where the connection breaks: TCP
+/// keep-alive tells a peer that has gone from one still answering.
+pub fn kept_alive() -> reqwest::Client {
+  reqwest::Client::builder()
+    .tcp_keepalive(KEEPALIVE)
+    .tcp_keepalive_interval(KEEPALIVE)
+    .tcp_keepalive_retries(KEEPALIVE_PROBES)
+    .build()
+    .expect("a client with keep-alive always builds")
+}
 
 impl BotApi {
   pub fn new(api: impl Into<String>, token: impl Into<String>) -> Self {
-    let http = reqwest::Client::builder()
-      .timeout(CALL_TIMEOUT)
-      .build()
-      .expect("a client with a timeout always builds");
-
     Self {
-      http,
+      http: kept_alive(),
       api: api.into().trim_end_matches('/').to_owned(),
       token: token.into(),
     }

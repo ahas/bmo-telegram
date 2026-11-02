@@ -14,8 +14,9 @@ EnvironmentFile=-%h/.local/share/bmo-telegram/deploy/telegram.env
 ExecStart=%h/.local/share/bmo-telegram/deploy/bin/bmo-telegram serve
 Restart=always
 RestartSec=2
-# A stop signals the service, which takes the reading down and ends; the wait bounds it.
-TimeoutStopSec=30
+# A stop signals the service, which finishes the calls it is serving, takes the reading down and ends; the stop
+# waits for it.
+TimeoutStopSec=infinity
 
 [Install]
 WantedBy=default.target

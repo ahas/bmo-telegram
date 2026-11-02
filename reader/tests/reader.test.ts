@@ -140,7 +140,7 @@ describe("OwnSends", () => {
   });
 
   test("a send that fails settles, so nothing waits on it", async () => {
-    const sends = new OwnSends({ waitForSendMs: 60_000 });
+    const sends = new OwnSends();
 
     await expect(sends.sending(1, async () => await Promise.reject(new Error("refused")), () => [])).rejects.toThrow("refused");
     expect(await sends.isOwn(1, 1)).toBe(false);

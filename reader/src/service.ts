@@ -97,9 +97,10 @@ export function serviceAt(port: number, token: string): Service {
   const base = `http://127.0.0.1:${port}`;
   const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
 
-  // A call answered; a failure is thrown, but for a `not-ready` where the caller reads one as an answer.
+  // A call answered, however long the service takes, with no idle timer of Bun's to cut it; a failure is
+  // thrown, but for a `not-ready` where the caller reads one as an answer.
   const call = async (method: "GET" | "POST", path: string, body?: unknown, notReadyAnswers = false): Promise<Response> => {
-    const response = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const response = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), timeout: false });
 
     if (!response.ok && !(notReadyAnswers && response.status === 503)) {
       throw new Error(`the service answered ${path} with ${response.status}: ${await response.text()}`);
@@ -111,7 +112,7 @@ export function serviceAt(port: number, token: string): Service {
   return {
     reachable: async () => {
       try {
-        return (await fetch(`${base}/reader/seen`, { headers })).ok;
+        return (await fetch(`${base}/reader/seen`, { headers, timeout: false })).ok;
       } catch {
         return false;
       }

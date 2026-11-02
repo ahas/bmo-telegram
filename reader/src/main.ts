@@ -90,7 +90,7 @@ async function open(): Promise<void> {
 
 void open();
 
-// The account let go and the lock released, within the stop systemd allows.
+// The account let go and the lock released, then the process ends.
 async function stop(): Promise<void> {
   if (stopping) return;
 

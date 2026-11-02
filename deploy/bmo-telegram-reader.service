@@ -11,8 +11,8 @@ EnvironmentFile=-%h/.local/share/bmo-telegram/deploy/telegram.env
 ExecStart=%h/.bun/bin/bun reader/src/main.ts
 Restart=always
 RestartSec=2
-# The reader lets go of the account and the session lock within the stop it is given.
-TimeoutStopSec=30
+# A stop signals the reader, which lets go of the account and the session lock and ends; the stop waits for it.
+TimeoutStopSec=infinity
 
 [Install]
 WantedBy=default.target

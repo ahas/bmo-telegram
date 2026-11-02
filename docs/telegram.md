@@ -108,6 +108,10 @@ owner's account's alone (「Contacts and starting a conversation」).
 - **The bot account long-polls the Bot API.** It first asks who it is, asking again until Telegram answers,
   so a message of its own is known by its number; until then the number is read off its token. Updates are
   read one at a time, in order; one that fails is said and the next is read.
+- **A call to the Bot API waits for its answer.** The long poll is held for Telegram's own thirty seconds and
+  asked again as soon as it returns; a call ends on its answer or on a connection that breaks, and TCP
+  keep-alive on every connection tells a Telegram that has gone from one still answering. A picture fetched
+  from a web address waits the same way.
 - **The rooms the bot account listens to** are the owner's one-to-one and every room whose number the chat
   protocol carries whole, within the integers JavaScript counts exactly. A message from any other room has its
   words handed over and nothing else: no file, no picture and no expression is gathered.
@@ -155,8 +159,9 @@ owner's account's alone (「Contacts and starting a conversation」).
 Every send is one verb, answered with the message it went out as or acted on. A send Telegram turns down for
 what it asked — any answer of its in the 400s but its flood limit — is refused with the platform's own English
 reason; a send about a message Telegram no longer has, or will never let change again, is refused and marked
-`gone`. A send Telegram could not answer at all — no answer, its flood limit past what is waited out, or its
-own fault — is the send's failure, in the protocol's error shape, and is never offered again.
+`gone`. A send Telegram could not answer at all — no answer, a connection that broke, its flood limit where
+the verb does not wait it out, or its own fault — is the send's failure, in the protocol's error shape, and is
+never offered again.
 
 | Verb | What goes out |
 |---|---|
@@ -175,8 +180,8 @@ own fault — is the send's failure, in the protocol's error shape, and is never
 
 - **A file or a picture answering `replyTo`** still goes where Telegram no longer has the message it answers;
   so does a text, unpinned.
-- **Flood limits** are waited out as Telegram asks, never past a minute: an album and each part of a voice's
-  reading are asked again twice at most.
+- **Flood limits** are waited out as Telegram asks: an album and each part of a voice's reading are asked
+  again after the wait Telegram names, however long, as often as it names one, until they go.
 - **A picture named by anything but a web address or a file under the picture root** is not sent: it is
   missed as `not-an-address`, `outside-data-root` or `missing-file`. With no picture root configured, no file
   path is sent. The file and the root are both resolved to where they really stand before either is read, so a
@@ -244,7 +249,7 @@ through the reader, so the room reads it as the owner's, never as the bot's. A s
   send's echo: the note is let go and the message is not handed over, since the sender holds it already. In a
   supergroup or a channel the number answers the note; in any other room the words do, the oldest note first.
   A message from the owner that comes while a send in the owner's voice into its room is still going waits for
-  that send, ten seconds at most, before it is matched.
+  that send to end, gone out or failed, before it is matched.
 
 ## The dialect: `telegram-html`
 

@@ -1,15 +1,13 @@
 // The messages the reader's own sends went out as (docs/reader.md, 「What it is for」): the owner's words in a
 // room whose people are the reader's are handed over, but for these, which the sender holds already. Each is
 // noted by its room and the number the account gave it, for a while and up to a bound per room; a message read
-// while a send into its room is still going waits for that send before it is matched.
+// while a send into its room is still going waits for that send to end before it is matched.
 
 const keptForMs = 5 * 60_000;
 const keptPerRoom = 200;
-const waitForSendMs = 10_000;
 
 export interface OwnSendsOptions {
   now?: () => number;
-  waitForSendMs?: number;
 }
 
 export class OwnSends {
@@ -18,11 +16,9 @@ export class OwnSends {
   // By room: the sends still going, each settled once its numbers are noted or it failed.
   private readonly going = new Map<number, Set<Promise<void>>>();
   private readonly now: () => number;
-  private readonly waitMs: number;
 
   constructor(options: OwnSendsOptions = {}) {
     this.now = options.now ?? Date.now;
-    this.waitMs = options.waitForSendMs ?? waitForSendMs;
   }
 
   /** A send into `chatId` carried out by `send`, the numbers it answers noted as the reader's own. */
@@ -72,12 +68,12 @@ export class OwnSends {
   }
 
   /** Whether message `id` of `chatId` is one the reader's own sends went out as, once the sends still going
-   * into the room have settled, ten seconds at most; a match is let go. */
+   * into the room have settled, gone out or failed; a match is let go. */
   async isOwn(chatId: number, id: number): Promise<boolean> {
     const going = this.going.get(chatId);
 
     if (going !== undefined && going.size > 0) {
-      await Promise.race([Promise.all(going), Bun.sleep(this.waitMs)]);
+      await Promise.all(going);
     }
 
     const room = this.noted.get(chatId);

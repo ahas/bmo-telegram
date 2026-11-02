@@ -234,8 +234,9 @@ export async function connectReader(account: AccountConfig): Promise<Client> {
     new (mtprotoSessions().StringSession)(account.session),
     account.apiId,
     account.apiHash,
-    // A flood wait up to this long is slept through rather than raised.
-    { connectionRetries: 5, floodSleepThreshold: 120 },
+    // A connection is tried again as often as it takes, and a flood wait Telegram names is slept through,
+    // however long, the request then asked again as often as it is answered with one.
+    { connectionRetries: Infinity, requestRetries: Infinity, floodSleepThreshold: Infinity },
   );
 
   await client.connect();

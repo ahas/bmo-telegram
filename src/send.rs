@@ -9,7 +9,7 @@ use std::sync::Arc;
 use bmo_chat::{ChatFailure, ChatRefusal, ChatSend, ChatSendResult, ChatSent};
 use serde_json::{Value, json};
 
-use crate::bot_api::{Answered, BotApi};
+use crate::bot_api::{Answered, BotApi, kept_alive};
 use crate::compose::text_parts;
 use crate::policy::POLICY;
 use crate::seen::Seen;
@@ -75,7 +75,7 @@ impl Speaker {
     Self {
       api,
       sending,
-      web: reqwest::Client::new(),
+      web: kept_alive(),
       seen,
     }
   }
