@@ -2,8 +2,6 @@
 //! keeps every hand-over and says when one came, and a router served on the loopback. The sends' own stand-ins
 //! are in `speaking`.
 
-#![allow(dead_code)]
-
 pub mod speaking;
 
 use std::collections::HashMap;

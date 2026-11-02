@@ -1,7 +1,7 @@
 //! The bot account's files and voices (docs/telegram.md, 「Sends」), sent to a stand-in of the Bot API: what
 //! went to it — a file by its name, its type and its bytes' digest — and what each send answered.
 
-mod support;
+use crate::support;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

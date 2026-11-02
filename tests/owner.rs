@@ -4,7 +4,7 @@
 //! account connected, and files gathered into the albums Telegram takes by their kinds, each file's size
 //! judged and a caption's line breaks read as a form carries them.
 
-mod support;
+use crate::support;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

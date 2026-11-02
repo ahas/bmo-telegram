@@ -3,7 +3,7 @@
 //! its type and what it is — and what each send answered. Under `/hidden/` lies a page Telegram cannot fetch
 //! for itself, which only an upload reaches.
 
-mod support;
+use crate::support;
 
 use std::collections::BTreeMap;
 use std::io::Cursor;

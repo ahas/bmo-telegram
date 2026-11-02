@@ -5,9 +5,15 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
+# One test target, the harness at tests/main.rs (bmo-chat's docs/conventions.md, 「Rust builds」).
+autotests = false
 
 [dependencies]
 bmo-chat.workspace = true
 regex.workspace = true
 unicode-segmentation.workspace = true
 url.workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

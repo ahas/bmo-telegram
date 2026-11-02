@@ -5,6 +5,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
+# One test target, the harness at tests/main.rs (bmo-chat's docs/conventions.md, 「Rust builds」).
+autotests = false
 
 [dependencies]
 avif-parse.workspace = true
@@ -13,3 +15,7 @@ rav1d.workspace = true
 resvg.workspace = true
 thiserror.workspace = true
 yuv.workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

@@ -2,7 +2,7 @@
 //! its expressions, its file and its picture, gathered from a stand-in of the Bot API, past its ceiling through
 //! a stand-in of the reader, and the long poll read through to the hand-overs it makes.
 
-mod support;
+use crate::support;
 
 use std::io::Cursor;
 use std::sync::Arc;

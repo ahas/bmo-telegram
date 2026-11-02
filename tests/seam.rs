@@ -1,7 +1,7 @@
 //! The seam between the service and the reader (docs/boundary-api.md): the service's client of the reader's
 //! routes against a fake reader, and the service's routes the reader calls, over an in-memory receiver.
 
-mod support;
+use crate::support;
 
 use std::sync::{Arc, Mutex};
 

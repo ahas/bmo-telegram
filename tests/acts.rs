@@ -2,7 +2,7 @@
 //! the Bot API: what went to it, and what each act answered — done, refused, or refused as gone. The last three
 //! are posted to the provider's `/sends` route as the receiving side posts them.
 
-mod support;
+use crate::support;
 
 use bmo_chat::{ChatSend, ChatSendResult};
 use bmo_telegram::policy::POLICY;

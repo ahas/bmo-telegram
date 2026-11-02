@@ -10,7 +10,7 @@ languages = ["cargo", "bun"]
 setup = ["cd reader && bun install --frozen-lockfile"]
 
 [check]
-quick = ["layout", "dependencies"]
+quick = ["layout", "dependencies", "cargo-profile"]
 base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui"]
 
 [[check.step]]

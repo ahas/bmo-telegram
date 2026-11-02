@@ -2,7 +2,7 @@
 //! calls and the repository's own, served together and asked over HTTP as the receiving side and the reader ask
 //! them.
 
-mod support;
+use crate::support;
 
 use std::sync::{Arc, Mutex};
 
