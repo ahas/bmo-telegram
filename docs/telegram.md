@@ -165,7 +165,7 @@ never offered again.
 
 | Verb | What goes out |
 |---|---|
-| `text` | the markdown in the dialect's markup, in as many messages as it takes, the first answering `replyTo`; folded where the send asks for a fold; without a notification where `silent`; plain text where Telegram refuses the markup. A part that does not go ends the send there |
+| `text` | the markdown in the dialect's markup, in as many messages as it takes, the first answering `replyTo`; folded where the send asks for a fold and the text is long enough for one (「The fold」); without a notification where `silent`; plain text where Telegram refuses the markup. A part that does not go ends the send there |
 | `photo` | a picture by web address, or by a file path under the picture root, tried by address first and uploaded where Telegram would not fetch it, redrawn for upload where Telegram would not take it as it is; the caption in the dialect's markup, and plain where Telegram refuses the markup. A picture that does not go is refused as `no-picture-sent`, its caption and web address sent as text in its place |
 | `album` | pictures by address or handed over as files, up to ten to an album, a longer list split evenly so that no album holds one; the caption and `replyTo` with the first album; one picture left goes as a `photo`. Each picture that did not go is a `missed` picture with why, and an album none of which went is said as its caption and web addresses; where none of them went at all, the send is refused as `no-picture-sent` |
 | `document` | a file with its name |
@@ -221,7 +221,8 @@ through the reader, so the room reads it as the owner's, never as the bot's. A s
 - **The same message the bot's send makes.** The owner's account sends what the bot account would have sent
   for the same send, in the owner's name:
   - **`text`**: the markdown in the parts the dialect divides it into, each in the dialect's markup, folded
-    where the send asks for a fold, and as its plain text where Telegram refuses the markup; without a
+    where the send asks for a fold and the text is long enough for one, and as its plain text where Telegram
+    refuses the markup; without a
     notification where `silent`. The first part answers `replyTo`. A part that does not go ends the send there.
   - **`photo`**, **`document`** and **`audio`**: the one file, a document kept whole as a file whatever its
     name, a sound under the type its first bytes read as, the photo's caption in the dialect's markup.
@@ -259,13 +260,22 @@ The agent's markdown becomes Telegram's HTML. The dialect has:
 |---|---|
 | `limits` | text 4096, caption 1024 (both counted in UTF-16 units), album 10 pictures, file 20,000,000 bytes |
 | `writing` | "This room shows formatting. Write markdown as the answer-shape rulebook describes: the send path turns it into this platform's own markup and escapes what has to be escaped, so never write a tag yourself. An answer folds into an expandable quote only where its send asks for a fold." |
-| `foldable` | true: an answer whose send asks for a fold folds into an expandable quote, its lead and a short closing line left open |
+| `foldable` | true: an answer whose send asks for a fold folds into an expandable quote where it is long enough for one, its lead and a short closing line left open |
 | `convert` | markdown in, the HTML markup, the same words plain, and whether the markup says more than the plain text |
 | `parts` | the markdown divided at block boundaries into pieces each of which fits one message |
 | `fault` | an English reason where the markup is not sound HTML Telegram reads: a character left unescaped, a tag Telegram does not take, a tag left open, one closed that was never opened, two crossed, one nested where it may not be |
-| `fold` | the folded markup, or null where there is nothing worth folding |
+| `fold` | the folded markup, or null where the text is too short for a fold |
 | `visible` | what a reader sees of the markup |
 
-Whether a reply folds is the sender's decision, carried to the provider as the send's `fold`, as the fixed
+Whether a reply may fold is the sender's decision, carried to the provider as the send's `fold`, as the fixed
 protocol states it. The provider applies the dialect's fold where the send asks for one and asks no output gate
 of its own.
+
+## The fold
+
+A fold hides the body of a long message behind an expandable quote, its lead and a short closing line left
+open, so a room reads the gist and opens the rest. It is for long text only: a text past 600 UTF-16 units or
+more than eight lines folds where its send asks for a fold; a shorter text goes open however it was asked, since
+a quote that hides three sentences, or the whole message, helps nobody. A text that asked for no fold never
+folds. The dialect's own fold (the `fold` reading) answers null for a text too short, and the code's own fold,
+where nothing upstream decided, follows the same measure.

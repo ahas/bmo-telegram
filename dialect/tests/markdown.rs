@@ -1,7 +1,9 @@
 //! Markdown read into Telegram's HTML: the pairs, the blocks, the fold and the division into messages.
 
 use telegram_dialect::js::chars;
-use telegram_dialect::markdown::{code_markup, convert_markdown, markdown_parts, sent_length};
+use telegram_dialect::markdown::{
+  code_markup, convert_markdown, folded_markup, markdown_parts, sent_length,
+};
 
 fn markup(source: &str) -> String {
   convert_markdown(source).markup
@@ -54,6 +56,27 @@ fn a_long_text_folds_behind_a_quote_with_its_conclusion_open() {
     code_markup(&converted),
     Some(format!("Opening.\n\n<blockquote expandable>{body}</blockquote>\n\nThat is all."))
   );
+}
+
+#[test]
+fn a_short_text_never_folds_however_its_send_asked() {
+  let three = "The song did not come out. The run that was sent could not reach the song pipeline, so there \
+is no audio. The lyrics are kept, so it has to be taken up again from a seat that can run it.";
+  let paragraphs =
+    "First.\n\nSecond paragraph of a few words.\n\nThird paragraph, still short.\n\nThat is all.";
+
+  assert_eq!(folded_markup(&convert_markdown(three)), None);
+  assert_eq!(folded_markup(&convert_markdown(paragraphs)), None);
+  assert_eq!(code_markup(&convert_markdown(three)), None, "plain text, nothing to mark up");
+}
+
+#[test]
+fn a_long_text_asked_for_a_fold_folds_through_the_dialect_too() {
+  let body = (0..12).map(|at| format!("line {at} of the body")).collect::<Vec<_>>().join("\n");
+  let converted = convert_markdown(&format!("Opening.\n\n{body}\n\nThat is all."));
+
+  assert_eq!(folded_markup(&converted), code_markup(&converted));
+  assert!(folded_markup(&converted).is_some());
 }
 
 #[test]

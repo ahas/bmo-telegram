@@ -969,8 +969,18 @@ pub fn fold_blocks(document: &Document) -> Option<Fold> {
   })
 }
 
-/// The message folded, or none where there is too little to hide for a fold to help.
+/// Whether a text is long enough for a fold to help: past the long-text length or more lines than the fold's
+/// minimum. A shorter text never folds, however its send asked.
+pub fn long_enough_to_fold(converted: &Converted) -> bool {
+  units(&converted.plain) > LONG_TEXT_LENGTH || line_count(&converted.plain) > FOLD_MIN_LINES
+}
+
+/// The message folded, or none where it is too short for a fold, or there is too little to hide for one.
 pub fn folded_markup(converted: &Converted) -> Option<String> {
+  if !long_enough_to_fold(converted) {
+    return None;
+  }
+
   let fold = fold_blocks(&converted.document)?;
   let opened = fold
     .opening
@@ -989,9 +999,7 @@ pub fn folded_markup(converted: &Converted) -> Option<String> {
 /// is long enough for one, the converted markup where it carries formatting, and none — the plain text —
 /// otherwise. Markup the structure check refuses is never it.
 pub fn code_markup(converted: &Converted) -> Option<String> {
-  let long = units(&converted.plain) > LONG_TEXT_LENGTH || line_count(&converted.plain) > FOLD_MIN_LINES;
-  let folded = if long { folded_markup(converted) } else { None };
-  let chosen = folded.or_else(|| converted.formatted.then(|| converted.markup.clone()));
+  let chosen = folded_markup(converted).or_else(|| converted.formatted.then(|| converted.markup.clone()));
 
   chosen.filter(|chosen| markup_fault(chosen).is_none())
 }

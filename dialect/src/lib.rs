@@ -19,7 +19,7 @@ pub const FILE_LIMIT: u64 = 20_000_000;
 /// The sentence a writer in a room of this dialect is told.
 pub const WRITING: &str = "This room shows formatting. Write markdown as the answer-shape rulebook describes: \
 the send path turns it into this platform's own markup and escapes what has to be escaped, so never write a tag \
-yourself. An answer folds into an expandable quote only where its send asks for a fold.";
+yourself. An answer folds into an expandable quote only where its send asks for a fold and it is long.";
 
 /// Telegram's HTML parse mode, as bmo-chat's contract states a dialect.
 #[derive(Debug, Clone, Copy, Default)]

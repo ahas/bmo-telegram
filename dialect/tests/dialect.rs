@@ -18,7 +18,7 @@ fn the_dialect_declares_telegram_s_limits_and_folds() {
     declared
       .writing
       .contains("folds into an expandable quote only where its send asks for a fold"),
-    "the writer is told the fold is asked, never decided by length"
+    "the writer is told a fold is asked for, and made only where the text is long"
   );
 }
 

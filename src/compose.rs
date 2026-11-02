@@ -1,6 +1,7 @@
 //! The form a text or a caption goes out in on Telegram (docs/telegram.md, 「Sends」): the markdown divided into
 //! the parts one message holds, each read into its HTML and its plain text by the `telegram-html` dialect, and
-//! folded where the send asks for a fold. Whether to fold is decided upstream; the dialect only carries it out.
+//! folded where the send asks for a fold and the text is long enough for one (docs/telegram.md, 「The fold」).
+//! Whether a fold may be made is decided upstream; the dialect measures the text and carries the fold out.
 
 use telegram_dialect::format::markup_fault;
 use telegram_dialect::markdown::{Converted, convert_markdown, folded_markup, telegram_parts};
@@ -13,7 +14,7 @@ pub struct Part {
   pub plain: String,
 }
 
-// The markup a part goes out as: the fold where one is asked for and there is one worth making, the
+// The markup a part goes out as: the fold where one is asked for and the text is long enough for one, the
 // conversion where it says more than the plain text, and none where neither is sound.
 fn markup_of(converted: &Converted, fold: bool) -> Option<String> {
   let folded = fold.then(|| folded_markup(converted)).flatten();
