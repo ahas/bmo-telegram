@@ -178,6 +178,10 @@ never offered again.
 | `edit` | the message's words; an edit to the words the message already says is no failure |
 | `delete` | the message |
 
+- **The configured sticker set is the deployment's emotion set.** It holds one sticker for each emotion,
+  entered with the emoji that stands for that emotion, so a sticker send's emoji asks for that emotion's
+  sticker; a set may hold more than one for a feeling, and one of them is picked. A changed emotion list
+  wants a new set, named in `BMO_TELEGRAM_STICKER_SET` (`docs/boundary-api.md`, 「Configuration」).
 - **A file or a picture answering `replyTo`** still goes where Telegram no longer has the message it answers;
   so does a text, unpinned.
 - **Flood limits** are waited out as Telegram asks: an album and each part of a voice's reading are asked
