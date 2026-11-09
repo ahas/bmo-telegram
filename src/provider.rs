@@ -21,7 +21,10 @@ use tokio::task::{JoinHandle, JoinSet};
 
 use crate::owner::OwnerVoice;
 use crate::policy::POLICY;
-use crate::reader::{ReaderClient, ReaderContact, ReaderFetch, ReaderHealth, ReaderRoom, ReaderStart};
+use crate::reader::{
+  ReaderClient, ReaderContact, ReaderFetch, ReaderHealth, ReaderMessage, ReaderRead, ReaderRoom,
+  ReaderStart,
+};
 use crate::seam::Standing;
 use crate::seen::Seen;
 use crate::send::{Sending, Speaker, refused};
@@ -32,6 +35,67 @@ pub const NO_READER: &str = "no reader stands behind the service";
 
 // How many rooms Telegram is asked about at once when the rooms are listed.
 const ASKED_AT_ONCE: usize = 8;
+
+/// What a chat read came to: its recent messages, the chats and contacts a name leaves to pick among, or the
+/// reader's refusal with the status it answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadAnswer {
+  Messages(Vec<ReaderMessage>),
+  Candidates(Vec<ReaderCandidate>),
+  Refused { status: u16, reason: String },
+}
+
+/// One chat or contact a name could mean, so the owner picks among them by number.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderCandidate {
+  pub chat_id: i64,
+  pub name: String,
+  pub kind: String,
+}
+
+// The chats and contacts a name could mean: those whose title or name holds the words asked, else every one
+// listed, each chat once, so the owner picks by number.
+fn candidates_for(
+  wanted: &str,
+  dialogs: &[ReaderRoom],
+  contacts: &[ReaderContact],
+) -> Vec<ReaderCandidate> {
+  let wanted = wanted.trim().to_lowercase();
+  let mut candidates = Vec::new();
+
+  for room in dialogs {
+    let name = room
+      .title
+      .clone()
+      .filter(|title| !title.trim().is_empty())
+      .unwrap_or_else(|| format!("chat {}", room.chat_id));
+
+    candidates.push(ReaderCandidate {
+      chat_id: room.chat_id,
+      name,
+      kind: "room".to_owned(),
+    });
+  }
+
+  for contact in contacts {
+    candidates.push(ReaderCandidate {
+      chat_id: contact.chat_id.unwrap_or(contact.id),
+      name: contact.name.clone(),
+      kind: "contact".to_owned(),
+    });
+  }
+
+  let matching: Vec<ReaderCandidate> = candidates
+    .iter()
+    .filter(|candidate| candidate.name.to_lowercase().contains(&wanted))
+    .cloned()
+    .collect();
+  let chosen = if matching.is_empty() { candidates } else { matching };
+  let mut seen = BTreeSet::new();
+
+  chosen.into_iter().filter(|candidate| seen.insert(candidate.chat_id)).collect()
+}
 
 /// The provider: the bot account, how it speaks, the reader behind it and where each of the reader's parts
 /// stands.
@@ -125,6 +189,38 @@ impl TelegramProvider {
     };
 
     reader.contacts().await
+  }
+
+  /// One chat's recent messages on the owner's word, read through the reader without a room standing for it;
+  /// or, where the chat is named by a person or a handle rather than a number, the chats and contacts that name
+  /// could mean, so the owner picks. Nothing is sent into the chat.
+  pub async fn read_messages(&self, chat: &str, max: usize, since: Option<i64>) -> ReadAnswer {
+    let Some(reader) = &self.reader else {
+      return ReadAnswer::Refused {
+        status: 503,
+        reason: NO_READER.to_owned(),
+      };
+    };
+    let chat = chat.trim();
+
+    if let Ok(chat_id) = chat.parse::<i64>() {
+      return match reader.messages(chat_id, max, since).await {
+        Ok(ReaderRead::Messages(messages)) => ReadAnswer::Messages(messages),
+        Ok(ReaderRead::Refused { status, reason }) => ReadAnswer::Refused { status, reason },
+        Err(why) => ReadAnswer::Refused {
+          status: 503,
+          reason: why,
+        },
+      };
+    }
+
+    match (reader.dialogs().await, reader.contacts().await) {
+      (Ok(dialogs), Ok(contacts)) => ReadAnswer::Candidates(candidates_for(chat, &dialogs, &contacts)),
+      (Err(why), _) | (_, Err(why)) => ReadAnswer::Refused {
+        status: 503,
+        reason: why,
+      },
+    }
   }
 
   // Whether the bot is in each of `chat_ids`, Telegram asked `ASKED_AT_ONCE` rooms at a time; a room whose asking

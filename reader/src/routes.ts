@@ -4,12 +4,14 @@
 // the seam's token.
 
 import { fetchFile, fetchPicture } from "./media";
+import { ChatUnresolved, DEFAULT_MAX, LARGEST_MAX } from "./messages";
 import { ownerRefusalName } from "./owner";
 
 import type { TelegramClient } from "telegram";
 import type { AccountContact, StartAsked, StartOutcome } from "./contacts";
 import type { AccountRoom } from "./dialogs";
 import type { Peers } from "./media";
+import type { MessagesAsked, RecentMessage } from "./messages";
 import type { AvatarKind } from "./store";
 import type { OwnerAccount } from "./owner";
 
@@ -33,6 +35,8 @@ export interface RoutesDeps {
   start: (client: TelegramClient, asked: StartAsked) => Promise<StartOutcome>;
   // Every profile picture the reader keeps.
   avatars: () => KeptAvatar[];
+  // One chat's recent messages, newest first, without a room standing for it.
+  messages: (client: TelegramClient, asked: MessagesAsked) => Promise<RecentMessage[]>;
   // Why the account is not connected, where it is not.
   missing: () => string | null;
 }
@@ -196,6 +200,36 @@ export function readerHandler(deps: RoutesDeps): (request: Request) => Promise<R
       try {
         return json({ contacts: await deps.contacts(client) });
       } catch (error) {
+        return failure("failed", error instanceof Error ? error.message : String(error), 500);
+      }
+    }
+
+    if (request.method === "GET" && pathname === "/reader/messages") {
+      const query = new URL(request.url).searchParams;
+      const rawChat = query.get("chat");
+      const rawMax = query.get("max");
+      const rawSince = query.get("since");
+      const chatId = rawChat === null || rawChat.trim() === "" ? Number.NaN : Number(rawChat);
+      const max = rawMax === null ? DEFAULT_MAX : Number(rawMax);
+      const since = rawSince === null || rawSince.trim() === "" ? null : Number(rawSince);
+
+      if (!Number.isSafeInteger(chatId)) return failure("bad-request", "chat (a whole number) is required", 400);
+      if (!Number.isSafeInteger(max) || max < 1 || max > LARGEST_MAX) {
+        return failure("bad-request", `max must be a whole number from 1 to ${LARGEST_MAX}`, 400);
+      }
+      if (since !== null && (!Number.isSafeInteger(since) || since < 0)) {
+        return failure("bad-request", "since must be epoch milliseconds", 400);
+      }
+
+      const client = deps.client();
+
+      if (client === null) return failure("not-ready", notConnected(), 503);
+
+      try {
+        return json({ messages: await deps.messages(client, { chatId, max, since }) });
+      } catch (error) {
+        if (error instanceof ChatUnresolved) return failure("not-found", error.message, 404);
+
         return failure("failed", error instanceof Error ? error.message : String(error), 500);
       }
     }

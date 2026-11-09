@@ -3,6 +3,7 @@
 //! started with them, a picture or a file the Bot API will not hand the bot, and a send in the owner's own voice.
 
 use bmo_chat::{ChatAvatar, ChatAvatarKind, ChatStart, FileItem, MessageFile};
+use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::compose::Part;
@@ -46,6 +47,25 @@ pub enum ReaderStart {
   Started { chat_id: i64, title: Option<String> },
   NoContact(i64),
   Refused(String),
+}
+
+/// One line of a chat read through the owner's account: its number, who said it, when, and what it says. A
+/// picture, file, sound or other non-text carries the placeholder its kind stands under in `text`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderMessage {
+  pub message_id: i64,
+  pub sender_id: Option<i64>,
+  pub sender_name: String,
+  pub sent_at: i64,
+  pub text: String,
+}
+
+/// What reading one chat came to: its recent messages, newest first, or why the reader refused it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReaderRead {
+  Messages(Vec<ReaderMessage>),
+  Refused { status: u16, reason: String },
 }
 
 /// What a fetch through the owner's account came to: the file, a reason it could not be had, or no account
@@ -231,6 +251,57 @@ impl ReaderClient {
         })
       })
       .collect()
+  }
+
+  /// One chat's recent messages, newest first, read through the owner's account without a room standing for it;
+  /// a chat the account cannot resolve is refused with the reader's reason.
+  pub async fn messages(&self, chat_id: i64, max: usize, since: Option<i64>) -> Result<ReaderRead, String> {
+    let mut route = format!("/reader/messages?chat={chat_id}&max={max}");
+
+    if let Some(since) = since {
+      route.push_str(&format!("&since={since}"));
+    }
+
+    let answer = self.wire.get(&route).await?;
+
+    if !answer.ok() {
+      return Ok(ReaderRead::Refused {
+        status: answer.status,
+        reason: answer.reason(),
+      });
+    }
+
+    let messages = answer
+      .body
+      .get("messages")
+      .and_then(Value::as_array)
+      .ok_or_else(|| "the reader's /reader/messages answered no list of messages".to_owned())?;
+
+    messages
+      .iter()
+      .map(|one| {
+        let message_id = one
+          .get("messageId")
+          .and_then(Value::as_i64)
+          .ok_or_else(|| "the reader answered a message with no number".to_owned())?;
+        let sender_id = one.get("senderId").and_then(Value::as_i64);
+        let sender_name = one.get("senderName").and_then(Value::as_str).unwrap_or_default().to_owned();
+        let sent_at = one
+          .get("sentAt")
+          .and_then(Value::as_i64)
+          .ok_or_else(|| "the reader answered a message with no moment".to_owned())?;
+        let text = one.get("text").and_then(Value::as_str).unwrap_or_default().to_owned();
+
+        Ok(ReaderMessage {
+          message_id,
+          sender_id,
+          sender_name,
+          sent_at,
+          text,
+        })
+      })
+      .collect::<Result<Vec<_>, String>>()
+      .map(ReaderRead::Messages)
   }
 
   /// A conversation started on the owner's account; a reader that does not answer, or answers no outcome, is

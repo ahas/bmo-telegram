@@ -5,16 +5,18 @@
 use std::sync::Arc;
 
 use axum::Router;
-use axum::extract::{Request, State};
+use axum::extract::{Query, Request, State};
 use axum::http::header::AUTHORIZATION;
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
 use bmo_chat::{ChatHealth, ChatProvider, ErrorCode, WireError, provider_router};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 
-use crate::provider::TelegramProvider;
+use crate::provider::{ReadAnswer, TelegramProvider};
+use crate::read::{DEFAULT_MAX, LARGEST_MAX};
 use crate::seam::{Seam, seam_router};
 
 /// Why a route that takes the token was asked without it.
@@ -43,6 +45,7 @@ pub fn service(provider: Arc<TelegramProvider>, seam: Arc<Seam>) -> Router {
 fn own_routes(served: Arc<Served>) -> Router {
   Router::new()
     .route("/status", get(status))
+    .route("/messages", get(messages))
     .layer(from_fn_with_state(served.clone(), authorized))
     .with_state(served)
 }
@@ -79,6 +82,42 @@ fn standing(active: bool, reason: Option<String>) -> Value {
     "standing": if active { "active" } else { "inactive" },
     "reason": reason,
   })
+}
+
+/// What one chat read is asked for: the chat by its number or by a name, how many messages at most, and the
+/// earliest moment it asks for.
+#[derive(Deserialize)]
+struct MessagesQuery {
+  chat: String,
+  max: Option<usize>,
+  since: Option<i64>,
+}
+
+/// One chat's recent messages on the owner's word, read through the reader without a room standing for it and
+/// nothing sent into the chat; or, where the chat is named by a person or a handle, the chats and contacts that
+/// name could mean, so the owner picks.
+async fn messages(State(served): State<Arc<Served>>, Query(asked): Query<MessagesQuery>) -> Response {
+  let chat = asked.chat.trim();
+
+  if chat.is_empty() {
+    return failure(ErrorCode::BadRequest, "chat is required".to_owned());
+  }
+
+  let max = asked.max.unwrap_or(DEFAULT_MAX).clamp(1, LARGEST_MAX);
+
+  match served.provider.read_messages(chat, max, asked.since).await {
+    ReadAnswer::Messages(messages) => Json(json!({ "messages": messages })).into_response(),
+    ReadAnswer::Candidates(candidates) => Json(json!({ "candidates": candidates })).into_response(),
+    ReadAnswer::Refused { status, reason } => {
+      let code = match status {
+        404 => ErrorCode::NotFound,
+        503 => ErrorCode::NotReady,
+        _ => ErrorCode::Failed,
+      };
+
+      failure(code, reason)
+    }
+  }
 }
 
 /// What stands of each part: the bot account, the reader, the history walk and the word of changed profile

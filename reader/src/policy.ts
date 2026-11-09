@@ -16,7 +16,17 @@ export interface ReaderPolicy {
     audio_extensions: Record<string, string>;
     video_extensions: Record<string, string>;
   };
-  kinds: { photo: string; sticker: string; video: string; video_note: string; gif: string; document: string; unnamed_file: string };
+  kinds: {
+    photo: string;
+    sticker: string;
+    video: string;
+    video_note: string;
+    gif: string;
+    voice: string;
+    audio: string;
+    document: string;
+    unnamed_file: string;
+  };
 }
 
 export const POLICY = policy as unknown as ReaderPolicy;

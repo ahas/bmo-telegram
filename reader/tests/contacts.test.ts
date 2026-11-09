@@ -160,6 +160,7 @@ function served(connected: boolean, asked: StartAsked[]): ReturnType<typeof Bun.
         return { outcome: "started", chatId: 501, title: "Ann Lee" };
       },
       avatars: () => [],
+      messages: async () => [],
       missing: () => "the account's values are not set",
     }),
   });

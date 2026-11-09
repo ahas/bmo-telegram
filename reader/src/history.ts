@@ -119,7 +119,7 @@ export function historyRooms(named: readonly HistoryRoom[], ownerId: number): Hi
     : [...named, { chatId: ownerId, oldestMessageId: null, oldestSentAt: null }];
 }
 
-function senderNameOf(sender: unknown, fallback: string): string {
+export function senderNameOf(sender: unknown, fallback: string): string {
   if (sender instanceof mtproto().Api.User) {
     return sender.firstName ?? sender.username ?? fallback;
   }
@@ -133,7 +133,7 @@ function senderNameOf(sender: unknown, fallback: string): string {
 
 // The number of the one who said a line: the owner's for the account's own, as the bot account knows the
 // owner, and the sender's own number for anyone else's.
-function senderIdOf(message: Api.Message, peers: Peers): number | null {
+export function senderIdOf(message: Api.Message, peers: Peers): number | null {
   if (message.out === true) {
     return peers.ownerId;
   }

@@ -42,6 +42,8 @@ const MADE_GROUP: i64 = -4_000_001;
 const OTHER_ROOM: i64 = -200;
 // A room nobody lists and the bot is not in.
 const UNKNOWN_ROOM: i64 = -300;
+// A chat number the stand-in reader's account cannot resolve.
+const UNREADABLE_CHAT: i64 = 999;
 // A room the bot is in that the owner's account does not list, seen by the provider.
 const BOT_ROOM: i64 = -400;
 // A room the provider has seen that the bot is no longer in and the owner's account does not list.
@@ -159,6 +161,31 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
           { "id": BOT, "name": "Helper", "bot": true, "chatId": OWNER }
         ] }))
       }),
+    )
+    .route(
+      "/reader/messages",
+      get(
+        |axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>| async move {
+          match query.get("chat").and_then(|chat| chat.parse::<i64>().ok()) {
+            Some(chat) if chat == UNREADABLE_CHAT => (
+              StatusCode::NOT_FOUND,
+              Json(json!({ "code": "not-found", "error": format!("the owner's account cannot resolve chat {chat}") })),
+            )
+              .into_response(),
+            Some(_) => Json(json!({ "messages": [
+              { "messageId": 3, "senderId": PERSON, "senderName": "Someone", "sentAt": SENT_AT + 2_000, "text": "the newest" },
+              { "messageId": 2, "senderId": PERSON, "senderName": "Someone", "sentAt": SENT_AT + 1_000, "text": "[Photo]" },
+              { "messageId": 1, "senderId": Value::Null, "senderName": "unknown", "sentAt": SENT_AT, "text": "the oldest" }
+            ] }))
+            .into_response(),
+            None => (
+              StatusCode::BAD_REQUEST,
+              Json(json!({ "code": "bad-request", "error": "chat (a whole number) is required" })),
+            )
+              .into_response(),
+          }
+        },
+      ),
     )
     .route(
       "/reader/start",
@@ -841,4 +868,50 @@ async fn the_seam_stands_beside_the_provider_routes() {
   assert_eq!(status, 200);
   assert_eq!(room["owns"], true);
   assert_eq!(room["kind"], "group");
+}
+
+/// One chat's recent messages are read through the service and the reader without a room: newest first, a
+/// picture as its placeholder, an unresolved chat refused with the reason, and no reader behind the service
+/// not ready rather than reading a chat as the bot.
+#[tokio::test]
+async fn one_chats_recent_messages_are_read_without_a_room() {
+  let served = stood(true).await;
+
+  let (status, answer) = asked_get(&served.base, &format!("/messages?chat={PERSON}&max=3")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(
+    answer["messages"],
+    json!([
+      { "messageId": 3, "senderId": PERSON, "senderName": "Someone", "sentAt": SENT_AT + 2_000, "text": "the newest" },
+      { "messageId": 2, "senderId": PERSON, "senderName": "Someone", "sentAt": SENT_AT + 1_000, "text": "[Photo]" },
+      { "messageId": 1, "senderId": null, "senderName": "unknown", "sentAt": SENT_AT, "text": "the oldest" }
+    ])
+  );
+
+  let (status, refused) = asked_get(&served.base, &format!("/messages?chat={UNREADABLE_CHAT}")).await;
+
+  assert_eq!(status, 404);
+  assert_eq!(refused["code"], "not-found");
+  assert!(refused["error"].as_str().unwrap_or_default().contains("cannot resolve chat"));
+
+  let down = stood(false).await;
+  let (status, refused) = asked_get(&down.base, "/messages?chat=55").await;
+
+  assert_eq!(status, 503);
+  assert_eq!(refused["code"], "not-ready");
+}
+
+/// A chat named by a person or a handle is answered with the chats and contacts that name could mean, so the
+/// owner picks among them by number.
+#[tokio::test]
+async fn a_chat_named_by_a_person_answers_the_candidates() {
+  let served = stood(true).await;
+
+  let (status, answer) = asked_get(&served.base, "/messages?chat=Someone").await;
+
+  assert_eq!(status, 200);
+  assert_eq!(answer["candidates"][0]["chatId"], PERSON);
+  assert_eq!(answer["candidates"][0]["name"], "Someone");
+  assert_eq!(answer["candidates"][0]["kind"], "room");
 }

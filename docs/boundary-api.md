@@ -57,9 +57,14 @@ Beside the protocol, under the same token and the protocol's conventions and err
 | Route | Answer |
 |---|---|
 | `GET /status` | what stands of each part, each a `standing` (`active` or `inactive`) and a `reason` (an English sentence, or null): `bot`, `reader`, `history`, `avatars` |
+| `GET /messages` | query `chat` (a number, or a name or a handle), `max` (1 to 200, 50 where absent), `since` (epoch milliseconds, or absent): one chat's recent messages, asked of the reader, newest first; where the chat is named by a person or a handle, `candidates`, each `chatId`, `name` and `kind` (`room` or `contact`), for the owner to pick among; 404 `not-found` with the reason where the account cannot resolve the chat, 503 `not-ready` with the reason while the reader does not answer |
 
 The status route is for the provider's own operators; no other unit reads it, and it is not part of the fixed
-API (`docs/api.md`).
+API (`docs/api.md`). The read route is the supervisor's road to one chat's recent messages:
+`bmo-telegram messages --chat <number-or-name> [--max <n>] [--since <epoch ms>]` asks it on the owner's word
+alone. It refuses a turn the receiver did not mark the owner's, saying that no grant in force names reading a
+chat, and it never sends anything into the chat. A chat named by a person or a handle answers the owner's
+account's chats and contacts that name could mean, so the owner picks one by number.
 
 ## Calls made on the receiver
 
@@ -109,6 +114,7 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `GET /reader/dialogs` | | `rooms`, each `chatId` and `title` (string or null): every chat the owner's account is in, numbered as the service numbers it; 503 `not-ready` with the reason while the account is not connected |
 | `GET /reader/contacts` | | `contacts`, each `id`, `name`, `bot` (boolean) and `chatId` (number or null, the one-to-one the account has with it): the account's contact list; 503 `not-ready` with the reason while the account is not connected |
 | `POST /reader/start` | `contactId`, or `title` and `contactIds` | `outcome`: `started` with `chatId` and `title`; `no-contact` with `contactId`; `refused` with `reason`, Telegram's own words; 503 `not-ready` with the reason while the account is not connected |
+| `GET /reader/messages` | query `chat` (a number), `max` (1 to 200, 50 where absent), `since` (epoch milliseconds, or absent) | `messages`, each `messageId`, `senderId` (number or null), `senderName`, `sentAt` (epoch milliseconds) and `text`, newest first, a non-text line carrying its kind's placeholder; 404 `not-found` with the reason where the account cannot resolve the chat; 503 `not-ready` with the reason while the account is not connected |
 | `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null) | `outcome`: `fetched` with `id`, `name`, `mime`, `bytes`, a message file under the owner's account's id; `unavailable` with `reason`; `no-reader` with `reason` |
 | `POST /reader/file` | `chatId`, `messageId`, `sentAt` | the same outcomes |
 | `POST /owner/say` | `chatId`, `text` (the plain words), `markup` (the dialect's HTML, or null), `silent` (boolean), `replyToMessageId` (number or null) | `messageId` and `text`, the words as Telegram holds them; or `refused` (`unavailable` or `unreachable`) with `error` |

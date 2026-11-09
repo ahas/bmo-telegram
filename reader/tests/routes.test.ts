@@ -37,6 +37,7 @@ const server = Bun.serve({
     contacts: async () => [],
     start: async () => ({ outcome: "refused", reason: "never asked" }),
     avatars: () => [{ kind: "person", id: 55, takenAt: 1_700_000_000_000 }],
+    messages: async () => [],
     missing: () => "the account's values are not set",
   }),
 });

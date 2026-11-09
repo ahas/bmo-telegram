@@ -61,6 +61,7 @@ function served(connected: boolean): ReturnType<typeof Bun.serve> {
       contacts: async () => [],
       start: async () => ({ outcome: "refused", reason: "never asked" }),
       avatars: () => [],
+      messages: async () => [],
       missing: () => "the account's values are not set",
     }),
   });

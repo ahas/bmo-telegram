@@ -32,6 +32,8 @@ reader」), and it reaches nothing but the service and Telegram.
 - **Contacts and conversations started.** The account's contacts are listed, and a one-to-one or a group with
   them is started in the owner's account, which the bot cannot do (「Contacts and starting a conversation」).
 - **History.** The past messages of the rooms the receiver names are walked back and handed over as history.
+- **One chat's recent messages.** A dialog is read by its number for the supervisor's road, newest first,
+  without a room standing for it and without touching the history walk or the record.
 - **Profile pictures.** The pictures of every room and every sender the provider has seen are kept current.
 
 ## What it hands over
@@ -139,6 +141,22 @@ reader」), and it reaches nothing but the service and Telegram.
   reaches no further back than the room's live reading: what the walk handed over below the receiver's first
   message stands under the walk's numbers, and a fill reaching it would hand it over again. The walk's
   progress is left as it stands.
+
+## One chat's recent messages
+
+- **A route on the live account:** `GET /reader/messages?chat=<id>&max=<n>&since=<epoch ms>` answers one
+  dialog's recent messages, newest first, from the connection the reader already holds; no second MTProto
+  connection is opened.
+- **Each line** carries the message's number, the sender's number and the name the account shows, the moment in
+  epoch milliseconds, and the words. A message that is not words alone carries the placeholder its kind stands
+  under in `policy/telegram.toml`: a picture, a file, a sound, a voice note or any other non-text.
+- **`max`** is how many lines at most, fifty where none is named and two hundred the most; **`since`** is the
+  earliest moment in epoch milliseconds, and no line older than it is answered.
+- **A chat number the account cannot resolve is refused** `not-found` with the reason, rather than read as a
+  search over every chat the account is in.
+- **While the account is not connected** the route answers 503 `not-ready` with the reason the health gives.
+- **No room is made and nothing is sent.** The route reads and answers; the dialog list, the history walk and
+  the record of what was seen are left as they stand.
 
 ## Profile pictures
 

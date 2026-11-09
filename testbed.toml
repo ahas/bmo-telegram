@@ -57,3 +57,15 @@ env_links = [{ link = "telegram.env", target = "env/telegram.env" }]
 units = ["deploy/*.service"]
 # Answers 0 once the service's own /health says ready, in the environment the release links.
 health = "set -a; . ~/.local/share/bmo-telegram/deploy/telegram.env; ~/.local/share/bmo-telegram/deploy/bin/bmo-telegram health"
+
+# The unit command, linked into the folder holding `bmo`, the first folder `bmo` looks for unit commands in, so
+# `bmo telegram messages …` reaches the service's own read road. The link names this repository's deploy tree,
+# whose own link stands across releases.
+[[deploy.step]]
+id = "link-unit-command"
+phase = "before-flip"
+command = '''
+set -eu
+bmo_dir="$(dirname "$(command -v bmo)")"
+ln -sfn "$HOME/.local/share/bmo-telegram/deploy/bin/bmo-telegram" "$bmo_dir/bmo-telegram"
+'''
