@@ -12,7 +12,6 @@ mod owner;
 mod personal_data;
 mod picture_sends;
 mod policy;
-mod read;
 mod reading;
 mod repository;
 mod seam;

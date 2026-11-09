@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "chat": {
+      "description": "The chat: its number, or the name or handle the owner's account shows it by.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "max": {
+      "description": "How many messages at most, newest first; 50 where absent, 200 the most.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "since": {
+      "description": "Only messages sent at or after this moment, in epoch milliseconds.",
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "chat"
+  ],
+  "type": "object"
+}

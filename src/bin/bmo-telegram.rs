@@ -11,7 +11,6 @@ use bmo_chat::{ChatProvider, ChatReceiver, ChatReceiverLink};
 use bmo_telegram::config::Config;
 use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::provider::TelegramProvider;
-use bmo_telegram::read;
 use bmo_telegram::reader::ReaderClient;
 use bmo_telegram::routes::{keep_reader_current, service};
 use bmo_telegram::seam::{Seam, Standing};
@@ -37,19 +36,6 @@ enum Command {
   Serve,
   /// Whether the served service answers ready: exit code 0 where it does, 1 where it does not.
   Health,
-  /// One chat's recent messages through the owner's account, on the owner's word alone and read-only; a chat
-  /// named by a person or a handle answers the chats and contacts that name could mean instead.
-  Messages {
-    /// The chat: its number, or the name or handle the owner's account shows it by.
-    #[arg(long)]
-    chat: String,
-    /// How many messages at most, newest first.
-    #[arg(long, default_value_t = read::DEFAULT_MAX)]
-    max: usize,
-    /// Only messages sent at or after this moment, in epoch milliseconds.
-    #[arg(long)]
-    since: Option<i64>,
-  },
 }
 
 // The stop the served routes answer to: the signal the unit sends, either of them once.
@@ -165,58 +151,6 @@ async fn health() -> Result<(), String> {
   }
 }
 
-/// One chat's recent messages, read through the served service on the owner's word alone: the lines newest
-/// first, or the chats and contacts a name could mean so the owner picks. Nothing is sent into the chat.
-async fn messages(chat: &str, max: usize, since: Option<i64>) -> Result<(), String> {
-  read::owner_admitted(&read::turn_variables())?;
-
-  let config = Config::from_environment();
-
-  if config.token.is_empty() {
-    return Err("BMO_TELEGRAM_TOKEN is not set".to_owned());
-  }
-
-  let max = max.clamp(1, read::LARGEST_MAX);
-  let mut query = url::form_urlencoded::Serializer::new(String::new());
-
-  query.append_pair("chat", chat).append_pair("max", &max.to_string());
-
-  if let Some(since) = since {
-    query.append_pair("since", &since.to_string());
-  }
-
-  let route = format!("/messages?{}", query.finish());
-  let answer = Wire::loopback(config.port, config.token).get(&route).await?;
-
-  if !answer.ok() {
-    return Err(answer.reason());
-  }
-
-  if answer.body.get("candidates").is_some() {
-    let candidates = read::candidates_of(&answer.body)?;
-
-    if candidates.is_empty() {
-      println!("no chat or contact is named {chat}");
-
-      return Ok(());
-    }
-
-    println!("no chat is read from that name alone; pick one by its number:");
-
-    for candidate in &candidates {
-      println!("{}", read::candidate_line(candidate));
-    }
-
-    return Ok(());
-  }
-
-  for message in &read::messages_of(&answer.body)? {
-    println!("{}", read::message_line(message));
-  }
-
-  Ok(())
-}
-
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
   let cli = Cli::parse();
@@ -224,7 +158,6 @@ async fn main() -> ExitCode {
   let ended = match cli.command {
     Command::Serve => serve().await.map(|()| 0),
     Command::Health => health().await.map(|()| 0),
-    Command::Messages { chat, max, since } => messages(&chat, max, since).await.map(|()| 0),
   };
 
   match ended {

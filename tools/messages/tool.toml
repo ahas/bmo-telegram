@@ -1,0 +1,22 @@
+# The provider's hosted tool (docs/tools.md): one chat's recent messages through the running service on the
+# owner's word alone. A call waits for the service's answer however long it takes.
+
+[tool]
+name = "messages"
+protocol = 1
+language = "rust"
+build = 'cargo build --release -p messages-tool && cp "$BMO_CARGO_TARGET/release/messages-tool" "$BMO_TOOL_OUT/"'
+check = 'cargo test -p messages-tool'
+run = ["messages-tool"]
+timeout = 60
+
+[[entry]]
+namespace = "bmo"
+name = "telegram_messages"
+description = "Read one chat's recent messages through the owner's account, newest first: each line the moment, the sender's name and number, and the words or a placeholder for a picture, file, sound or other non-text. Refused outside the owner's word alone or for a chat the account cannot resolve, and nothing is sent into the chat. Where a name could mean several chats or contacts, the answer lists the candidates by number and name so the owner picks."
+manual = "manual.md"
+input = "messages.json"
+capabilities = ["room.tools"]
+
+[entry.hints]
+read_only = true

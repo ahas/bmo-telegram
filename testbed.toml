@@ -9,6 +9,10 @@ name = "telegram"
 languages = ["cargo", "bun"]
 setup = ["cd reader && bun install --frozen-lockfile"]
 
+# The provider's hosted tool, found by its tool.toml and checked by the command the manifest names.
+[tools]
+dir = "tools"
+
 [check]
 quick = ["layout", "dependencies", "cargo-profile", "shared-versions"]
 base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui"]
@@ -42,9 +46,9 @@ dir = "reader"
 when = ["reader/**", "policy/**"]
 
 [build]
-# The service's binary; the reader is a bun package run from the release's reader/, which the setup steps
-# install, not a Cargo binary.
-binaries = ["bmo-telegram"]
+# The service's binary and the hosted tool's executable; the reader is a bun package run from the release's
+# reader/, which the setup steps install, not a Cargo binary.
+binaries = ["bmo-telegram", "messages-tool"]
 
 # The provider's deploy tree, and the data root it shares with the services that read its files. The env file
 # both processes read is linked into the release (docs/boundary-api.md, 「Configuration」); the service's unit
@@ -58,14 +62,25 @@ units = ["deploy/*.service"]
 # Answers 0 once the service's own /health says ready, in the environment the release links.
 health = "set -a; . ~/.local/share/bmo-telegram/deploy/telegram.env; ~/.local/share/bmo-telegram/deploy/bin/bmo-telegram health"
 
-# The unit command, linked into the folder holding `bmo`, the first folder `bmo` looks for unit commands in, so
-# `bmo telegram messages …` reaches the service's own read road. The link names this repository's deploy tree,
-# whose own link stands across releases.
+# The tool placed in its folder's .placed/, the folder the tool host reads: the executable the release's bin/
+# holds, its manifest, the schema and the manual beside it.
 [[deploy.step]]
-id = "link-unit-command"
+id = "place-tools"
 phase = "before-flip"
 command = '''
 set -eu
-bmo_dir="$(dirname "$(command -v bmo)")"
-ln -sfn "$HOME/.local/share/bmo-telegram/deploy/bin/bmo-telegram" "$bmo_dir/bmo-telegram"
+rm -rf "tools/messages/.placed"
+mkdir -p "tools/messages/.placed"
+cp "bin/messages-tool" "tools/messages/tool.toml" "tools/messages/messages.json" "tools/messages/manual.md" "tools/messages/.placed/"
+'''
+
+# The placed tool registered with the tool host under this service's name, so every release carries it without
+# a hand on the registry and an entry a release no longer holds leaves the catalogue with it.
+[[deploy.step]]
+id = "register-tools"
+phase = "after-health"
+command = '''
+set -eu
+put="$HOME/.local/share/bmo-pocket/deploy/bin/bmo-pocket"
+"$put" put --service telegram --placed --allow room.tools tools/messages/.placed
 '''

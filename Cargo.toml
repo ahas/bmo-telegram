@@ -3,7 +3,7 @@
 # the repository and the service's integration tests in `tests/`. The owner's reader in `reader/` is a bun
 # package, outside the workspace.
 [workspace]
-members = ["dialect", "picture"]
+members = ["dialect", "picture", "tools/messages"]
 resolver = "3"
 
 [workspace.package]
@@ -16,6 +16,8 @@ async-trait = "0.1.92"
 avif-parse = "2.1.0"
 clap = { version = "4.5.40", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 axum = { version = "0.8.9", features = ["macros", "multipart", "ws"] }
+# The env file the deployment writes under the data root, which the hosted tool reads for the provider's token.
+dotenvy = "0.15.7"
 bmo-chat = { path = "../../base/chat/provider" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp", "tiff", "avif"] }
 mime_guess = "2.0.5"

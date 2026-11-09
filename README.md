@@ -14,6 +14,7 @@ words, held by a separate process, the reader.
 | `dialect/` | `telegram-dialect`, the `telegram-html` dialect: markdown into Telegram's HTML, the structure check, the fold and the division into messages |
 | `picture/` | `telegram-picture`, a picture read and redrawn: its type, its transparency, an upload Telegram takes as a photo, and a picture kept inside its size |
 | `reader/` | the reader, a bun package holding the owner's account over MTProto, with its tests in `reader/tests/` |
+| `tools/` | the hosted tool the deployment places: one chat's recent messages through the service, on the owner's word alone |
 | `policy/` | the provider's fixed numbers and English words: its limits, refusals and placeholders |
 | `tests/` | the checks that span the repository, and the service's tests |
 | `deploy/` | the two service units a deployment links: the Rust provider and the bun reader |
@@ -32,6 +33,7 @@ deployed), `rustfmt.toml` and `CLAUDE.md`.
 | `docs/boundary-api.md` | The boundary: the routes served, the calls made on the receiver, the seam between the service and the reader, the configuration |
 | `docs/telegram.md` | The provider: its declaration, how it reads a room, what each send does, the owner's voice, the `telegram-html` dialect |
 | `docs/reader.md` | The reader: the owner's account, connecting, the history walk, profile pictures, and why it is TypeScript |
+| `docs/tools.md` | The hosted tool: its entry, arguments, the owner's word, and where the provider is reached |
 | `docs/checks.md` | The repository checks: dependencies, manifests, layout, the version, the testbed's declaration, Hangul, personal data and names |
 | `docs/PERSONAL-DATA.md` | The repository's personal-data prohibition: what no tracked file may hold, what goes in its place, and the check that holds it |
 

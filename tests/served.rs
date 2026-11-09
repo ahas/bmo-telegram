@@ -902,16 +902,22 @@ async fn one_chats_recent_messages_are_read_without_a_room() {
   assert_eq!(refused["code"], "not-ready");
 }
 
-/// A chat named by a person or a handle is answered with the chats and contacts that name could mean, so the
-/// owner picks among them by number.
+/// A name that means exactly one chat reads it without the owner picking; a name that could mean several
+/// answers the chats and contacts it could mean, so the owner picks among them by number.
 #[tokio::test]
-async fn a_chat_named_by_a_person_answers_the_candidates() {
+async fn a_chat_named_by_a_person_is_read_or_answered_with_its_candidates() {
   let served = stood(true).await;
 
   let (status, answer) = asked_get(&served.base, "/messages?chat=Someone").await;
 
   assert_eq!(status, 200);
-  assert_eq!(answer["candidates"][0]["chatId"], PERSON);
-  assert_eq!(answer["candidates"][0]["name"], "Someone");
+  assert_eq!(answer["messages"][0]["messageId"], 3);
+
+  let (status, answer) = asked_get(&served.base, "/messages?chat=Person").await;
+
+  assert_eq!(status, 200);
+  assert_eq!(answer["candidates"][0]["chatId"], STRANGERS.start);
+  assert_eq!(answer["candidates"][0]["name"], format!("Person {}", STRANGERS.start));
   assert_eq!(answer["candidates"][0]["kind"], "room");
+  assert!(answer["candidates"].as_array().is_some_and(|candidates| candidates.len() > 1));
 }

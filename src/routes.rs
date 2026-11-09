@@ -16,11 +16,14 @@ use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 
 use crate::provider::{ReadAnswer, TelegramProvider};
-use crate::read::{DEFAULT_MAX, LARGEST_MAX};
 use crate::seam::{Seam, seam_router};
 
 /// Why a route that takes the token was asked without it.
 const WRONG_TOKEN: &str = "the token is missing or wrong";
+
+/// How many messages a chat read answers where it asks for no number, and the most it answers at all.
+const DEFAULT_MAX: usize = 50;
+const LARGEST_MAX: usize = 200;
 
 /// What the service's own routes stand on: the provider and the seam.
 pub struct Served {

@@ -54,13 +54,13 @@ pub struct ReaderCandidate {
   pub kind: String,
 }
 
-// The chats and contacts a name could mean: those whose title or name holds the words asked, else every one
-// listed, each chat once, so the owner picks by number.
+// The chats and contacts a name could mean: those whose title or name holds the words asked, and whether any
+// did; each chat once. Where none did, every one listed stands so the owner picks by number.
 fn candidates_for(
   wanted: &str,
   dialogs: &[ReaderRoom],
   contacts: &[ReaderContact],
-) -> Vec<ReaderCandidate> {
+) -> (bool, Vec<ReaderCandidate>) {
   let wanted = wanted.trim().to_lowercase();
   let mut candidates = Vec::new();
 
@@ -91,10 +91,23 @@ fn candidates_for(
     .filter(|candidate| candidate.name.to_lowercase().contains(&wanted))
     .cloned()
     .collect();
-  let chosen = if matching.is_empty() { candidates } else { matching };
+  let matched = !matching.is_empty();
+  let chosen = if matched { matching } else { candidates };
   let mut seen = BTreeSet::new();
 
-  chosen.into_iter().filter(|candidate| seen.insert(candidate.chat_id)).collect()
+  (matched, chosen.into_iter().filter(|candidate| seen.insert(candidate.chat_id)).collect())
+}
+
+// One chat read through the reader, its refusal kept with the status the reader answered.
+async fn read_one(reader: &ReaderClient, chat_id: i64, max: usize, since: Option<i64>) -> ReadAnswer {
+  match reader.messages(chat_id, max, since).await {
+    Ok(ReaderRead::Messages(messages)) => ReadAnswer::Messages(messages),
+    Ok(ReaderRead::Refused { status, reason }) => ReadAnswer::Refused { status, reason },
+    Err(why) => ReadAnswer::Refused {
+      status: 503,
+      reason: why,
+    },
+  }
 }
 
 /// The provider: the bot account, how it speaks, the reader behind it and where each of the reader's parts
@@ -191,9 +204,9 @@ impl TelegramProvider {
     reader.contacts().await
   }
 
-  /// One chat's recent messages on the owner's word, read through the reader without a room standing for it;
-  /// or, where the chat is named by a person or a handle rather than a number, the chats and contacts that name
-  /// could mean, so the owner picks. Nothing is sent into the chat.
+  /// One chat's recent messages on the owner's word, read through the reader without a room standing for it.
+  /// A chat named by a person or a handle is read where exactly one chat matches; where several could, the
+  /// chats and contacts are answered so the owner picks. Nothing is sent into the chat.
   pub async fn read_messages(&self, chat: &str, max: usize, since: Option<i64>) -> ReadAnswer {
     let Some(reader) = &self.reader else {
       return ReadAnswer::Refused {
@@ -204,18 +217,20 @@ impl TelegramProvider {
     let chat = chat.trim();
 
     if let Ok(chat_id) = chat.parse::<i64>() {
-      return match reader.messages(chat_id, max, since).await {
-        Ok(ReaderRead::Messages(messages)) => ReadAnswer::Messages(messages),
-        Ok(ReaderRead::Refused { status, reason }) => ReadAnswer::Refused { status, reason },
-        Err(why) => ReadAnswer::Refused {
-          status: 503,
-          reason: why,
-        },
-      };
+      return read_one(reader, chat_id, max, since).await;
     }
 
     match (reader.dialogs().await, reader.contacts().await) {
-      (Ok(dialogs), Ok(contacts)) => ReadAnswer::Candidates(candidates_for(chat, &dialogs, &contacts)),
+      (Ok(dialogs), Ok(contacts)) => {
+        let (matched, candidates) = candidates_for(chat, &dialogs, &contacts);
+
+        // A name that means exactly one chat reads it; one that could mean several leaves the owner to pick.
+        if matched && candidates.len() == 1 {
+          return read_one(reader, candidates[0].chat_id, max, since).await;
+        }
+
+        ReadAnswer::Candidates(candidates)
+      }
       (Err(why), _) | (_, Err(why)) => ReadAnswer::Refused {
         status: 503,
         reason: why,

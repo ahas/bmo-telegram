@@ -16,7 +16,6 @@ pub mod owner;
 pub mod pictures;
 pub mod policy;
 pub mod provider;
-pub mod read;
 pub mod reader;
 pub mod reading;
 pub mod routes;

@@ -57,14 +57,16 @@ Beside the protocol, under the same token and the protocol's conventions and err
 | Route | Answer |
 |---|---|
 | `GET /status` | what stands of each part, each a `standing` (`active` or `inactive`) and a `reason` (an English sentence, or null): `bot`, `reader`, `history`, `avatars` |
-| `GET /messages` | query `chat` (a number, or a name or a handle), `max` (1 to 200, 50 where absent), `since` (epoch milliseconds, or absent): one chat's recent messages, asked of the reader, newest first; where the chat is named by a person or a handle, `candidates`, each `chatId`, `name` and `kind` (`room` or `contact`), for the owner to pick among; 404 `not-found` with the reason where the account cannot resolve the chat, 503 `not-ready` with the reason while the reader does not answer |
+| `GET /messages` | query `chat` (a number, or a name or a handle), `max` (1 to 200, 50 where absent), `since` (epoch milliseconds, or absent): one chat's recent messages, asked of the reader, newest first; a name that means exactly one chat reads it, and one that could mean several answers `candidates`, each `chatId`, `name` and `kind` (`room` or `contact`), for the owner to pick among; 404 `not-found` with the reason where the account cannot resolve the chat, 503 `not-ready` with the reason while the reader does not answer |
 
 The status route is for the provider's own operators; no other unit reads it, and it is not part of the fixed
-API (`docs/api.md`). The read route is the supervisor's road to one chat's recent messages:
-`bmo-telegram messages --chat <number-or-name> [--max <n>] [--since <epoch ms>]` asks it on the owner's word
-alone. It refuses a turn the receiver did not mark the owner's, saying that no grant in force names reading a
-chat, and it never sends anything into the chat. A chat named by a person or a handle answers the owner's
-account's chats and contacts that name could mean, so the owner picks one by number.
+API (`docs/api.md`). The read route is the backend of the hosted tool `bmo/telegram_messages`
+(`docs/tools.md`): one chat's recent messages on the owner's word alone, read-only and with nothing sent into
+the chat. A name that means exactly one chat is read; a name that could mean several answers the owner's
+account's chats and contacts, so the owner picks one by number. The tool reaches the route over the loopback
+with the token and
+port from `env/telegram.env` under the data root; the route itself takes the service's token like the status
+route.
 
 ## Calls made on the receiver
 
