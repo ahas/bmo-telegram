@@ -147,6 +147,8 @@ handed to the receiver a second time.
 | `POST /reader/inbound` | `kind` `message` with `roomId`, `messageId` and a handed message as the protocol states it, or `kind` `gathered` with `roomId`, `messageId` and `patch` (`files`, or `gatherFailure`) | `{}` once the service has handed it on, and for a message whose origin is `history` `kept`; the receiver's failure in the error shape |
 | `POST /reader/listened` | `chatId` | `listened` (boolean), the receiver's answer or its fallback; `people` (boolean), whether a person's words in the room are the reader's to hand over: the bot is not in the room and the receiver asked for it to be read (`docs/telegram.md`, 「The rooms」) |
 | `GET /reader/rooms` | | `rooms`, each `chatId`, `oldestMessageId` and `oldestSentAt`, as the receiver answers them; 503 `not-ready` with the reason while the receiver does not say |
+| `POST /reader/reactions` | `roomId`, `messageId` or `stamp` (`senderId`, `sentAt`), `reactions` (each `personId` and `emojis`) and `whole` | `{}` once the service has handed it on as a reaction change; the receiver's failure in the error shape |
+| `POST /reader/deleted` | `roomId`, `messageIds` and `stamps` (each `senderId` and `sentAt`) | `{}` once the service has handed it on as a deletion; the receiver's failure in the error shape |
 | `GET /reader/seen` | | `rooms` and `people`: every room and sender the provider has handed a message of over or sent into |
 | `POST /reader/avatars` | `rooms`, `people` | `{}` once word of the changed pictures has gone to the receiver, or stood down |
 

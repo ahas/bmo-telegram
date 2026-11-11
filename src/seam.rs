@@ -95,6 +95,8 @@ pub fn seam_router(seam: Arc<Seam>) -> Router {
     .route("/reader/rooms", get(rooms))
     .route("/reader/seen", get(seen))
     .route("/reader/avatars", post(avatars))
+    .route("/reader/reactions", post(reactions))
+    .route("/reader/deleted", post(deleted))
     .layer(from_fn_with_state(seam.clone(), authorized))
     .with_state(seam)
 }
@@ -265,4 +267,68 @@ async fn avatars(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Resp
   Standing::set(&seam.standing.avatars, reason);
 
   Json(Value::Object(serde_json::Map::new())).into_response()
+}
+
+/// The body of `POST /reader/reactions`: a message's reactions as the account sees them, the message by its number
+/// or its stamp (docs/boundary-api.md, 「The service's routes, called by the reader」).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReactionsSeen {
+  room_id: i64,
+  #[serde(default)]
+  message_id: i64,
+  #[serde(default)]
+  stamp: Option<bmo_chat::MessageStamp>,
+  reactions: Vec<bmo_chat::PersonReactions>,
+  #[serde(default)]
+  whole: bool,
+}
+
+async fn reactions(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Response {
+  let seen: ReactionsSeen = match body_of(&body) {
+    Ok(seen) => seen,
+    Err(why) => return failure(ErrorCode::BadRequest, why),
+  };
+  let change = bmo_chat::ReactionChange {
+    via: VIA.to_owned(),
+    room_id: seen.room_id,
+    message_id: seen.message_id,
+    stamp: seen.stamp,
+    reactions: seen.reactions,
+    whole: seen.whole,
+  };
+
+  match seam.receiver.reactions_changed(change).await {
+    Ok(()) => Json(Value::Object(serde_json::Map::new())).into_response(),
+    Err(why) => failure(ErrorCode::Failed, format!("the reactions were not handed over: {why}")),
+  }
+}
+
+/// The body of `POST /reader/deleted`: messages of one room deleted, by their numbers or their stamps.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeletedSeen {
+  room_id: i64,
+  #[serde(default)]
+  message_ids: Vec<i64>,
+  #[serde(default)]
+  stamps: Vec<bmo_chat::MessageStamp>,
+}
+
+async fn deleted(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Response {
+  let seen: DeletedSeen = match body_of(&body) {
+    Ok(seen) => seen,
+    Err(why) => return failure(ErrorCode::BadRequest, why),
+  };
+  let deletion = bmo_chat::Deletion {
+    via: VIA.to_owned(),
+    room_id: seen.room_id,
+    message_ids: seen.message_ids,
+    stamps: seen.stamps,
+  };
+
+  match seam.receiver.deleted(deletion).await {
+    Ok(()) => Json(Value::Object(serde_json::Map::new())).into_response(),
+    Err(why) => failure(ErrorCode::Failed, format!("the deletion was not handed over: {why}")),
+  }
 }

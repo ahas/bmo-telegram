@@ -48,6 +48,33 @@ struct Update {
   update_id: i64,
   message: Option<Value>,
   edited_message: Option<Value>,
+  message_reaction: Option<Value>,
+}
+
+/// A person's reactions on a message as a reaction update tells them (docs/telegram.md, 「Reading a room」): the
+/// room, the message by the bot account's number, the person, and every emoji they have on it now, a custom emoji
+/// left out. None where the update names no person, as an anonymous administrator's does.
+pub fn reaction_change(update: &Value) -> Option<bmo_chat::ReactionChange> {
+  let person = update["user"]["id"].as_i64()?;
+  let emojis = update["new_reaction"]
+    .as_array()
+    .into_iter()
+    .flatten()
+    .filter(|reaction| reaction["type"] == "emoji")
+    .filter_map(|reaction| reaction["emoji"].as_str().map(str::to_owned))
+    .collect();
+
+  Some(bmo_chat::ReactionChange {
+    via: crate::VIA.to_owned(),
+    room_id: update["chat"]["id"].as_i64()?,
+    message_id: update["message_id"].as_i64()?,
+    stamp: None,
+    reactions: vec![bmo_chat::PersonReactions {
+      person_id: Some(person),
+      emojis,
+    }],
+    whole: false,
+  })
 }
 
 #[derive(Deserialize)]
@@ -419,6 +446,16 @@ impl Telegram {
 
   // One update, as it came; a failure is said and the next one read.
   async fn handle(&self, receiver: &Arc<dyn ChatReceiver>, update: Update) {
+    if let Some(reacted) = update.message_reaction.as_ref() {
+      if let Some(change) = reaction_change(reacted)
+        && let Err(why) = receiver.reactions_changed(change).await
+      {
+        eprintln!("telegram: update {}: the reaction was not handed over: {why}", update.update_id);
+      }
+
+      return;
+    }
+
     let handled = match (update.message, update.edited_message) {
       (Some(message), _) => self.message(receiver.clone(), message).await,
       (None, Some(edited)) => self.edited(receiver.clone(), edited).await,
@@ -453,7 +490,8 @@ impl Telegram {
     let mut offset: Option<i64> = None;
 
     loop {
-      let mut asked = json!({ "timeout": 30, "allowed_updates": ["message", "edited_message"] });
+      let mut asked =
+        json!({ "timeout": 30, "allowed_updates": ["message", "edited_message", "message_reaction"] });
 
       if let Some(offset) = offset {
         asked["offset"] = json!(offset);

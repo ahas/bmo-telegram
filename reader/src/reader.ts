@@ -5,6 +5,7 @@
 // hands it to the service, which hands it to the receiver as read in the `human-reader` mode.
 
 import { fileIdOf, messageFileKind, messageHasPhoto, pictureOf, readerFileOf, seconds } from "./media";
+import { deletionsOf, reactionsOf, SeenMessages } from "./aftermath";
 import { mtproto, mtprotoEvents, mtprotoSessions } from "./mtproto";
 import { fill, POLICY } from "./policy";
 import { base64Of, handedMessage, roomFacts } from "./service";
@@ -252,14 +253,45 @@ export async function connectReader(account: AccountConfig): Promise<Client> {
 /** The account connected, every new message it reads handed on. */
 export async function startReader(deps: ReaderDeps): Promise<Client> {
   const client = await connectReader(deps.account);
+  const { Api } = mtproto();
+  // What the reader saw of each message, so a deletion or a reaction the account names by its own number finds
+  // the message in a room that numbers it apart (docs/reader.md, 「What it hands over」).
+  const seen = new SeenMessages();
 
   client.addEventHandler(async (event: NewMessageEvent) => {
+    const message = event.message;
+
+    if (event.chatId !== undefined) {
+      seen.remember(message.id, Number(event.chatId.toString()), {
+        senderId: message.out === true ? deps.peers.ownerId : Number(message.senderId?.toString() ?? 0),
+        sentAt: message.date * 1000,
+      });
+    }
+
     try {
       await ingest(deps, client, event);
     } catch (error) {
       console.error("reader ingest failed:", error);
     }
   }, new (mtprotoEvents().NewMessage)({}));
+
+  client.addEventHandler(async (update: Api.TypeUpdate) => {
+    try {
+      if (update instanceof Api.UpdateDeleteMessages || update instanceof Api.UpdateDeleteChannelMessages) {
+        for (const deletion of deletionsOf(update, seen)) {
+          await deps.service.deleted(deletion);
+        }
+      } else if (update instanceof Api.UpdateMessageReactions) {
+        const reactions = reactionsOf(update, seen);
+
+        if (reactions !== null) {
+          await deps.service.reactions(reactions);
+        }
+      }
+    } catch (error) {
+      console.error("reader aftermath failed:", error);
+    }
+  }, new (mtprotoEvents().Raw)({}));
 
   return client;
 }

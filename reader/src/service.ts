@@ -2,6 +2,8 @@
 // and the reader」): what the owner's account read handed on to the receiver, and what the receiver says of
 // its rooms, asked through the service, which is the only process that talks to another unit.
 
+import type { ReactionsSeen, RoomDeletion } from "./aftermath";
+
 // A message as it crosses the chat protocol (bmo-chat's `docs/contract.md`, 「Messages」). Its time is an
 // integer of epoch milliseconds.
 export interface HandedMessage {
@@ -87,6 +89,10 @@ export interface Service {
   rooms(): Promise<Rooms>;
   seen(): Promise<{ rooms: number[]; people: number[] }>;
   avatarsChanged(rooms: number[], people: number[]): Promise<void>;
+  // A message's reactions as the account sees them, carried on as a reaction change.
+  reactions(seen: ReactionsSeen): Promise<void>;
+  // Messages of one room deleted, carried on as a deletion.
+  deleted(deletion: RoomDeletion): Promise<void>;
 }
 
 /** The provider's key, written onto every message it hands over. */
@@ -134,6 +140,12 @@ export function serviceAt(port: number, token: string): Service {
     seen: async () => await (await call("GET", "/reader/seen")).json() as { rooms: number[]; people: number[] },
     avatarsChanged: async (rooms, people) => {
       await call("POST", "/reader/avatars", { rooms, people });
+    },
+    reactions: async (seen) => {
+      await call("POST", "/reader/reactions", seen);
+    },
+    deleted: async (deletion) => {
+      await call("POST", "/reader/deleted", deletion);
     },
   };
 }

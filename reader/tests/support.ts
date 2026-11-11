@@ -56,5 +56,7 @@ export function keptService(options: { rooms?: HistoryRoom[] | string; seen?: { 
     avatarsChanged: async (rooms, people) => {
       changed.push({ rooms, people });
     },
+    reactions: async () => {},
+    deleted: async () => {},
   };
 }

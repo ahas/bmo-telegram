@@ -437,3 +437,62 @@ async fn the_seam_takes_its_own_token_alone_and_refuses_a_body_it_cannot_read() 
   assert_eq!(seam.post("/reader/inbound", &json!({ "kind": "shout" })).await.unwrap().status, 400);
   assert!(receiver.handed.lock().unwrap().is_empty());
 }
+
+/// What the reader sees happen to a message afterwards goes on as the protocol's reaction change and deletion,
+/// a message named by its number or by its stamp (docs/boundary-api.md, 「The service's routes, called by the
+/// reader」).
+#[tokio::test]
+async fn a_reaction_and_a_deletion_the_reader_sees_go_on_to_the_receiver() {
+  let (receiver, _heard) = KeptReceiver::new();
+  let served = seam_over(receiver.clone()).await;
+  let seam = Wire::loopback(served.port, TOKEN);
+  let reacted = json!({
+    "roomId": -5_000_000_001_i64,
+    "stamp": { "senderId": 55, "sentAt": 1_700_000_000_000_i64 },
+    "reactions": [{ "personId": 56, "emojis": ["\u{1F44D}"] }],
+    "whole": true
+  });
+
+  assert_eq!(seam.post("/reader/reactions", &reacted).await.unwrap().status, 200);
+  assert_eq!(
+    seam
+      .post("/reader/deleted", &json!({ "roomId": -1_001_234_567_890_i64, "messageIds": [7, 8] }))
+      .await
+      .unwrap()
+      .status,
+    200
+  );
+
+  let change = receiver.reaction_changes.lock().unwrap()[0].clone();
+
+  assert_eq!((change.via.as_str(), change.room_id, change.whole), ("telegram", -5_000_000_001, true));
+  assert_eq!(
+    change.stamp.map(|stamp| (stamp.sender_id, stamp.sent_at)),
+    Some((55, 1_700_000_000_000))
+  );
+  assert_eq!(change.reactions[0].emojis, ["\u{1F44D}"]);
+  assert_eq!(receiver.deletions.lock().unwrap()[0].message_ids, [7, 8]);
+}
+
+/// A reaction update of the bot account names the message by the bot's number and the person by theirs, with
+/// every emoji they have now and no custom emoji (docs/telegram.md, 「Reading a room」).
+#[test]
+fn a_reaction_update_is_the_persons_reactions_now() {
+  let update = json!({
+    "chat": { "id": -1_001_234_567_890_i64 },
+    "message_id": 42,
+    "user": { "id": 56 },
+    "new_reaction": [
+      { "type": "emoji", "emoji": "\u{2764}" },
+      { "type": "custom_emoji", "custom_emoji_id": "5" }
+    ]
+  });
+  let change = bmo_telegram::telegram::reaction_change(&update).unwrap();
+
+  assert_eq!((change.room_id, change.message_id), (-1_001_234_567_890, 42));
+  assert_eq!(change.reactions[0].person_id, Some(56));
+  assert_eq!(change.reactions[0].emojis, ["\u{2764}"]);
+  assert!(
+    bmo_telegram::telegram::reaction_change(&json!({ "chat": { "id": 1 }, "message_id": 1 })).is_none()
+  );
+}

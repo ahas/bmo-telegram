@@ -112,6 +112,10 @@ owner's account's alone (「Contacts and starting a conversation」).
   asked again as soon as it returns; a call ends on its answer or on a connection that breaks, and TCP
   keep-alive on every connection tells a Telegram that has gone from one still answering. A picture fetched
   from a web address waits the same way.
+- **A reaction on a message is handed over as the message's reactions changed** (bmo-chat's `docs/contract.md`,
+  「The receiving side, as a provider sees it」): the bot account asks for reaction updates beside messages, and
+  each names the message by the bot account's own number and the person by theirs, with every emoji they have on
+  it now, a custom emoji left out. Telegram tells a bot of reactions only in a room where it is an administrator.
 - **The rooms the bot account listens to** are the owner's one-to-one and every room whose number the chat
   protocol carries whole, within the integers JavaScript counts exactly. A message from any other room has its
   words handed over and nothing else: no file, no picture and no expression is gathered.

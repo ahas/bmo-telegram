@@ -147,6 +147,8 @@ pub struct KeptReceiver {
   pub held: Mutex<HashMap<(i64, i64), HandedMessage>>,
   pub rooms: Mutex<Vec<ReceiverRoom>>,
   pub avatar_changes: Mutex<Vec<AvatarChange>>,
+  pub reaction_changes: Mutex<Vec<bmo_chat::ReactionChange>>,
+  pub deletions: Mutex<Vec<bmo_chat::Deletion>>,
   pub hand_over_failure: Mutex<Option<String>>,
   pub room_failure: Mutex<Option<String>>,
   pub rooms_failure: Mutex<Option<String>>,
@@ -164,6 +166,8 @@ impl KeptReceiver {
         held: Mutex::default(),
         rooms: Mutex::default(),
         avatar_changes: Mutex::default(),
+        reaction_changes: Mutex::default(),
+        deletions: Mutex::default(),
         hand_over_failure: Mutex::default(),
         room_failure: Mutex::default(),
         rooms_failure: Mutex::default(),
@@ -229,6 +233,18 @@ impl ChatReceiver for KeptReceiver {
     }
 
     self.avatar_changes.lock().unwrap().push(change);
+
+    Ok(())
+  }
+
+  async fn reactions_changed(&self, change: bmo_chat::ReactionChange) -> Result<(), ChatFailure> {
+    self.reaction_changes.lock().unwrap().push(change);
+
+    Ok(())
+  }
+
+  async fn deleted(&self, deletion: bmo_chat::Deletion) -> Result<(), ChatFailure> {
+    self.deletions.lock().unwrap().push(deletion);
 
     Ok(())
   }
