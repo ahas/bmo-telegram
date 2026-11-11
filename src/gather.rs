@@ -298,8 +298,8 @@ impl Gatherer {
     })
   }
 
-  // A sticker's asset as a file of the message, at its place there: an animated one as the thumbnail Telegram
-  // makes of it.
+  // A sticker's asset as a file of the message, at its place there: the file Telegram keeps for it, an animated
+  // one's TGS scene among them, so a room draws it as the platform does.
   async fn sticker_asset(
     &self,
     chat_id: i64,
@@ -308,19 +308,9 @@ impl Gatherer {
     name: &str,
     place: &str,
   ) -> Option<MessageFile> {
-    let animated = sticker.get("is_animated").and_then(Value::as_bool) == Some(true);
-    let video = sticker.get("is_video").and_then(Value::as_bool) == Some(true);
-    let file =
-      (if animated { sticker.get("thumbnail") } else { Some(sticker) }).filter(|file| !file.is_null())?;
-    let (extension, mime) = if animated {
-      ("jpg", "image/jpeg")
-    } else if video {
-      ("webm", "video/webm")
-    } else {
-      ("webp", "image/webp")
-    };
+    let (extension, mime) = sticker_format(sticker);
     let name = format!("{name}.{extension}");
-    let unique = text(file, "file_unique_id");
+    let unique = text(sticker, "file_unique_id");
     let key = format!("{chat_id}:{message_id}:{name}");
 
     if self.holds(&key, unique.as_deref()) {
@@ -329,7 +319,7 @@ impl Gatherer {
 
     let bytes = self
       .api
-      .file_bytes(&text(file, "file_id").unwrap_or_default())
+      .file_bytes(&text(sticker, "file_id").unwrap_or_default())
       .await
       .inspect_err(|why| eprintln!("telegram: the asset {name} of chat {chat_id} was not had: {why}"))
       .ok()?;
@@ -388,6 +378,20 @@ impl Gatherer {
     }
 
     files
+  }
+}
+
+/// The extension and the type of the file Telegram keeps for a sticker or a custom emoji: an animated one's TGS
+/// scene, a video one's WebM, or a still one's WebP.
+pub fn sticker_format(sticker: &Value) -> (&'static str, &'static str) {
+  let flag = |key: &str| sticker.get(key).and_then(Value::as_bool) == Some(true);
+
+  if flag("is_animated") {
+    ("tgs", "application/x-tgsticker")
+  } else if flag("is_video") {
+    ("webm", "video/webm")
+  } else {
+    ("webp", "image/webp")
   }
 }
 

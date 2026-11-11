@@ -137,7 +137,9 @@ owner's account's alone (「Contacts and starting a conversation」).
   under the file's own name, or `not-kept` with the policy's reason. A file with no name of its own is named
   for what it is: a spoken note, a sound, a video, a round note or a GIF.
 - **A sticker and the custom emoji among a message's words** are gathered as the message's files: the message
-  says `gathering`, and the assets follow as `gathered`.
+  says `gathering`, and the assets follow as `gathered`. Each asset is the file Telegram keeps for it, so a room
+  can draw it as the platform does: a still one as WebP, a video one as WebM and an animated one as its TGS
+  scene. The placeholder stays the message's words for whatever cannot draw the sticker.
 - **A file past the Bot API's ceiling for a bot,** picture or other, is fetched through the reader; with no
   reader standing, a picture goes without its bytes and another file is not kept.
 - **Every file a message carried crosses with its id,** the same each time the same file crosses. The bot

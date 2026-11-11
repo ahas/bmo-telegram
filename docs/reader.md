@@ -46,7 +46,9 @@ reader」), and it reaches nothing but the service and Telegram.
   policy's reason.
 - **A wordless message** is handed over under the placeholder of its kind, from `policy/telegram.toml`, the
   same words the bot account's reading uses; the words a message carried go as `spokenText`.
-- **Telegram's own words and the custom emoji among their marks** go as the context's `metadata`.
+- **Telegram's own words, the custom emoji among their marks and the sticker a message is** go as the context's
+  `metadata`, the sticker in the bot account's reading's shape as far as the account can tell it: its emoji, its
+  set's name where Telegram names it, and whether it is animated or a video; `null` where the message is none.
 - **What happens to a message afterwards** is handed over too, as the protocol's reaction changes and deletions:
   a message deleted, and a message's reactions as the account sees them, every person it lists with the emoji
   they have on it. A supergroup or a channel numbers its messages for everyone, so such a message is named by its

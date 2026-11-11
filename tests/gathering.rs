@@ -12,6 +12,7 @@ use axum::response::Json;
 use axum::routing::post;
 use bmo_chat::{ChatReceiver, MessageFile};
 use bmo_telegram::file_ids::FileIds;
+use bmo_telegram::gather::sticker_format;
 use bmo_telegram::policy::POLICY;
 use bmo_telegram::reader::ReaderClient;
 use bmo_telegram::seen::Seen;
@@ -154,6 +155,17 @@ async fn expressions_are_handed_over_as_telegram_wrote_them_with_their_assets_an
   assert_eq!((route.as_str(), &edited["files"]), ("message", &json!([])));
   assert_eq!(edited["origin"], "edit");
   assert_eq!(account.api.methods(), ["getCustomEmojiStickers"]);
+}
+
+#[test]
+fn a_sticker_crosses_as_the_file_telegram_keeps_for_it_an_animated_one_as_its_scene() {
+  let format = |animated: bool, video: bool| {
+    sticker_format(&json!({ "file_id": "s", "is_animated": animated, "is_video": video, "emoji": "😀" }))
+  };
+
+  assert_eq!(format(true, false), ("tgs", "application/x-tgsticker"));
+  assert_eq!(format(false, true), ("webm", "video/webm"));
+  assert_eq!(format(false, false), ("webp", "image/webp"));
 }
 
 #[tokio::test]

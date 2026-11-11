@@ -108,6 +108,43 @@ describe("ingest", () => {
     expect(service.handed).toEqual([]);
   });
 
+  test("a sticker goes under its placeholder with the sticker in its metadata, its scene following as a sticker", async () => {
+    const { Api } = mtproto();
+    const { service, deps } = readerOf({ listened: true, people: true });
+    const message = new Api.Message({
+      id: 701,
+      message: "",
+      date: 1_700_000_000,
+      media: new Api.MessageMediaDocument({
+        document: new Api.Document({
+          id: bigInt(900),
+          accessHash: bigInt(2),
+          fileReference: Buffer.from([]),
+          date: 1_700_000_000,
+          mimeType: "application/x-tgsticker",
+          size: bigInt(20),
+          dcId: 2,
+          attributes: [new Api.DocumentAttributeSticker({ alt: "💭", stickerset: new Api.InputStickerSetShortName({ shortName: "Pack" }) })],
+        } as never),
+      }),
+    } as never);
+    const sender = new Api.User({ id: bigInt(55), firstName: "Person" } as never);
+    const reading = { downloadMedia: async () => new Uint8Array([1, 2, 3]) } as unknown as TelegramClient;
+
+    Object.assign(message, { getSender: async () => sender, getChat: async () => sender });
+    await ingest(deps, reading, { message, chatId: bigInt(roomId) } as unknown as NewMessageEvent);
+
+    const [said, gathered] = service.handed;
+
+    expect(said?.kind === "message" ? [said.message.text, said.message.context?.metadata] : null).toEqual([
+      "[Sticker 💭]",
+      { text: "", entities: [], sticker: { emoji: "💭", set_name: "Pack", is_animated: true, is_video: false } },
+    ]);
+    expect(gathered?.kind === "gathered" ? gathered.patch.files?.map((file) => [file.name, file.mime, file.kind]) : null).toEqual([
+      ["sticker-900.tgs", "application/x-tgsticker", "sticker"],
+    ]);
+  });
+
   test("an outgoing message in a room the bot is in is the bot account's to read", async () => {
     const { service, deps } = readerOf({ listened: true, people: false });
 

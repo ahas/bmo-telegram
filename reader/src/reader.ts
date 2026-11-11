@@ -60,7 +60,29 @@ export function readerMark(message: Api.Message, carriesPhoto: boolean): string 
   return fill(kinds.document, { name: ` ${name?.fileName ?? kinds.unnamed_file}`, caption: "" });
 }
 
-// Telegram's own words and the custom emoji among their marks, as the bot account's reading keeps them.
+// The sticker a message is, in the bot account's reading's shape as far as the account can tell it: its emoji,
+// its set's name where Telegram names one, and whether it is an animated scene or a video; null for none.
+function stickerOf(message: Api.Message): Record<string, unknown> | null {
+  const { Api } = mtproto();
+  const document = message.document;
+  const sticker = document?.attributes.find((one): one is Api.DocumentAttributeSticker => one instanceof Api.DocumentAttributeSticker);
+
+  if (document === undefined || document === null || sticker === undefined) {
+    return null;
+  }
+
+  const mime = document.mimeType.toLowerCase();
+
+  return {
+    emoji: sticker.alt,
+    ...(sticker.stickerset instanceof Api.InputStickerSetShortName ? { set_name: sticker.stickerset.shortName } : {}),
+    is_animated: mime === "application/x-tgsticker",
+    is_video: mime === "video/webm",
+  };
+}
+
+// Telegram's own words, the custom emoji among their marks and the sticker the message is, as the bot account's
+// reading keeps them, so a room draws the sticker where it can.
 function metadataOf(message: Api.Message, text: string): unknown {
   const { Api } = mtproto();
 
@@ -71,6 +93,7 @@ function metadataOf(message: Api.Message, text: string): unknown {
         ? [{ type: "custom_emoji", offset: entity.offset, length: entity.length, custom_emoji_id: String(entity.documentId) }]
         : [],
     ),
+    sticker: stickerOf(message),
   };
 }
 
