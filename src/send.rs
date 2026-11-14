@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bmo_chat::{ChatFailure, ChatRefusal, ChatSend, ChatSendResult, ChatSent};
+use bmo_chat::{ChatFailure, ChatRefusal, ChatSend, ChatSendResult, ChatSent, ChatSticker};
 use serde_json::{Value, json};
 
 use crate::bot_api::{Answered, BotApi, kept_alive};
@@ -119,7 +119,8 @@ impl Speaker {
         transcript,
         ..
       } => self.voice(chat_id, audio, caption.as_deref(), transcript.as_deref(), reply_to).await,
-      ChatSend::Sticker { emoji } => self.sticker(chat_id, emoji).await,
+      ChatSend::Sticker(ChatSticker::Emoji { emoji }) => self.sticker(chat_id, emoji).await,
+      ChatSend::Sticker(ChatSticker::Item { item }) => self.sticker_item(chat_id, &item.id).await,
       ChatSend::Reaction { message_id, emoji } => self.reaction(chat_id, *message_id, emoji).await,
       ChatSend::Pin {
         message_id,

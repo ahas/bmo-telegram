@@ -111,6 +111,12 @@ impl Speaker {
     else {
       return Ok(refused(POLICY.sticker_missing(set, emoji)));
     };
+
+    self.sticker_item(chat_id, file_id).await
+  }
+
+  /// The sticker Telegram knows by the file id, needing no configured set.
+  pub async fn sticker_item(&self, chat_id: i64, file_id: &str) -> Sent {
     let answered: Answered =
       self.call("sendSticker", &json!({ "chat_id": chat_id, "sticker": file_id })).await?;
     let Some(went) = message_id(&answered) else {

@@ -4,7 +4,7 @@
 
 use crate::support;
 
-use bmo_chat::{ChatSend, ChatSendResult};
+use bmo_chat::{ChatSend, ChatSendResult, ChatSticker, StickerItem};
 use bmo_telegram::policy::POLICY;
 use bmo_telegram::send::{Sending, sent};
 use serde_json::{Value, json};
@@ -140,9 +140,9 @@ async fn a_sticker_is_picked_out_of_the_configured_set_by_its_feeling() {
     send(
       &speaker,
       None,
-      ChatSend::Sticker {
+      ChatSend::Sticker(ChatSticker::Emoji {
         emoji: "\u{1f600}".to_owned()
-      }
+      })
     )
     .await,
     Ok(sent(Some(500)))
@@ -150,6 +150,26 @@ async fn a_sticker_is_picked_out_of_the_configured_set_by_its_feeling() {
   assert_eq!(bot.methods(), ["getStickerSet", "sendSticker"]);
   assert_eq!(bot.bodies()[0], json!({ "name": SET }));
   assert_eq!(bot.bodies()[1], json!({ "chat_id": ROOM, "sticker": "sticker-1" }));
+}
+
+#[tokio::test]
+async fn a_named_item_goes_by_its_file_id_with_no_set_asked_or_needed() {
+  let bot = BotSends::new();
+  let speaker = speaker(bot.clone(), Sending::default()).await;
+  let item = StickerItem {
+    id: "sticker-9".to_owned(),
+    pack: Some(SET.to_owned()),
+    title: None,
+    image_url: None,
+    thumbnail_url: None,
+  };
+
+  assert_eq!(
+    send(&speaker, None, ChatSend::Sticker(ChatSticker::Item { item })).await,
+    Ok(sent(Some(500)))
+  );
+  assert_eq!(bot.methods(), ["sendSticker"]);
+  assert_eq!(bot.bodies()[0], json!({ "chat_id": ROOM, "sticker": "sticker-9" }));
 }
 
 #[tokio::test]
@@ -163,9 +183,9 @@ async fn a_feeling_the_set_does_not_carry_is_refused_and_so_is_a_sticker_with_no
     send(
       &with,
       None,
-      ChatSend::Sticker {
+      ChatSend::Sticker(ChatSticker::Emoji {
         emoji: "\u{1f984}".to_owned()
-      }
+      })
     )
     .await,
     Ok(ChatSendResult::Refused(POLICY.sticker_missing(SET, "\u{1f984}")))
@@ -179,9 +199,9 @@ async fn a_feeling_the_set_does_not_carry_is_refused_and_so_is_a_sticker_with_no
     send(
       &unset,
       None,
-      ChatSend::Sticker {
+      ChatSend::Sticker(ChatSticker::Emoji {
         emoji: "\u{1f600}".to_owned()
-      }
+      })
     )
     .await,
     Ok(ChatSendResult::Refused(POLICY.sticker_unset()))

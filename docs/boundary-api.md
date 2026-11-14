@@ -181,7 +181,7 @@ This provider's own:
 | `BMO_TELEGRAM_READER_PORT` | both | the loopback port the reader listens on; 3221 where unset |
 | `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen and the people who wrote to the bot privately, the id each picture and file the bot account handed over crossed with, and the lock that keeps the owner's session to one process |
 | `BMO_TELEGRAM_PICTURE_ROOT` | service | the folder a picture or an album item named by a file path may be read from; where unset, only a web address or an inline file is sent |
-| `BMO_TELEGRAM_STICKER_SET` | service | the Telegram sticker set a `sticker` send picks from by its emoji; where unset, a sticker send is refused saying no set is configured |
+| `BMO_TELEGRAM_STICKER_SET` | service | the Telegram sticker set a `sticker` send picks from by its emoji; where unset, a sticker send naming an emoji is refused saying no set is configured |
 
 ## Statements about siblings
 

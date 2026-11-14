@@ -177,7 +177,7 @@ never offered again.
 | `document` | a file with its name |
 | `audio` | a sound file with its name, under the type its first bytes read as |
 | `voice` | a voice note, the first part of the reading its caption as an expandable quote and the rest quiet replies under it, or its own caption where there is no reading; where Telegram refuses the caption, the voice goes again bare and the reading follows as messages under it. A reading that did not all go is the send's failure, naming the voice that went |
-| `sticker` | a sticker of the configured set that carries the emoji, picked at random among them; refused where the set carries none |
+| `sticker` | for an emoji, a sticker of the configured set that carries it, picked at random among them, refused where the set carries none; for an item, the sticker whose Telegram file id is the item's `id`, which asks for no set |
 | `reaction` | the emoji on the message; an empty emoji takes the reaction off |
 | `pin` | the message pinned, quietly where `silent`, or unpinned |
 | `typing` | the typing mark; taking it off asks Telegram nothing |

@@ -12,7 +12,7 @@ use std::time::Duration;
 use axum::Router;
 use axum::response::Json;
 use axum::routing::{get, post};
-use bmo_chat::{ChatProvider, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, ChatVoice};
+use bmo_chat::{ChatProvider, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, ChatSticker, ChatVoice};
 use bmo_telegram::compose::text_parts;
 use bmo_telegram::echoes::{Echoes, numbered_for_everyone};
 use bmo_telegram::file_ids::FileIds;
@@ -228,9 +228,9 @@ async fn the_owner_s_files_go_through_the_reader_a_document_kept_whole_whatever_
     mode: Some(ChatVoice::HumanReader),
     ..ChatSendRequest::new(
       GROUP,
-      ChatSend::Sticker {
+      ChatSend::Sticker(ChatSticker::Emoji {
         emoji: "x".to_owned(),
-      },
+      }),
     )
   };
 
