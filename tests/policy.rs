@@ -49,6 +49,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
   } = owner;
   let Gathering {
     file_not_kept,
+    seam_body_bytes,
     voice_name,
     sound_name,
     video_name,
@@ -156,6 +157,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
   assert_eq!((*upload_quality, *kept_quality), (90, 80));
   assert_eq!((*kept_threshold_bytes, *kept_max_dimension), (4_000_000, 1568));
   assert_eq!(*largest_bytes, 52_428_800);
+  assert_eq!(*seam_body_bytes, 50_331_648);
   assert_eq!(audio_extensions.len(), 10);
   assert_eq!(video_extensions.get("video/quicktime").map(String::as_str), Some(".mov"));
 }

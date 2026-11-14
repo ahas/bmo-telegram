@@ -283,6 +283,42 @@ fn message(origin: &str, room_id: i64, message_id: i64, sender: i64) -> Value {
   })
 }
 
+/// A video the reader gathered crosses whole: a hand-over far past a web server's usual two megabytes, as a
+/// twelve-second phone video is, reaches the receiver rather than being refused for its size.
+#[tokio::test]
+async fn a_gathered_video_of_many_megabytes_crosses_the_seam_whole() {
+  let (receiver, _heard) = KeptReceiver::new();
+
+  *receiver.rooms.lock().unwrap() = vec![ReceiverRoom {
+    id: -1001,
+    listened: true,
+    read: false,
+    oldest_message_id: Some(5),
+    oldest_sent_at: Some(1_700_000_000_000),
+  }];
+
+  let served = seam_over(receiver).await;
+  let seam = Wire::loopback(served.port, TOKEN);
+
+  assert_eq!(seam.post("/reader/inbound", &message("live", -1001, 7, 55)).await.unwrap().status, 200);
+
+  // Twelve million bytes, as base64.
+  let bytes = "A".repeat(16_000_000);
+  let gathered = json!({
+    "kind": "gathered", "roomId": -1001, "messageId": 7,
+    "patch": { "files": [{ "id": "f1", "name": "IMG_0001.MOV", "mime": "video/quicktime", "bytes": bytes, "kind": "video" }] }
+  });
+
+  assert_eq!(seam.post("/reader/inbound", &gathered).await.unwrap().status, 200);
+
+  let handed = served.receiver.handed.lock().unwrap().clone();
+
+  assert_eq!(
+    handed.iter().map(|(route, _)| route.as_str()).collect::<Vec<_>>(),
+    ["message", "gathered"]
+  );
+}
+
 #[tokio::test]
 async fn what_the_reader_hands_over_goes_on_to_the_receiver_and_its_room_and_sender_are_seen() {
   let (receiver, _heard) = KeptReceiver::new();

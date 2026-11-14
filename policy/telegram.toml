@@ -70,6 +70,9 @@ megabytes = "{megabytes} MB"
 [gathering]
 # Why a file that could not be kept is handed over as not kept.
 file_not_kept = "The file could not be kept."
+# The largest body the reader's seam takes in one hand-over. A gathered file crosses whole as base64 in JSON, a
+# third larger than its bytes, and the receiver keeps a file of up to 25 MiB, so the seam takes 48 MiB.
+seam_body_bytes = 50_331_648
 # A sound with no name of its own: a note somebody spoke, or a sound file they attached, with the extension
 # its type implies.
 voice_name = "voice"

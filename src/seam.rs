@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use async_trait::async_trait;
 use axum::Router;
-use axum::extract::{Request, State};
+use axum::extract::{DefaultBodyLimit, Request, State};
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
@@ -19,6 +19,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::VIA;
+use crate::policy::POLICY;
 use crate::seen::{Seen, Sighted};
 
 /// One hand-over the reader makes: a message, whatever its origin, or the files a message's gathering
@@ -97,6 +98,8 @@ pub fn seam_router(seam: Arc<Seam>) -> Router {
     .route("/reader/avatars", post(avatars))
     .route("/reader/reactions", post(reactions))
     .route("/reader/deleted", post(deleted))
+    // A gathered file crosses whole in its hand-over, so the seam takes a body as large as one the receiver keeps.
+    .layer(DefaultBodyLimit::max(POLICY.gathering.seam_body_bytes))
     .layer(from_fn_with_state(seam.clone(), authorized))
     .with_state(seam)
 }

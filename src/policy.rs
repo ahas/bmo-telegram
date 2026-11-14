@@ -80,6 +80,7 @@ pub struct Owner {
 #[serde(deny_unknown_fields)]
 pub struct Gathering {
   pub file_not_kept: String,
+  pub seam_body_bytes: usize,
   pub voice_name: String,
   pub sound_name: String,
   pub video_name: String,
