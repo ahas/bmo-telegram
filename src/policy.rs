@@ -22,6 +22,7 @@ pub struct Policy {
   pub refusals: Refusals,
   pub pictures: Pictures,
   pub owner: Owner,
+  pub avatar: Avatar,
   pub gathering: Gathering,
   pub kinds: Kinds,
 }
@@ -73,6 +74,14 @@ pub struct Owner {
   pub empty_file: String,
   pub too_large: String,
   pub megabytes: String,
+}
+
+/// The agent's words in the owner's account: the prefix they carry where neither the send nor the deployment
+/// names one.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Avatar {
+  pub prefix: String,
 }
 
 /// What the provider gathers of a message: why a file was not kept, and the names a file with none is given.

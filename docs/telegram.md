@@ -11,12 +11,12 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 | `key` | `telegram` |
 | `label` | `Telegram` |
 | `configured` | null where the bot token is set, else `BMO_BOT_TOKEN not set` |
-| `modes` | `bot-account` and `human-reader`, below |
+| `modes` | `bot-account`, `human-reader` and `human-avatar`, below |
 | `can` | the capabilities below |
 | `dialect` | `telegram-html`, below |
 | `shows` | null |
 | `numbering` | `native` for rooms, people and messages: Telegram's own numbers, used as they are |
-| `speakers` | false: a send names no speaker; it goes out as the bot account, or as the owner's in the owner's voice |
+| `speakers` | false: a send names no speaker; it goes out as the bot account, or in the owner's account in the owner's voice or the avatar's |
 
 ### Modes
 
@@ -24,6 +24,7 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 |---|---|---|---|
 | `bot-account` | `all-messages` | `active` | true |
 | `human-reader` | `all-messages` | `active` while the reader is connected; `inactive` otherwise, with the reader's reason, `BMO_TG_API_ID, BMO_TG_API_HASH, BMO_TG_SESSION not all set` where they are missing | true |
+| `human-avatar` | `all-messages` | as `human-reader`: `active` while the reader is connected, `inactive` otherwise with the same reason | true |
 
 - **The bot account reads every message of every room it is in,** and is what the provider runs on with
   nothing else configured.
@@ -31,8 +32,12 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
   shows a bot, and the bytes behind a picture or a file past the Bot API's ceiling, **and speaks the owner's own
   words**: a send in its voice goes out in the owner's account, never by the bot (「The owner's voice」). Such a
   send can be pinned to a message, since the account finds the line by the message's number.
-- **No room is answered as the owner.** The provider declares no `human-avatar` mode, so a room is never added to
-  be answered in the owner's account; the owner's account carries the owner's own words alone.
+- **A room can be answered as the owner, in the avatar.** The `human-avatar` mode is the owner's account speaking
+  the agent's words, each behind the avatar prefix, so a reader of the room tells them from the owner's own
+  (「The avatar」). It stands on the owner's account alone, so it is active exactly while the reader is, and a
+  room of the bot's added in the avatar mode is answered through the owner's account rather than by the bot.
+- **The bot answers as itself** in every room of the bot's that is not answered in the avatar: a send that
+  names no voice, or `bot-account`, goes by the bot.
 
 ### Capabilities
 
@@ -63,15 +68,18 @@ owner's account's alone (「Contacts and starting a conversation」).
   read and handed over, as `live` in `human-reader`, only where the receiving side asked for the room to be
   read, so the owner's other chats never flow. Both sides of such a room are handed over: the owner's own
   words there, typed wherever the owner typed them, go as the owner's, under `BMO_OWNER_ID`, but for the
-  messages a send in the owner's voice went out as, which the sender holds already (`docs/reader.md`, 「What
+  messages a send in the owner's account went out as, which the sender holds already (`docs/reader.md`, 「What
   it is for」). The request is the `read` of the room as the receiving side answers it; whether the room is
   listened to is no such request, and a receiving side that does not answer, or holds nothing of the room,
   asks for nothing.
 - **A hand-over from a room the bot is not in carries no `identity`** in its room facts, as the room's own
   answer carries none.
-- **A room's `modes`** are the voices the declaration has active in a room of the bot's, and `human-reader`
-  alone in a room the bot is not in. Its `identity` is the bot's number in a room of the bot's, and null in one
-  the bot is not in, since no words of the provider's own stand there but the owner's.
+- **A room's `modes`** are the voices the declaration has active in a room of the bot's, `human-avatar` among
+  them while the reader is connected, and `human-reader` alone in a room the bot is not in. A room the bot is
+  not in therefore takes no avatar: its people's words are read only while it stays read-only, as the receiving
+  side asks for the room to be read, so the provider keeps it so rather than answer in a room it would stop
+  reading. Its `identity` is the bot's number in a room of the bot's, and null in one the bot is not in, since
+  no words of the provider's own stand there but the owner's.
 - **The list** holds the bot's rooms, the owner's one-to-one and every room seen that the bot is in, and every
   chat of the owner's account (`docs/reader.md`, 「The rooms of the account」), each room once: a chat the bot is
   also in is the bot's, under the account's title for it, and a room of the bot's the account does not list is
@@ -157,8 +165,9 @@ owner's account's alone (「Contacts and starting a conversation」).
   supergroup's number is no message, and the reading goes on.
 - **The bot's own messages** are not read back in: a file it sent is the sender's to keep, and a pin it made
   is nobody's word.
-- **A message a send in the owner's voice went out as** is not read back in either: the sender holds it
-  already, so the bot account's sight of it is that send's echo (「The owner's voice」).
+- **A message a send in the owner's account went out as,** in the owner's voice or the avatar's, is not read
+  back in either: the sender holds it already, so the bot account's sight of it is that send's echo (「The
+  owner's voice」).
 
 ## Sends
 
@@ -197,7 +206,7 @@ never offered again.
   path is sent. The file and the root are both resolved to where they really stand before either is read, so a
   symbolic link inside the root that reaches a file outside it is `outside-data-root`.
 - **What went is not kept here.** Keeping a copy of a send is the sender's, under the number the result gives.
-  The provider notes only, for a few minutes, the messages a send in the owner's voice went out as, to know
+  The provider notes only, for a few minutes, the messages a send in the owner's account went out as, to know
   their echo (「The owner's voice」).
 
 ### Refusals
@@ -210,8 +219,8 @@ English lines of `policy/telegram.toml`, each the detail of a `platform` refusal
 | an act on a message Telegram no longer has, or will never let change again | `platform`, marked `gone` | `message_gone`, with Telegram's own description |
 | a sticker the configured set does not carry | `platform` | `sticker_missing` |
 | a sticker where no set is configured | `platform` | `sticker_unset` |
-| a send asked to be spoken in a mode that is not running, the owner's voice while the reader does not have the account connected among them, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
-| a send in the owner's own voice of a verb other than `text`, `photo`, `album`, `document` and `audio` | `platform` | `owner_verb` |
+| a send asked to be spoken in a mode that is not running, the owner's voice or the avatar's while the reader does not have the account connected among them, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
+| a send in the owner's account, in the owner's voice or the avatar's, of a verb other than `text`, `photo`, `album`, `document`, `audio`, `typing` and `delete` | `platform` | `owner_verb` |
 | a send in any voice but the owner's own into a room the bot is not in (「The rooms」) | `platform` | `read_only` |
 | any other refusal Telegram gives | `platform` | Telegram's own description |
 | every picture of a send missed | `no-picture-sent` | each picture with its reason, below |
@@ -224,12 +233,12 @@ failed and one left out of an album that went are `platform`, with the policy's 
 ### The owner's voice
 
 A send is the owner's own words when it names the voice `human-reader`, as the chat protocol names a send in the
-owner's own words; a send carries no sender of its own. Such a send goes out in the owner's own account,
-through the reader, so the room reads it as the owner's, never as the bot's. A send that names no voice, or
-`bot-account`, goes as the bot's.
+owner's own words, and the agent's words in the owner's account when it names `human-avatar` (「The avatar」); a
+send carries no sender of its own. Either goes out in the owner's own account, through the reader, so the room
+reads it as the owner's, never as the bot's. A send that names no voice, or `bot-account`, goes as the bot's.
 
 - **The same message the bot's send makes.** The owner's account sends what the bot account would have sent
-  for the same send, in the owner's name:
+  for the same send, in the owner's name, the avatar's words behind the prefix:
   - **`text`**: the markdown in the parts the dialect divides it into, each in the dialect's markup, folded
     where the send asks for a fold and the text is long enough for one, and as its plain text where Telegram
     refuses the markup; without a
@@ -243,24 +252,56 @@ through the reader, so the room reads it as the owner's, never as the bot's. A s
     nothing, or one past the `[owner]` ceiling, is missed with the policy's `empty_file` or `too_large`; an
     album the account refuses is missed by every file in it, and stops none after it. The first album answers
     `replyTo`.
+  - **`typing`**: the typing mark shown in the room as the owner's account's, or taken off.
+  - **`delete`**: the message the owner's account holds under the number, deleted for everyone in the room. A
+    number the account holds no line under is refused marked `gone`, with the policy's `message_gone`.
   - Any other verb is refused with the policy's `owner_verb`.
 - **A reply** is named by the send's `replyToMessageId`, the message's number as the protocol carries it. The
   reader finds that number's line on the owner's account and answers it; where the account has no line under
   that number, the send is refused `unreachable` rather than sent without the reference the caller asked for.
 - **While the reader does not have the account connected**, or no reader stands behind the service, the send
-  is refused `platform` with the policy's `mode_down` and the reader's reason. It is never sent by the bot
-  instead.
+  is refused `platform` with the policy's `mode_down`, naming the voice the send asked for, and the reader's
+  reason. It is never sent by the bot instead.
 - **The number a send answers** is the one the owner's account gave the first message it went out as. In a
   supergroup or a channel that is the number everyone knows the message by; in any other room each account
   numbers its own messages, and the bot account knows the message by another.
 - **Its echo is not handed over.** The bot account sees in its rooms what the owner's account sends there, as
-  a message from the owner's number, `BMO_OWNER_ID`. Each message a send in the owner's voice went out as is
+  a message from the owner's number, `BMO_OWNER_ID`. Each message a send in the owner's account went out as is
   noted, in memory and for five minutes, by its room, the number the owner's account gave it and the words
   Telegram holds for it. A message the bot account reads from the owner's number that answers a note is that
   send's echo: the note is let go and the message is not handed over, since the sender holds it already. In a
   supergroup or a channel the number answers the note; in any other room the words do, the oldest note first.
-  A message from the owner that comes while a send in the owner's voice into its room is still going waits for
+  A message from the owner that comes while a send in the owner's account into its room is still going waits for
   that send to end, gone out or failed, before it is matched.
+
+### The avatar
+
+A send in the `human-avatar` voice is the agent speaking in the owner's account, so every word of it is marked as
+the agent's by the avatar prefix, and the owner's own words, in `human-reader`, never are.
+
+- **The prefix** is the send's own `prefix` where it carries one that is not blank, else
+  `BMO_TELEGRAM_AVATAR_PREFIX` (`docs/boundary-api.md`, 「Configuration」), else the policy's `[avatar] prefix`. A send therefore always has
+  one, and the mode needs nothing beyond the reader to stand.
+- **Every message the send goes out as carries it.** Each part of a divided text begins with it, the text divided
+  short enough that the part and the prefix fit one message; each album's caption begins with it, the prefix
+  alone where the send has no caption, so a file sent bare is still marked. Words that already begin with the
+  prefix, read without the space after it, go out as they are, never doubled.
+- **The prefix reads as written**: it is put before the plain words as it stands and before the markup escaped,
+  so nothing in it is read as a mark.
+- **`typing` and `delete` carry no words** and so no prefix.
+- **A room the bot is not in takes no avatar send**: it is refused with the policy's `read_only`, as a send in any
+  voice but the owner's own is (「The rooms」).
+- **A line the avatar sent is the agent's own wherever it is read back.** A message from the owner's number, in a
+  room of the bot's, whose words begin with the prefix is handed over as the agent's: under the room's
+  `identity`, the bot's number, in the `human-avatar` mode, with the prefix and the one space after it taken off
+  its words and off the words typed under a file. It holds on every road the owner's account's lines come back
+  by: the bot account's reading of a new message or an edit, once the echo note has gone or after a restart, and
+  the reader's live reading and history walk. A line an echo note still answers is not handed over at all.
+- **The prefix read back is the deployment's,** `BMO_TELEGRAM_AVATAR_PREFIX`, else the policy's: a send that named
+  a prefix of its own is read back as the agent's only where it named the same one.
+- **A prefixed line in a room the bot is not in is the owner's own.** No avatar send goes there, so such a line is
+  one the owner typed, and it is handed over as his.
+- **An unprefixed line from the owner's number is the owner's own words** wherever it is read.
 
 ## The dialect: `telegram-html`
 

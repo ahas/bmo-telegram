@@ -17,6 +17,8 @@ const peers = { ownerId: OWNER_ID, botId: BOT_ID };
 const owner: OwnerAccount = {
   say: async () => ({ id: null, text: "" }),
   album: async () => [],
+  typing: async () => {},
+  delete: async () => {},
 };
 const client = {} as TelegramClient;
 

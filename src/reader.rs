@@ -77,8 +77,9 @@ pub enum ReaderFetch {
   NoReader(String),
 }
 
-/// What a send in the owner's voice came to: what went, or the name the account refused it by — not connected,
-/// or a reply its history cannot find — with the sentence saying why.
+/// What a send in the owner's account came to: what went, or the name the account refused it by — not
+/// connected, a reply its history cannot find, or a message to delete it holds no line under — with the sentence
+/// saying why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AsOwner<T> {
   Sent(T),
@@ -404,6 +405,21 @@ impl ReaderClient {
         })
         .unwrap_or_default()
     }))
+  }
+
+  /// The typing mark shown in a room as the owner's account's, or taken off.
+  pub async fn owner_typing(&self, chat_id: i64, on: bool) -> Result<AsOwner<()>, NotCarried> {
+    let sent = self.as_owner("/owner/typing", &json!({ "chatId": chat_id, "on": on })).await?;
+
+    Ok(map_sent(sent, |_| ()))
+  }
+
+  /// The message the owner's account holds under the number deleted for everyone in the room.
+  pub async fn owner_delete(&self, chat_id: i64, message_id: i64) -> Result<AsOwner<()>, NotCarried> {
+    let body = json!({ "chatId": chat_id, "messageId": message_id });
+    let sent = self.as_owner("/owner/delete", &body).await?;
+
+    Ok(map_sent(sent, |_| ()))
   }
 }
 

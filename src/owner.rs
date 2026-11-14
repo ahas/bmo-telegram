@@ -1,25 +1,26 @@
-//! A send in the owner's own voice (docs/telegram.md, 「The owner's voice」): the words in the parts and the
-//! markup the bot's send would take, and files gathered into the albums Telegram takes, each sent through the
-//! reader over the seam and noted, so the bot account's sight of it is known as its echo. What the owner's
-//! account refuses comes back as the reader said it.
+//! A send in the owner's account (docs/telegram.md, 「The owner's voice」, 「The avatar」): the words in the parts
+//! and the markup the bot's send would take, and files gathered into the albums Telegram takes, each sent
+//! through the reader over the seam and noted, so the bot account's sight of it is known as its echo; the
+//! typing mark, and a delete. The owner's own words go as they are, the avatar's behind its prefix. What the
+//! owner's account refuses comes back as the reader said it.
 
 use std::path::Path;
 
 use bmo_chat::{
-  AlbumItem, ChatRefusal, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, FileItem, MissedPicture,
-  MissedPictureReason,
+  AlbumItem, ChatRefusal, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, ChatVoice, FileItem,
+  MissedPicture, MissedPictureReason,
 };
 use telegram_dialect::ALBUM_LIMIT;
 use telegram_dialect::js;
 
-use crate::compose::{caption, text_parts};
+use crate::compose::{Part, avatar_caption, avatar_text_parts, caption, text_parts};
 use crate::echoes::Echoes;
 use crate::files::audio_type;
 use crate::pictures::Picture;
 use crate::policy::{POLICY, fill};
 use crate::provider::wire_name;
 use crate::reader::{AsOwner, ReaderClient};
-use crate::send::{Sent, Speaker, refused};
+use crate::send::{Sent, Speaker, refused, sent};
 
 /// What Telegram makes of a file, by its own type, or by its name where none came with it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -122,18 +123,10 @@ pub fn caption_of(field: Option<&str>) -> String {
   js::trim(&field.unwrap_or_default().replace("\r\n", "\n").replace('\r', "\n")).to_owned()
 }
 
-// The name the owner's account refuses a send by while it is not connected.
+// The names the owner's account refuses a send by: while it is not connected, and where it holds no line under
+// the number an act names.
 const UNAVAILABLE: &str = "unavailable";
-
-// What the owner's account refused, as the provider refuses it: a mode that is not running, or the account's
-// own words.
-fn owner_refused(name: &str, error: &str) -> ChatRefusal {
-  if name == UNAVAILABLE {
-    POLICY.mode_down("human-reader", Some(error))
-  } else {
-    POLICY.refused(error)
-  }
-}
+const GONE: &str = "gone";
 
 // One item of the owner's album as a file: one handed over as it is, one named by an address read where a
 // picture of the bot's may be read from.
@@ -157,17 +150,46 @@ async fn file_of(
   Ok(FileItem { name, mime, bytes })
 }
 
-/// The owner's voice as one send uses it: the bot account's sending, for where a picture is read from and the
-/// record of rooms sent into; the reader the owner's account is reached through; and the notes of what went.
+/// The owner's account as one send uses it: the bot account's sending, for where a picture is read from and the
+/// record of rooms sent into; the reader the owner's account is reached through; the notes of what went; the
+/// voice the send was asked in; and the prefix its words go behind, none for the owner's own words.
 pub struct OwnerVoice<'a> {
   pub speaker: &'a Speaker,
   pub reader: &'a ReaderClient,
   pub echoes: &'a Echoes,
+  pub voice: ChatVoice,
+  pub prefix: Option<&'a str>,
 }
 
 impl OwnerVoice<'_> {
-  /// One send in the owner's voice: words, a picture, a file, a sound or an album, each as the bot's send would
-  /// carry it; any other verb refused.
+  // What the owner's account refused, as the provider refuses it: the voice not running, a message no longer
+  // there, or the account's own words.
+  fn refusal(&self, name: &str, error: &str) -> ChatRefusal {
+    match name {
+      UNAVAILABLE => POLICY.mode_down(&wire_name(&self.voice), Some(error)),
+      GONE => POLICY.message_gone(error),
+      _ => POLICY.refused(error),
+    }
+  }
+
+  // The markdown in the parts it goes out in, behind the prefix where there is one.
+  fn parts(&self, markdown: &str, fold: bool) -> Vec<Part> {
+    match self.prefix {
+      Some(prefix) => avatar_text_parts(prefix, markdown, fold),
+      None => text_parts(markdown, fold),
+    }
+  }
+
+  // A caption's markdown as it goes with an album, behind the prefix where there is one.
+  fn caption(&self, markdown: &str) -> Part {
+    match self.prefix {
+      Some(prefix) => avatar_caption(prefix, markdown),
+      None => caption(markdown),
+    }
+  }
+
+  /// One send in the owner's account: words, a picture, a file, a sound or an album, each as the bot's send
+  /// would carry it, the typing mark, or a delete; any other verb refused.
   pub async fn send(&self, request: &ChatSendRequest) -> Sent {
     let room = request.room_id;
     let reply_to = request.reply_to_message_id;
@@ -201,13 +223,16 @@ impl OwnerVoice<'_> {
 
         self.album(room, &items, None, reply_to).await
       }
+      ChatSend::Typing { on } => self.typing(room, *on).await,
+      ChatSend::Delete { message_id } => self.delete(room, *message_id).await,
       other => Ok(refused(POLICY.owner_verb(&wire_name(&other.kind())))),
     }
   }
 
-  /// The owner's markdown said in the room through the reader in the parts the dialect divides it into, each in
-  /// its markup and as its plain text where the account refuses the markup, the first answering the message
-  /// named: the message the first part went out as. A part that does not go ends the send there.
+  /// The markdown said in the room through the reader in the parts the dialect divides it into, behind the
+  /// prefix where there is one, each in its markup and as its plain text where the account refuses the markup,
+  /// the first answering the message named: the message the first part went out as. A part that does not go
+  /// ends the send there.
   pub async fn say(
     &self,
     chat_id: i64,
@@ -218,7 +243,7 @@ impl OwnerVoice<'_> {
   ) -> Sent {
     let mut first = None;
 
-    for part in text_parts(markdown, fold) {
+    for part in self.parts(markdown, fold) {
       let pinned = if first.is_none() { reply_to } else { None };
 
       match self.reader.owner_say(chat_id, &part, silent, pinned).await? {
@@ -227,7 +252,7 @@ impl OwnerVoice<'_> {
           self.speaker.spoke_in(chat_id);
           first.get_or_insert(went.message_id);
         }
-        AsOwner::Refused { name, error } => return Ok(refused(owner_refused(&name, &error))),
+        AsOwner::Refused { name, error } => return Ok(refused(self.refusal(&name, &error))),
       }
     }
 
@@ -237,10 +262,10 @@ impl OwnerVoice<'_> {
     }))
   }
 
-  /// The owner's files sent through the reader as the albums Telegram takes, the caption in its markup and the
-  /// reply with the first. A file that holds nothing or is past the ceiling is missed before anything goes; an
-  /// album the account would not take is missed by every file in it and stops none after it. The message the
-  /// first file went out as.
+  /// The files sent through the reader as the albums Telegram takes, the caption in its markup and the reply
+  /// with the first, every album's caption behind the prefix where there is one. A file that holds nothing or is
+  /// past the ceiling is missed before anything goes; an album the account would not take is missed by every file
+  /// in it and stops none after it. The message the first file went out as.
   pub async fn album(
     &self,
     chat_id: i64,
@@ -250,8 +275,8 @@ impl OwnerVoice<'_> {
   ) -> Sent {
     let speaker = self.speaker;
     let root = speaker.sending.picture_root.as_deref();
-    let first_caption = caption(&caption_of(caption_field));
-    let bare = caption("");
+    let first_caption = self.caption(&caption_of(caption_field));
+    let bare = self.caption("");
     let mut missed = Vec::new();
     let mut files = Vec::new();
 
@@ -288,7 +313,7 @@ impl OwnerVoice<'_> {
           first = first.or(went.into_iter().find_map(|one| one.message_id));
         }
         AsOwner::Refused { name, error } => {
-          let detail = match owner_refused(&name, &error) {
+          let detail = match self.refusal(&name, &error) {
             ChatRefusal::Platform { detail, .. } => detail,
             other => other.to_string(),
           };
@@ -314,5 +339,21 @@ impl OwnerVoice<'_> {
       message_id: first,
       missed,
     }))
+  }
+
+  /// The typing mark shown in the room as the owner's account's, or taken off.
+  pub async fn typing(&self, chat_id: i64, on: bool) -> Sent {
+    match self.reader.owner_typing(chat_id, on).await? {
+      AsOwner::Sent(()) => Ok(sent(None)),
+      AsOwner::Refused { name, error } => Ok(refused(self.refusal(&name, &error))),
+    }
+  }
+
+  /// The message the owner's account holds under the number, deleted for everyone in the room.
+  pub async fn delete(&self, chat_id: i64, message_id: i64) -> Sent {
+    match self.reader.owner_delete(chat_id, message_id).await? {
+      AsOwner::Sent(()) => Ok(sent(Some(message_id))),
+      AsOwner::Refused { name, error } => Ok(refused(self.refusal(&name, &error))),
+    }
   }
 }

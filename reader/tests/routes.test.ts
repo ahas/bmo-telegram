@@ -4,6 +4,8 @@ import { lockOnceFree } from "../src/lock";
 import { readerHandler } from "../src/routes";
 import { BOT_ID, OWNER_ID } from "./support";
 
+import { MessageGone } from "../src/owner";
+
 import type { OwnerAccount } from "../src/owner";
 
 // The reader's routes, served in this process over an owner's account that keeps what it is asked, and
@@ -22,6 +24,14 @@ const owner: OwnerAccount = {
     ownerAsked.push({ ...album, files: album.files.map((file) => file.name) });
 
     return album.files.map((_, at) => (at === 0 ? { id: 901, text: album.caption } : { id: null, text: "" }));
+  },
+  typing: async (chatId, on) => {
+    ownerAsked.push({ chatId, on });
+  },
+  delete: async (chatId, messageId) => {
+    ownerAsked.push({ chatId, messageId });
+
+    if (messageId !== 900) throw new MessageGone();
   },
 };
 
@@ -92,6 +102,24 @@ describe("the reader's door", () => {
     const avatars = await fetch(`http://127.0.0.1:${server.port}/reader/avatars`, { headers: { authorization: `Bearer ${token}` } });
 
     expect(await avatars.json()).toEqual({ avatars: [{ kind: "person", id: 55, takenAt: 1_700_000_000_000 }] });
+  });
+
+  test("carries the typing mark and a delete, and names a delete of a line the account does not hold gone", async () => {
+    const before = ownerAsked.length;
+
+    expect((await call("/owner/typing", { chatId: 5, on: "yes" }))[0]).toBe(400);
+    expect((await call("/owner/delete", { chatId: 5 }))[0]).toBe(400);
+    expect(await call("/owner/typing", { chatId: 5, on: true })).toEqual([200, {}]);
+    expect(await call("/owner/delete", { chatId: 5, messageId: 900 })).toEqual([200, {}]);
+    expect(await call("/owner/delete", { chatId: 5, messageId: 7 })).toEqual([
+      200,
+      { refused: "gone", error: "Telegram has no message here for the owner's account to delete" },
+    ]);
+    expect(ownerAsked.slice(before)).toEqual([
+      { chatId: 5, on: true },
+      { chatId: 5, messageId: 900 },
+      { chatId: 5, messageId: 7 },
+    ]);
   });
 });
 

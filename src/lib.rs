@@ -4,6 +4,7 @@
 
 pub mod acts;
 pub mod albums;
+pub mod avatar;
 pub mod bot_api;
 pub mod compose;
 pub mod config;

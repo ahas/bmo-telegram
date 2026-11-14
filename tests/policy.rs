@@ -2,7 +2,9 @@
 //! is used, and each reason becomes its bmo-chat refusal code.
 
 use bmo_chat::{ChatCapability, ChatRefusal, MissedPictureReason};
-use bmo_telegram::policy::{Gathering, Kinds, Owner, POLICY, Pictures, Platform, Policy, Refusals, fill};
+use bmo_telegram::policy::{
+  Avatar, Gathering, Kinds, Owner, POLICY, Pictures, Platform, Policy, Refusals, fill,
+};
 use strum::VariantArray;
 
 #[test]
@@ -12,6 +14,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     refusals,
     pictures,
     owner,
+    avatar,
     gathering,
     kinds,
   } = &*POLICY;
@@ -47,6 +50,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     too_large,
     megabytes,
   } = owner;
+  let Avatar { prefix } = avatar;
   let Gathering {
     file_not_kept,
     seam_body_bytes,
@@ -108,6 +112,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     left_out,
     empty_file,
     too_large,
+    prefix,
     megabytes,
     file_not_kept,
     voice_name,

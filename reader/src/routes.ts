@@ -1,7 +1,7 @@
 // The reader's routes, called by the service alone (docs/boundary-api.md, 「The reader's routes, called by the
 // service」): whether the owner's account is connected, the chats it is in, its contacts and a conversation
-// started with them, a picture or a file fetched through it, and a send in the owner's voice. Every route takes
-// the seam's token.
+// started with them, a picture or a file fetched through it, and a send through the owner's account, its typing
+// mark and a delete. Every route takes the seam's token.
 
 import { fetchFile, fetchPicture } from "./media";
 import { ChatUnresolved, DEFAULT_MAX, LARGEST_MAX } from "./messages";
@@ -86,7 +86,7 @@ function startOf(body: Body): StartAsked | null {
   return null;
 }
 
-// A send in the owner's voice carried, a refusal of the account answered by its name.
+// A send through the owner's account carried, a refusal of the account answered by its name.
 async function asOwner(send: () => Promise<Body>): Promise<Response> {
   try {
     return json(await send());
@@ -156,6 +156,32 @@ function routes(deps: RoutesDeps): Record<string, (body: Body) => Promise<Respon
         const sent = await deps.owner.album(album);
 
         return { ids: sent.map((one) => one.id), texts: sent.map((one) => one.text) };
+      });
+    },
+
+    "/owner/typing": async (body) => {
+      if (!isNumber(body.chatId) || typeof body.on !== "boolean") return failure("bad-request", "chatId (number) and on (boolean) are required", 400);
+
+      const chatId = body.chatId;
+      const on = body.on;
+
+      return await asOwner(async () => {
+        await deps.owner.typing(chatId, on);
+
+        return {};
+      });
+    },
+
+    "/owner/delete": async (body) => {
+      if (!isNumber(body.chatId) || !isNumber(body.messageId)) return failure("bad-request", "chatId and messageId (numbers) are required", 400);
+
+      const chatId = body.chatId;
+      const messageId = body.messageId;
+
+      return await asOwner(async () => {
+        await deps.owner.delete(chatId, messageId);
+
+        return {};
       });
     },
   };

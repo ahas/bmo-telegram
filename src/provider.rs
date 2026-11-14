@@ -272,21 +272,39 @@ impl TelegramProvider {
     }
   }
 
-  // A send in the owner's own voice, through the reader while it has the account connected; never by the bot
-  // instead. It is going into its room until it is answered, so its echo waits for it.
-  async fn as_owner(&self, request: &ChatSendRequest) -> Result<ChatSendResult, ChatFailure> {
+  /// The prefix the avatar's words carry (docs/telegram.md, 「The avatar」): the send's own where it is not blank,
+  /// else the deployment's, else the policy's.
+  pub fn avatar_prefix<'a>(&'a self, request: &'a ChatSendRequest) -> &'a str {
+    request
+      .prefix
+      .as_deref()
+      .filter(|prefix| !prefix.trim().is_empty())
+      .unwrap_or(self.telegram.avatar().prefix())
+  }
+
+  // A send in the owner's account, in `voice`, through the reader while it has the account connected; never by
+  // the bot instead. The owner's own words go as they are, the avatar's behind its prefix. It is going into its
+  // room until it is answered, so its echo waits for it.
+  async fn in_owner_account(
+    &self,
+    request: &ChatSendRequest,
+    voice: ChatVoice,
+  ) -> Result<ChatSendResult, ChatFailure> {
     let health = self.refresh_reader().await;
     let Some(reader) = self.reader.as_ref().filter(|_| health.connected) else {
       let why = health.reason.as_deref().unwrap_or(NO_READER);
 
-      return Ok(refused(POLICY.mode_down(&wire_name(&ChatVoice::HumanReader), Some(why))));
+      return Ok(refused(POLICY.mode_down(&wire_name(&voice), Some(why))));
     };
     let echoes = self.telegram.echoes();
     let _going = echoes.going(request.room_id);
+    let prefix = (voice == ChatVoice::HumanAvatar).then(|| self.avatar_prefix(request));
     let voice = OwnerVoice {
       speaker: &self.speaker,
       reader,
       echoes,
+      voice,
+      prefix,
     };
 
     voice.send(request).await
@@ -352,9 +370,11 @@ impl ChatProvider for TelegramProvider {
       (ChatModeStanding::Inactive, reader.reason.or_else(|| Some(NO_READER.to_owned())))
     };
 
+    // The owner's own words and the avatar's both stand on the owner's account, and so stand or fall together.
     vec![
       mode(ChatVoice::BotAccount, ChatModeStanding::Active, None),
-      mode(ChatVoice::HumanReader, standing, reason),
+      mode(ChatVoice::HumanReader, standing, reason.clone()),
+      mode(ChatVoice::HumanAvatar, standing, reason),
     ]
   }
 
@@ -536,7 +556,9 @@ impl ChatProvider for TelegramProvider {
       None | Some(ChatVoice::BotAccount) => {
         self.speaker.send(request.room_id, request.reply_to_message_id, &request.send).await
       }
-      Some(ChatVoice::HumanReader) => self.as_owner(&request).await,
+      Some(voice @ (ChatVoice::HumanReader | ChatVoice::HumanAvatar)) => {
+        self.in_owner_account(&request, voice).await
+      }
       Some(other) => Ok(refused(POLICY.mode_down(&wire_name(&other), None))),
     }
   }

@@ -77,14 +77,17 @@ async fn serve() -> Result<(), String> {
   let seen = Arc::new(Seen::kept_in(config.data.join("seen.json")));
   let standing = Arc::new(Standing::default());
   let reader = ReaderClient::new(Wire::loopback(config.reader_port, config.token.as_str()));
-  let telegram = Arc::new(Telegram::new(
-    &config.bot_token,
-    &config.api,
-    config.owner_id,
-    Some(reader.clone()),
-    seen.clone(),
-    Arc::new(FileIds::kept_in(config.data.join("file-ids.jsonl"))),
-  ));
+  let telegram = Arc::new(
+    Telegram::new(
+      &config.bot_token,
+      &config.api,
+      config.owner_id,
+      Some(reader.clone()),
+      seen.clone(),
+      Arc::new(FileIds::kept_in(config.data.join("file-ids.jsonl"))),
+    )
+    .with_avatar_prefix(config.avatar_prefix),
+  );
   let link = ChatReceiverLink::new(config.receiver_url.as_str(), config.receiver_token.as_str());
   let receiver: Arc<dyn ChatReceiver> = Arc::new(link);
   let seam = Arc::new(Seam {
@@ -93,6 +96,7 @@ async fn serve() -> Result<(), String> {
     seen: seen.clone(),
     standing: standing.clone(),
     presence: telegram.clone(),
+    avatar: telegram.avatar().clone(),
   });
   let sending = Sending {
     picture_root: config.picture_root,

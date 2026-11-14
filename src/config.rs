@@ -51,6 +51,8 @@ pub struct Config {
   pub picture_root: Option<PathBuf>,
   /// The sticker set a `sticker` send picks from.
   pub sticker_set: Option<String>,
+  /// The prefix the avatar's words carry where a send names none, kept as written, its trailing space with it.
+  pub avatar_prefix: Option<String>,
 }
 
 impl Config {
@@ -68,6 +70,9 @@ impl Config {
       data: given("BMO_TELEGRAM_DATA").map(PathBuf::from).unwrap_or_default(),
       picture_root: given("BMO_TELEGRAM_PICTURE_ROOT").map(PathBuf::from),
       sticker_set: given("BMO_TELEGRAM_STICKER_SET"),
+      avatar_prefix: std::env::var("BMO_TELEGRAM_AVATAR_PREFIX")
+        .ok()
+        .filter(|prefix| !prefix.trim().is_empty()),
     }
   }
 

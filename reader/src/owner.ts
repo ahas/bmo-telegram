@@ -1,7 +1,8 @@
-// What is sent in the owner's own voice, through the owner's account (docs/telegram.md, 「The owner's
-// voice」): one part of words, and one album of files, each answering an earlier message where it names
-// one, in the markup the service gives as HTML. The service divides a send into the parts and albums
-// Telegram takes before it asks; this is what the account is told for each, and what each went out as.
+// What is sent through the owner's account, in the owner's own voice or the avatar's (docs/telegram.md, 「The
+// owner's voice」): one part of words, and one album of files, each answering an earlier message where it
+// names one, in the markup the service gives as HTML; the typing mark; and a message deleted. The service
+// divides a send into the parts and albums Telegram takes, and puts the avatar's prefix before its words,
+// before it asks; this is what the account is told for each, and what each went out as.
 
 import { accountMessageId, resolveEntity } from "./history";
 import { peerOf } from "./media";
@@ -154,10 +155,19 @@ export class ReplyUnreachable extends Error {
   }
 }
 
-/** What is sent in the owner's voice: one part of words, and one album of files. */
+export class MessageGone extends Error {
+  constructor() {
+    super("Telegram has no message here for the owner's account to delete");
+  }
+}
+
+/** What is sent through the owner's account: one part of words, one album of files, the typing mark shown or
+ * taken off, and a message deleted for everyone. */
 export interface OwnerAccount {
   say(words: OwnerWords): Promise<OwnerSent>;
   album(album: OwnerAlbum): Promise<OwnerSent[]>;
+  typing(chatId: number, on: boolean): Promise<void>;
+  delete(chatId: number, messageId: number): Promise<void>;
 }
 
 // How the account reads what it is given: the service's markup as HTML, plain words as they stand. The
@@ -187,19 +197,25 @@ async function readerTarget(
     return { client, entity, replyTo: undefined };
   }
 
-  const own = accountMessageId(chatId, replyToMessageId);
+  const own = await heldLine(client, entity, chatId, replyToMessageId);
 
-  if (own <= 0) {
-    throw new ReplyUnreachable();
-  }
-
-  const [line] = await client.getMessages(entity, { ids: [own] });
-
-  if (line === undefined || line.id !== own) {
+  if (own === null) {
     throw new ReplyUnreachable();
   }
 
   return { client, entity, replyTo: own };
+}
+
+// The account's own number for a message the provider names, where the account holds a line under it; null
+// where it holds none.
+async function heldLine(client: TelegramClient, entity: Awaited<ReturnType<typeof resolveEntity>>, chatId: number, messageId: number): Promise<number | null> {
+  const own = accountMessageId(chatId, messageId);
+
+  if (own <= 0) return null;
+
+  const [line] = await client.getMessages(entity, { ids: [own] });
+
+  return line === undefined || line.id !== own ? null : own;
 }
 
 /** The owner's account as this process's own connection to it, asked for at each send; every message a send
@@ -264,18 +280,39 @@ export function heldOwnerAccount(client: () => TelegramClient | null, peers: Pee
 
       return album.files.map((_, at) => ({ id: sent[at]?.id ?? null, text: sent[at]?.message ?? "" }));
     },
+
+    typing: async (chatId, on) => {
+      const { client: account, entity } = await readerTarget(client(), peers, chatId, null);
+      const { Api } = mtproto();
+      const action = on ? new Api.SendMessageTypingAction() : new Api.SendMessageCancelAction();
+
+      await account.invoke(new Api.messages.SetTyping({ peer: entity, action }));
+    },
+
+    // Deleted for everyone in the room, as a person deleting their own message would ask.
+    delete: async (chatId, messageId) => {
+      const { client: account, entity } = await readerTarget(client(), peers, chatId, null);
+      const own = await heldLine(account, entity, chatId, messageId);
+
+      if (own === null) throw new MessageGone();
+
+      await account.deleteMessages(entity, [own], { revoke: true });
+    },
   };
 
   return {
     say: async (words) => await sends.sending(words.chatId, () => account.say(words), (sent) => [sent.id]),
     album: async (album) => await sends.sending(album.chatId, () => account.album(album), (sent) => sent.map((one) => one.id)),
+    typing: account.typing,
+    delete: account.delete,
   };
 }
 
 /** The name a refusal of the owner's account crosses the seam under, or null where it is none. */
-export function ownerRefusalName(error: unknown): "unavailable" | "unreachable" | null {
+export function ownerRefusalName(error: unknown): "unavailable" | "unreachable" | "gone" | null {
   if (error instanceof ReaderUnavailable) return "unavailable";
   if (error instanceof ReplyUnreachable) return "unreachable";
+  if (error instanceof MessageGone) return "gone";
 
   return null;
 }

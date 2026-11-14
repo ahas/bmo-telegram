@@ -13,6 +13,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::albums::AlbumNames;
+use crate::avatar::AvatarLines;
 use crate::bot_api::BotApi;
 use crate::echoes::Echoes;
 use crate::file_ids::FileIds;
@@ -36,6 +37,8 @@ pub struct Telegram {
   file_ids: Arc<FileIds>,
   // What the sends in the owner's voice went out as, so their echo is not handed over.
   echoes: Arc<Echoes>,
+  // The avatar's lines, so one read back from the owner's number is handed over as the agent's own.
+  avatar: AvatarLines,
   // Why the bot account is not reading yet, or null once it is.
   standing: Mutex<Option<String>>,
   // Whether Telegram said the bot is in a room, and when it said so.
@@ -122,9 +125,21 @@ impl Telegram {
       albums: Mutex::default(),
       seen,
       echoes: Arc::default(),
+      avatar: AvatarLines::new(owner_id, None),
       standing: Mutex::new(Some("the bot account has not been read yet".to_owned())),
       presence: Mutex::default(),
     }
+  }
+
+  /// The bot account whose avatar's words carry `prefix` where it is not blank, rather than the policy's.
+  pub fn with_avatar_prefix(mut self, prefix: Option<String>) -> Self {
+    self.avatar = AvatarLines::new(self.owner_id, prefix);
+    self
+  }
+
+  /// The avatar's lines as the bot account reads them back.
+  pub fn avatar(&self) -> &AvatarLines {
+    &self.avatar
   }
 
   /// Null where the bot account can run, else why not.
@@ -359,6 +374,11 @@ impl Telegram {
       handed.context.metadata = Some(kept);
     }
 
+    // A line the avatar sent, read back past its echo, is the agent's own (docs/telegram.md, 「The avatar」).
+    if let Some(handed) = reading.message_mut() {
+      self.avatar.take_as_agent_s(handed);
+    }
+
     match reading {
       Reading::Said(mut handed) => {
         handed.gathering = assets;
@@ -422,6 +442,8 @@ impl Telegram {
     let Some(mut handed) = edit.said else {
       return Ok(());
     };
+
+    self.avatar.take_as_agent_s(&mut handed);
     let mut files = self.gatherer.assets(chat_id, message_id, &raw).await;
 
     if edit.carries_file {

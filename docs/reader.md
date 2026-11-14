@@ -22,11 +22,13 @@ reader」), and it reaches nothing but the service and Telegram.
   are the bot account's to read, and the reader hands none of them over.
 - **What the Bot API will not fetch.** A picture or a file past the Bot API's ceiling for a bot, and a picture
   fetched after the fact for a turn that answers it, are fetched through the reader and answered as bytes.
-- **The owner's own words.** A send in the owner's voice goes out in the owner's account, never by the bot:
-  the words and the files the bot's send would carry, its markup sent as HTML, the words sent plain where the
-  account refuses the markup. A reply the send names is found on the account by the message's number; one it
-  has no line under is refused `unreachable`. Each send answers the numbers its messages went out as and the
-  words Telegram holds for each, by which the service knows the bot account's sight of them as their echo.
+- **The owner's own words, and the avatar's.** A send in the owner's voice, or in the avatar's behind its prefix,
+  goes out in the owner's account, never by the bot: the words and the files the bot's send would carry, its
+  markup sent as HTML, the words sent plain where the account refuses the markup. The typing mark is shown, and a
+  message the account holds deleted for everyone, the same way. A reply the send names is found on the account by
+  the message's number; one it has no line under is refused `unreachable`. Each send answers the numbers its
+  messages went out as and the words Telegram holds for each, by which the service knows the bot account's sight
+  of them as their echo.
 - **The rooms of the account.** Every chat the owner's account is in is listed, for a person to choose a room
   among them; one the bot is not in is read-only (`docs/telegram.md`, 「The rooms」).
 - **Contacts and conversations started.** The account's contacts are listed, and a one-to-one or a group with

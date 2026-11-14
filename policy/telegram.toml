@@ -66,6 +66,11 @@ empty_file = "{name}: the file is empty, so it was not sent."
 too_large = "{name}: {size} is too large; one file can be at most {largest}."
 megabytes = "{megabytes} MB"
 
+# The agent's words in the owner's account, the `human-avatar` voice: the prefix they carry where neither the
+# send nor the deployment names one, so a reader of the room tells them from the owner's own.
+[avatar]
+prefix = "🤖 "
+
 # What the provider gathers of a message.
 [gathering]
 # Why a file that could not be kept is handed over as not kept.

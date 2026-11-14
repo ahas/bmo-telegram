@@ -10,13 +10,15 @@ use axum::http::StatusCode;
 use axum::response::Json;
 use axum::routing::{get, post};
 use bmo_chat::{FileItem, MessageFile, ReceiverRoom};
+use bmo_telegram::avatar::AvatarLines;
 use bmo_telegram::compose::Part;
+use bmo_telegram::policy::POLICY;
 use bmo_telegram::reader::{AsOwner, OwnerSent, ReaderClient, ReaderFetch, ReaderRoom};
 use bmo_telegram::seam::{Presence, Seam, Standing, seam_router};
 use bmo_telegram::seen::Seen;
 use bmo_telegram::wire::Wire;
 use serde_json::{Value, json};
-use support::KeptReceiver;
+use support::{KeptReceiver, OWNER};
 
 const TOKEN: &str = "seam-token";
 // The one room of the receiver's the bot is in.
@@ -256,6 +258,7 @@ async fn seam_over(receiver: Arc<KeptReceiver>) -> Served {
     seen,
     standing: standing.clone(),
     presence: Arc::new(InBotRoom),
+    avatar: AvatarLines::new(OWNER, None),
   };
   let port = serve(seam_router(Arc::new(seam))).await;
 
@@ -383,6 +386,68 @@ async fn what_the_reader_hands_over_goes_on_to_the_receiver_and_its_room_and_sen
   assert_eq!(served.standing.history(), None);
   assert_eq!(served.standing.avatars(), None);
   assert_eq!(served.receiver.avatar_changes.lock().unwrap().clone()[0].room_ids, vec![-1001]);
+}
+
+// A line of the owner's account the reader hands over, with the words typed and the room's identity as the
+// reader names it.
+fn owner_line(room_id: i64, message_id: i64, words: &str) -> Value {
+  json!({
+    "kind": "message",
+    "roomId": room_id,
+    "messageId": message_id,
+    "message": {
+      "origin": "history",
+      "senderId": OWNER, "senderName": "Owner", "sentAt": 1_700_000_000_000_i64,
+      "text": words, "replyToMessageId": null, "via": "telegram", "album": null,
+      "mode": "human-reader",
+      "context": { "spokenText": words },
+      "room": { "kind": "group", "identity": 7_000_000_001_i64, "privateTo": null },
+      "files": []
+    }
+  })
+}
+
+/// A line the avatar sent, read back through the reader in a room the bot is in, goes on as the agent's own under
+/// the room's identity with the prefix taken off; an unprefixed line is the owner's, and so is a prefixed one in a
+/// room the bot is not in, where no avatar send goes (docs/telegram.md, 「The avatar」).
+#[tokio::test]
+async fn a_line_the_avatar_sent_read_back_through_the_reader_goes_on_as_the_agent_s_own() {
+  let (receiver, _heard) = KeptReceiver::new();
+  let served = seam_over(receiver).await;
+  let seam = Wire::loopback(served.port, TOKEN);
+  let prefix = &POLICY.avatar.prefix;
+  let lines = [
+    owner_line(BOT_ROOM, 1, &format!("{prefix}on my way")),
+    owner_line(BOT_ROOM, 2, "typed by hand"),
+    owner_line(-1002, 3, &format!("{prefix}typed by hand")),
+  ];
+
+  for line in &lines {
+    assert_eq!(seam.post("/reader/inbound", line).await.unwrap().status, 200);
+  }
+
+  let handed = served.receiver.handed.lock().unwrap().clone();
+  let said: Vec<(Value, Value, Value, Value)> = handed
+    .iter()
+    .map(|(_, body)| {
+      (
+        body["senderId"].clone(),
+        body["text"].clone(),
+        body["context"]["spokenText"].clone(),
+        body["mode"].clone(),
+      )
+    })
+    .collect();
+  let typed = format!("{prefix}typed by hand");
+
+  assert_eq!(
+    said,
+    [
+      (json!(7_000_000_001_i64), json!("on my way"), json!("on my way"), json!("human-avatar")),
+      (json!(OWNER), json!("typed by hand"), json!("typed by hand"), json!("human-reader")),
+      (json!(OWNER), json!(typed), json!(typed), json!("human-reader")),
+    ]
+  );
 }
 
 /// A person's words are the reader's to hand over only in a room the bot is not in whose `read` the receiving

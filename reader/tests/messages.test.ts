@@ -100,6 +100,8 @@ describe("the reader's route for one chat", () => {
   const owner: OwnerAccount = {
     say: async () => ({ id: null, text: "" }),
     album: async () => [],
+    typing: async () => {},
+    delete: async () => {},
   };
 
   const server = Bun.serve({

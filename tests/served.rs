@@ -263,6 +263,7 @@ async fn stood(reader_standing: bool) -> Served {
     seen: seen.clone(),
     standing: standing.clone(),
     presence: telegram.clone(),
+    avatar: telegram.avatar().clone(),
   });
 
   let pictures = tempdir().expect("a temporary folder");
@@ -441,7 +442,7 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
   assert_eq!(
     owner,
     json!({ "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER,
-      "title": "Board room", "modes": ["bot-account", "human-reader"] })
+      "title": "Board room", "modes": ["bot-account", "human-reader", "human-avatar"] })
   );
 
   let (status, bot_room) = asked_get(&served.base, &format!("/rooms/{ROOM}")).await;
@@ -450,7 +451,7 @@ async fn every_room_route_answers_for_a_room_the_provider_reads() {
   assert_eq!(
     bot_room,
     json!({ "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board room",
-      "modes": ["bot-account", "human-reader"] })
+      "modes": ["bot-account", "human-reader", "human-avatar"] })
   );
 
   let (status, person) = asked_get(&served.base, &format!("/rooms/{PERSON}")).await;
@@ -494,11 +495,11 @@ async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
     first,
     json!({ "items": [
       { "id": BOT_ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board room",
-        "modes": ["bot-account", "human-reader"] },
+        "modes": ["bot-account", "human-reader", "human-avatar"] },
       { "id": OTHER_ROOM, "owns": true, "identity": null, "kind": "group", "privateTo": null, "title": null,
         "modes": ["human-reader"] },
       { "id": ROOM, "owns": true, "identity": BOT, "kind": "group", "privateTo": null, "title": "Board",
-        "modes": ["bot-account", "human-reader"] }
+        "modes": ["bot-account", "human-reader", "human-avatar"] }
     ], "more": true })
   );
 
@@ -509,7 +510,7 @@ async fn the_bot_s_rooms_and_the_owner_s_account_s_are_listed_once_each() {
     next,
     json!({ "items": [
       { "id": OWNER, "owns": true, "identity": BOT, "kind": "owner", "privateTo": OWNER, "title": "Helper",
-        "modes": ["bot-account", "human-reader"] },
+        "modes": ["bot-account", "human-reader", "human-avatar"] },
       { "id": PERSON, "owns": true, "identity": null, "kind": "group", "privateTo": PERSON, "title": "Someone",
         "modes": ["human-reader"] },
       { "id": STRANGERS.start, "owns": true, "identity": null, "kind": "group", "privateTo": STRANGERS.start,
@@ -579,7 +580,7 @@ async fn a_one_to_one_is_the_bot_s_only_once_its_person_wrote_to_the_bot() {
   assert_eq!(
     after,
     json!({ "id": met, "owns": true, "identity": BOT, "kind": "group", "privateTo": met, "title": null,
-      "modes": ["bot-account", "human-reader"] })
+      "modes": ["bot-account", "human-reader", "human-avatar"] })
   );
 
   let (_, listed) = asked_get(&served.base, &format!("/rooms?after={PERSON}&limit=2")).await;
@@ -734,7 +735,7 @@ async fn a_room_the_bot_is_not_in_takes_only_the_owner_s_own_words() {
   let voices: Vec<&Value> =
     declaration["modes"].as_array().unwrap().iter().map(|mode| &mode["voice"]).collect();
 
-  assert_eq!(voices, [&json!("bot-account"), &json!("human-reader")]);
+  assert_eq!(voices, [&json!("bot-account"), &json!("human-reader"), &json!("human-avatar")]);
 
   for mode in [Value::Null, json!("bot-account"), json!("human-avatar")] {
     for (kind, fields) in [("text", json!({ "text": "an answer" })), ("typing", json!({ "on": true }))] {

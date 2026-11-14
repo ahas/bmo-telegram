@@ -2,7 +2,8 @@
 //! would carry, said through a fake reader and never by the bot, a send in no voice still the bot's, the echo
 //! of the owner's send as the bot account reads it not handed over again, the refusal while the reader has no
 //! account connected, and files gathered into the albums Telegram takes by their kinds, each file's size
-//! judged and a caption's line breaks read as a form carries them.
+//! judged and a caption's line breaks read as a form carries them; a line the avatar sent, read back past its
+//! echo, handed over as the agent's own (docs/telegram.md, 「The avatar」).
 
 use crate::support;
 
@@ -12,7 +13,10 @@ use std::time::Duration;
 use axum::Router;
 use axum::response::Json;
 use axum::routing::{get, post};
-use bmo_chat::{ChatProvider, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, ChatSticker, ChatVoice};
+use bmo_chat::{
+  ChatModeStanding, ChatProvider, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, ChatSticker,
+  ChatVoice,
+};
 use bmo_telegram::compose::text_parts;
 use bmo_telegram::echoes::{Echoes, numbered_for_everyone};
 use bmo_telegram::file_ids::FileIds;
@@ -39,6 +43,8 @@ type Asked = Arc<Mutex<Vec<(String, Value)>>>;
 // from 900 and holding each one's plain words as Telegram would.
 fn fake_reader(connected: bool, asked: Asked) -> Router {
   let album_asked = asked.clone();
+  let typing_asked = asked.clone();
+  let delete_asked = asked.clone();
 
   Router::new()
     .route(
@@ -70,6 +76,28 @@ fn fake_reader(connected: bool, asked: Asked) -> Router {
           (0..count).map(|at| if at == 0 { body["caption"].as_str().unwrap_or_default() } else { "" }).collect();
 
         Json(json!({ "ids": ids, "texts": texts }))
+      }),
+    )
+    .route(
+      "/owner/typing",
+      post(move |Json(body): Json<Value>| async move {
+        typing_asked.lock().unwrap().push(("typing".to_owned(), body));
+        Json(json!({}))
+      }),
+    )
+    // The account holds a line under 900 alone.
+    .route(
+      "/owner/delete",
+      post(move |Json(body): Json<Value>| async move {
+        let held = body["messageId"] == 900;
+
+        delete_asked.lock().unwrap().push(("delete".to_owned(), body));
+
+        if held {
+          Json(json!({}))
+        } else {
+          Json(json!({ "refused": "gone", "error": "no line under that number" }))
+        }
       }),
     )
 }
@@ -137,6 +165,21 @@ fn text(room: i64, mode: Option<ChatVoice>, words: &str) -> ChatSendRequest {
 
 fn as_owner(room: i64, words: &str) -> ChatSendRequest {
   text(room, Some(ChatVoice::HumanReader), words)
+}
+
+fn as_avatar(room: i64, words: &str) -> ChatSendRequest {
+  text(room, Some(ChatVoice::HumanAvatar), words)
+}
+
+// A provider's mode by its voice: its standing and its reason.
+fn standing_of(provider: &TelegramProvider, voice: ChatVoice) -> (ChatModeStanding, Option<String>) {
+  let mode = provider
+    .modes()
+    .into_iter()
+    .find(|mode| mode.voice == voice)
+    .expect("the mode is declared");
+
+  (mode.standing, mode.reason)
 }
 
 // A message the bot account reads in a room, from the owner's number.
@@ -318,6 +361,189 @@ async fn the_echo_of_the_owner_s_send_is_not_handed_over_again_by_number_or_by_w
     .unwrap();
 
   assert_eq!(handed_ids(&receiver), [950, 7_000, 7_002]);
+}
+
+/// The avatar stands on the owner's account alone: active while the reader has it connected, and inactive with
+/// the reader's reason, the same as the owner's own voice, where it does not or no reader stands.
+#[tokio::test]
+async fn the_avatar_is_declared_active_only_while_the_owner_s_account_stands_and_names_the_reader_s_reason_otherwise()
+ {
+  let up = standing(Some(true)).await;
+
+  up.provider.refresh_reader().await;
+  assert_eq!(standing_of(&up.provider, ChatVoice::HumanAvatar), (ChatModeStanding::Active, None));
+
+  let down = standing(Some(false)).await;
+  let not_connected = (ChatModeStanding::Inactive, Some("the account is not connected".to_owned()));
+
+  down.provider.refresh_reader().await;
+  assert_eq!(standing_of(&down.provider, ChatVoice::HumanAvatar), not_connected);
+  assert_eq!(standing_of(&down.provider, ChatVoice::HumanReader), not_connected);
+  assert_eq!(standing_of(&down.provider, ChatVoice::BotAccount), (ChatModeStanding::Active, None));
+
+  let none = standing(None).await;
+
+  none.provider.refresh_reader().await;
+  assert_eq!(
+    standing_of(&none.provider, ChatVoice::HumanAvatar),
+    (ChatModeStanding::Inactive, Some(NO_READER.to_owned()))
+  );
+  assert_eq!(
+    down.provider.send(as_avatar(SUPERGROUP, "hello")).await.unwrap(),
+    ChatSendResult::Refused(POLICY.mode_down("human-avatar", Some("the account is not connected")))
+  );
+  assert!(down.bot.asked().is_empty(), "the avatar never goes by the bot");
+}
+
+/// The avatar's words go through the owner's account, every part behind the prefix, plain as it stands and
+/// in the markup escaped, with words already behind it not put behind it twice; the send's own prefix comes
+/// first; a file sent bare carries the prefix alone as its caption; the owner's own words carry none.
+#[tokio::test]
+async fn the_avatar_s_every_part_carries_the_prefix_and_the_owner_s_own_words_carry_none() {
+  let up = standing(Some(true)).await;
+  let prefix = POLICY.avatar.prefix.as_str();
+  let words = format!("**Bold** <words>\n\n{}", "a ".repeat(2100));
+
+  assert!(matches!(
+    up.provider.send(as_avatar(SUPERGROUP, &words)).await.unwrap(),
+    ChatSendResult::Sent(_)
+  ));
+  up.provider.send(as_avatar(SUPERGROUP, &format!("{prefix}once"))).await.unwrap();
+  up.provider
+    .send(ChatSendRequest {
+      prefix: Some("<agent> ".to_owned()),
+      ..as_avatar(SUPERGROUP, "**own** prefix")
+    })
+    .await
+    .unwrap();
+  up.provider
+    .send(ChatSendRequest {
+      mode: Some(ChatVoice::HumanAvatar),
+      ..ChatSendRequest::new(
+        GROUP,
+        ChatSend::Document {
+          bytes: vec![1, 2, 3],
+          file_name: "notes.txt".to_owned(),
+        },
+      )
+    })
+    .await
+    .unwrap();
+  up.provider.send(as_owner(SUPERGROUP, &words)).await.unwrap();
+  assert!(up.bot.asked().is_empty(), "the bot sent nothing: {:?}", up.bot.methods());
+
+  let asked = up.asked.lock().unwrap().clone();
+  let says: Vec<&Value> = asked.iter().filter(|(route, _)| route == "say").map(|(_, body)| body).collect();
+  let parts = text_parts(&words, false).len();
+  let avatar_parts = says.len() - 2 - parts;
+
+  assert!(avatar_parts > 1, "the avatar's words take several parts");
+
+  for said in &says[..avatar_parts] {
+    let plain = said["text"].as_str().unwrap();
+    let markup = said["markup"].as_str().unwrap_or(plain);
+
+    assert!(plain.starts_with(prefix), "{plain:.40}");
+    assert!(markup.starts_with(prefix), "{markup:.40}");
+    assert!(!plain[prefix.len()..].starts_with(prefix.trim_end()), "never doubled");
+  }
+
+  assert_eq!(
+    says[0]["markup"].as_str().map(|markup| markup.contains("<b>Bold</b> &lt;words&gt;")),
+    Some(true)
+  );
+  assert_eq!(says[avatar_parts]["text"], format!("{prefix}once"));
+  assert_eq!(says[avatar_parts + 1]["text"], "<agent> own prefix");
+  assert_eq!(says[avatar_parts + 1]["markup"], "&lt;agent&gt; <b>own</b> prefix");
+
+  for said in &says[avatar_parts + 2..] {
+    assert!(
+      !said["text"].as_str().unwrap().starts_with(prefix.trim_end()),
+      "the owner's words carry no prefix"
+    );
+  }
+
+  let album = asked.iter().find(|(route, _)| route == "album").map(|(_, body)| body).unwrap();
+
+  assert_eq!(album["caption"], prefix);
+}
+
+/// The typing mark and a delete in the owner's account go through the reader, and a delete of a number the
+/// account holds no line under is refused as gone.
+#[tokio::test]
+async fn the_avatar_s_typing_mark_and_delete_go_through_the_owner_s_account() {
+  let up = standing(Some(true)).await;
+  let act = |send: ChatSend| ChatSendRequest {
+    mode: Some(ChatVoice::HumanAvatar),
+    ..ChatSendRequest::new(GROUP, send)
+  };
+
+  assert_eq!(
+    up.provider.send(act(ChatSend::Typing { on: true })).await.unwrap(),
+    ChatSendResult::Sent(ChatSent {
+      message_id: None,
+      missed: Vec::new()
+    })
+  );
+  assert_eq!(
+    up.provider.send(act(ChatSend::Delete { message_id: 900 })).await.unwrap(),
+    ChatSendResult::Sent(ChatSent {
+      message_id: Some(900),
+      missed: Vec::new()
+    })
+  );
+  assert_eq!(
+    up.provider.send(act(ChatSend::Delete { message_id: 901 })).await.unwrap(),
+    ChatSendResult::Refused(POLICY.message_gone("no line under that number"))
+  );
+  assert!(up.bot.asked().is_empty());
+  assert_eq!(
+    up.asked.lock().unwrap().clone(),
+    [
+      ("typing".to_owned(), json!({ "chatId": GROUP, "on": true })),
+      ("delete".to_owned(), json!({ "chatId": GROUP, "messageId": 900 })),
+      ("delete".to_owned(), json!({ "chatId": GROUP, "messageId": 901 })),
+    ]
+  );
+}
+
+#[tokio::test]
+async fn a_line_the_avatar_sent_read_back_past_its_echo_is_the_agent_s_own_and_an_unprefixed_one_the_owner_s()
+ {
+  let up = standing(Some(true)).await;
+  let (receiver, _heard) = KeptReceiver::new();
+  let prefix = &POLICY.avatar.prefix;
+
+  // No echo note answers either line, as after the note has gone or a restart.
+  up.telegram
+    .message(receiver.clone(), from_owner(SUPERGROUP, 960, &format!("{prefix}on my way")))
+    .await
+    .unwrap();
+  up.telegram
+    .message(receiver.clone(), from_owner(SUPERGROUP, 961, "typed by hand"))
+    .await
+    .unwrap();
+
+  let handed = receiver.handed.lock().unwrap().clone();
+  let said = |at: usize| {
+    let body = &handed[at].1;
+
+    (
+      body["senderId"].clone(),
+      body["text"].clone(),
+      body["context"]["spokenText"].clone(),
+      body["mode"].clone(),
+    )
+  };
+
+  assert_eq!(
+    said(0),
+    (json!(up.telegram.me()), json!("on my way"), json!("on my way"), json!("human-avatar"))
+  );
+  assert_eq!(
+    said(1),
+    (json!(OWNER), json!("typed by hand"), json!("typed by hand"), json!("bot-account"))
+  );
 }
 
 #[tokio::test]

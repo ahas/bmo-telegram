@@ -27,7 +27,7 @@ the reader」).
 | Method | Path | Answer |
 |---|---|---|
 | `GET` | `/rooms` | a page of the rooms the bot account and the owner's account are in, each once, in ascending order of `id`, walked by `after` (a room) and `limit`, each as `GET /rooms/{roomId}` shapes a room; refused `unsupported-capability` while `roomList` is not declared |
-| `GET` | `/rooms/{roomId}` | what the provider knows of the room: `id`, `owns`, `identity` (null in a room the bot is not in), `kind`, `privateTo`, `title` and `modes` (`human-reader` alone in a room the bot is not in, which takes only the owner's own words; the declaration's active voices in a room of the bot's); 404 `not-found` where it knows nothing of it |
+| `GET` | `/rooms/{roomId}` | what the provider knows of the room: `id`, `owns`, `identity` (null in a room the bot is not in), `kind`, `privateTo`, `title` and `modes` (`human-reader` alone in a room the bot is not in, which takes only the owner's own words; the declaration's active voices in a room of the bot's, `human-avatar` among them while the reader is connected); 404 `not-found` where it knows nothing of it |
 | `GET` | `/owner` | `roomId`, the room to reach the owner in, or null |
 | `POST` | `/rooms` | 201, the room a conversation the owner's account started came to: a one-to-one with `contactId`, read-only unless the bot is in it, or a group of `contactIds` under `title`; 400 `bad-request` for neither shape, 404 `not-found` for a number that is not a contact, `platform` for what Telegram refuses; refused `unsupported-capability` while `startChat` or `startGroup` is not declared |
 

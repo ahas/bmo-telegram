@@ -16,6 +16,8 @@ const peers = { ownerId: OWNER_ID, botId: BOT_ID };
 const owner: OwnerAccount = {
   say: async () => ({ id: null, text: "" }),
   album: async () => [],
+  typing: async () => {},
+  delete: async () => {},
 };
 
 // One dialog of the stand-in account: its number and title, and what its chat says of itself.
