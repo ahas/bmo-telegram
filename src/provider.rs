@@ -13,7 +13,7 @@ use bmo_chat::{
   ChatAvatar, ChatAvatarKind, ChatCapability, ChatContact, ChatContactKind, ChatDialect, ChatFailure,
   ChatHealth, ChatMediaRequest, ChatMediaResult, ChatModeStanding, ChatNumberRanges, ChatNumberSpace,
   ChatNumbering, ChatPicture, ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal,
-  ChatSendRequest, ChatSendResult, ChatStart, ChatStartResult, ChatVoice, MessageFile, ProviderRoom,
+  ChatSendRequest, ChatSendResult, ChatStartRequest, ChatStartResult, ChatVoice, MessageFile, ProviderRoom,
   RoomQuery,
 };
 use serde::Serialize;
@@ -568,7 +568,9 @@ impl ChatProvider for TelegramProvider {
     Ok(rooms.into_values().collect())
   }
 
-  async fn contacts(&self) -> Result<Vec<ChatContact>, ChatFailure> {
+  // The owner's account's contacts, whichever account a listing names: it is the one person's account this
+  // provider holds (bmo-chat's docs/contract.md, 「The account a call is for」).
+  async fn contacts(&self, _account_id: Option<i64>) -> Result<Vec<ChatContact>, ChatFailure> {
     let contacts = self
       .reader_contacts()
       .await
@@ -589,7 +591,8 @@ impl ChatProvider for TelegramProvider {
 
   // A conversation started by the owner's account, never by the bot, which cannot start a one-to-one
   // (docs/telegram.md, 「Contacts and starting a conversation」).
-  async fn start_chat(&self, start: ChatStart) -> Result<ChatStartResult, ChatFailure> {
+  async fn start_chat(&self, request: ChatStartRequest) -> Result<ChatStartResult, ChatFailure> {
+    let start = request.start;
     let health = self.refresh_reader().await;
     let Some(reader) = self.reader.as_ref().filter(|_| health.connected) else {
       let why = health.reason.as_deref().unwrap_or(NO_READER);
