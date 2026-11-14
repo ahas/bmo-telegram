@@ -151,9 +151,20 @@ async fn inbound(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Resp
     } => {
       let history = message.origin == MessageOrigin::History;
 
-      // No words of the provider's own stand in a room the bot is not in.
+      // A room the bot is not in carries the facts its own answer gives (docs/telegram.md, 「The rooms」): where the
+      // receiver reads it, the agent's identity and no person of a one-to-one; where it does not, no words of the
+      // provider's own stand there.
       if !seam.presence.bot_in(room_id).await {
-        message.room.identity = None;
+        let query = RoomQuery {
+          via: VIA.to_owned(),
+        };
+        let read = matches!(seam.receiver.room(room_id, query).await, Ok(Some(held)) if read_asked(&held));
+
+        if read {
+          message.room.private_to = None;
+        } else {
+          message.room.identity = None;
+        }
       }
 
       // A line the avatar sent goes on as the agent's own (docs/telegram.md, 「The avatar」).

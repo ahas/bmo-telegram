@@ -32,11 +32,12 @@ sticker_unset = "No sticker set is configured."
 # by.
 mode_down = "Telegram's {mode} mode is not running: {why}."
 mode_missing = "Telegram does not read by that mode"
-# A send in the owner's own account of a {verb} it does not carry: it takes words and files alone.
-owner_verb = "The owner's own account sends only text, photos, albums, documents and audio, not {verb}."
-# A send in any voice but the owner's own into a room the bot is not in: such a room is the owner's account's
-# alone, read only.
-read_only = "The bot is not in this room: it is the owner's account's alone, and takes only the owner's own words."
+# A send in the owner's own account of a {verb} it does not carry: it takes words, files, the typing mark and a
+# delete alone.
+owner_verb = "The owner's own account sends only text, photos, albums, documents, audio, the typing mark and deletes, not {verb}."
+# A send into a room the bot is not in, in any voice but the owner's own, or in the avatar's where the room is not
+# added: such a room is the owner's account's alone.
+read_only = "The bot is not in this room: it is the owner's account's alone, and takes only the owner's own words, and the avatar's once the room is added."
 
 # A picture: the placeholder a picture message with no caption is handed over as, why one did not go, and how
 # one is redrawn. A picture named by something that is neither a web address nor a file under the picture

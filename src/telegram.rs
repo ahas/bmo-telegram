@@ -257,10 +257,19 @@ impl Telegram {
     }
   }
 
-  /// A room of the owner's account the bot is not in, as the protocol shapes it under `title`: read-only, taking
-  /// the owner's own voice alone, and with no number of the provider's own speaking there, so its identity is
-  /// null.
-  pub fn account_room_of(&self, chat_id: i64, title: Option<String>) -> ProviderRoom {
+  /// A room of the owner's account the bot is not in, as the protocol shapes it under `title` (docs/telegram.md,
+  /// 「The rooms」). Where the receiving side reads it, it can be answered in the avatar: it takes the owner's own
+  /// voice and the avatar's, the bot's number stands as the agent's identity, and no person of a one-to-one is
+  /// named, since the person speaks with the owner there. Otherwise it is read-only: the owner's own voice alone,
+  /// and no number of the provider's own, so its identity is null.
+  pub fn account_room_of(&self, chat_id: i64, title: Option<String>, read: bool) -> ProviderRoom {
+    if read {
+      return ProviderRoom {
+        private_to: None,
+        ..self.room_of(chat_id, title, vec![ChatVoice::HumanReader, ChatVoice::HumanAvatar])
+      };
+    }
+
     ProviderRoom {
       identity: None,
       ..self.room_of(chat_id, title, vec![ChatVoice::HumanReader])

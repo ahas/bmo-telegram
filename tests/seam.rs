@@ -23,6 +23,8 @@ use support::{KeptReceiver, OWNER};
 const TOKEN: &str = "seam-token";
 // The one room of the receiver's the bot is in.
 const BOT_ROOM: i64 = -1001;
+// A one-to-one of the owner's account the bot is not in, added, so the receiver reads it.
+const ADDED_PERSON: i64 = 77;
 
 // The bot account, in `BOT_ROOM` alone.
 struct InBotRoom;
@@ -388,8 +390,8 @@ async fn what_the_reader_hands_over_goes_on_to_the_receiver_and_its_room_and_sen
   assert_eq!(served.receiver.avatar_changes.lock().unwrap().clone()[0].room_ids, vec![-1001]);
 }
 
-// A line of the owner's account the reader hands over, with the words typed and the room's identity as the
-// reader names it.
+// A line of the owner's account the reader hands over, with the words typed and the room's identity and person as
+// the reader names them.
 fn owner_line(room_id: i64, message_id: i64, words: &str) -> Value {
   json!({
     "kind": "message",
@@ -401,18 +403,28 @@ fn owner_line(room_id: i64, message_id: i64, words: &str) -> Value {
       "text": words, "replyToMessageId": null, "via": "telegram", "album": null,
       "mode": "human-reader",
       "context": { "spokenText": words },
-      "room": { "kind": "group", "identity": 7_000_000_001_i64, "privateTo": null },
+      "room": { "kind": "group", "identity": 7_000_000_001_i64, "privateTo": (room_id > 0).then_some(room_id) },
       "files": []
     }
   })
 }
 
-/// A line the avatar sent, read back through the reader in a room the bot is in, goes on as the agent's own under
-/// the room's identity with the prefix taken off; an unprefixed line is the owner's, and so is a prefixed one in a
-/// room the bot is not in, where no avatar send goes (docs/telegram.md, 「The avatar」).
+/// A line the avatar sent, read back through the reader in a room the bot is in or one the receiver reads, goes on
+/// as the agent's own under the room's identity with the prefix taken off, a read room naming no person; an
+/// unprefixed line is the owner's, and so is a prefixed one in a room the bot is not in that the receiver does not
+/// read, where no avatar send goes (docs/telegram.md, 「The rooms」, 「The avatar」).
 #[tokio::test]
 async fn a_line_the_avatar_sent_read_back_through_the_reader_goes_on_as_the_agent_s_own() {
   let (receiver, _heard) = KeptReceiver::new();
+
+  *receiver.rooms.lock().unwrap() = vec![ReceiverRoom {
+    id: ADDED_PERSON,
+    listened: true,
+    read: true,
+    oldest_message_id: None,
+    oldest_sent_at: None,
+  }];
+
   let served = seam_over(receiver).await;
   let seam = Wire::loopback(served.port, TOKEN);
   let prefix = &POLICY.avatar.prefix;
@@ -420,6 +432,7 @@ async fn a_line_the_avatar_sent_read_back_through_the_reader_goes_on_as_the_agen
     owner_line(BOT_ROOM, 1, &format!("{prefix}on my way")),
     owner_line(BOT_ROOM, 2, "typed by hand"),
     owner_line(-1002, 3, &format!("{prefix}typed by hand")),
+    owner_line(ADDED_PERSON, 4, &format!("{prefix}on my way")),
   ];
 
   for line in &lines {
@@ -446,8 +459,12 @@ async fn a_line_the_avatar_sent_read_back_through_the_reader_goes_on_as_the_agen
       (json!(7_000_000_001_i64), json!("on my way"), json!("on my way"), json!("human-avatar")),
       (json!(OWNER), json!("typed by hand"), json!("typed by hand"), json!("human-reader")),
       (json!(OWNER), json!(typed), json!(typed), json!("human-reader")),
+      (json!(7_000_000_001_i64), json!("on my way"), json!("on my way"), json!("human-avatar")),
     ]
   );
+  // A room the receiver reads keeps the agent's identity and names no person; one it does not read keeps none.
+  assert_eq!(handed[2].1["room"], json!({ "kind": "group" }));
+  assert_eq!(handed[3].1["room"], json!({ "kind": "group", "identity": 7_000_000_001_i64 }));
 }
 
 /// A person's words are the reader's to hand over only in a room the bot is not in whose `read` the receiving

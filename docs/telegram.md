@@ -55,14 +55,18 @@ owner's account's alone (「Contacts and starting a conversation」).
   bot account read the message; the provider keeps a record of who has, and Telegram is not asked. Telegram lets
   a bot speak to a person only after the person has spoken to it, and it knows a person the bot merely shares a
   group with as well as one who wrote to it, so that knowing is no sign of a chat. A one-to-one of the owner's
-  account with anyone else, the bot met in a group or never at all, is the owner's account's and read-only.
+  account with anyone else, the bot met in a group or never at all, is the owner's account's.
 - **For a group or a channel** Telegram is asked once and its answer stands for ten minutes; a message the bot
   account reads in a room lets go of the answer kept for it, so a room the bot has just joined is asked again.
   Where Telegram cannot be asked, a room the provider has seen stands as the bot's.
-- **A room of the owner's account the bot is not in is read-only.** It is listed and answered as a room of the
-  provider's own, so it can be added, and it is the owner's account's alone: its `modes` are `human-reader`
-  alone, and only the owner's own words, a send naming that voice, go into it. A send in any other voice, or naming none, is refused `platform`
-  with the policy's `read_only`, whatever its verb, so nothing answers in such a room.
+- **A room of the owner's account the bot is not in is the owner's account's alone.** It is listed and answered
+  as a room of the provider's own, so it can be added. Until the receiving side reads it (below) it is
+  read-only: its `modes` are `human-reader` alone, and only the owner's own words, a send naming that voice, go
+  into it. Once the receiving side reads it, which it does for a room added on this provider whatever its mode,
+  it can be answered as the owner as well: its `modes` are `human-reader` and `human-avatar`, and a send naming
+  the avatar goes into it through the owner's account (「The avatar」). A send in any other voice, or naming none,
+  is refused `platform` with the policy's `read_only`, whatever its verb, so the bot never answers in such a
+  room, and so is an avatar send into a room the receiving side does not read.
 - **A room the bot is not in is read through the owner's account only where the receiving side asks for it.**
   Other bots' words are read wherever the room is listened to, as in any room. A person's words there are
   read and handed over, as `live` in `human-reader`, only where the receiving side asked for the room to be
@@ -72,14 +76,15 @@ owner's account's alone (「Contacts and starting a conversation」).
   it is for」). The request is the `read` of the room as the receiving side answers it; whether the room is
   listened to is no such request, and a receiving side that does not answer, or holds nothing of the room,
   asks for nothing.
-- **A hand-over from a room the bot is not in carries no `identity`** in its room facts, as the room's own
-  answer carries none.
 - **A room's `modes`** are the voices the declaration has active in a room of the bot's, `human-avatar` among
-  them while the reader is connected, and `human-reader` alone in a room the bot is not in. A room the bot is
-  not in therefore takes no avatar: its people's words are read only while it stays read-only, as the receiving
-  side asks for the room to be read, so the provider keeps it so rather than answer in a room it would stop
-  reading. Its `identity` is the bot's number in a room of the bot's, and null in one the bot is not in, since
-  no words of the provider's own stand there but the owner's.
+  them while the reader is connected; in a room the bot is not in, `human-reader` and `human-avatar` where the
+  receiving side reads it, and `human-reader` alone where it does not.
+- **A room's `identity`** is the bot's number in a room of the bot's, and in a room the bot is not in that the
+  receiving side reads, where it is the number the agent's words in the avatar stand under (「The avatar」); it
+  is null in a room the bot is not in that the receiving side does not read, since no words of the provider's
+  own stand there but the owner's. A hand-over's room facts carry the same identity as the room's answer.
+- **A room the bot is not in that the receiving side reads carries no `privateTo`,** one-to-one or not: it may be
+  answered in the avatar voice, where the person in it speaks with the owner and not with the agent.
 - **The list** holds the bot's rooms, the owner's one-to-one and every room seen that the bot is in, and every
   chat of the owner's account (`docs/reader.md`, 「The rooms of the account」), each room once: a chat the bot is
   also in is the bot's, under the account's title for it, and a room of the bot's the account does not list is
@@ -97,9 +102,9 @@ owner's account's alone (「Contacts and starting a conversation」).
   contacts.
 - **The bot account cannot start a one-to-one.** Telegram lets a bot speak to a person only once the person has
   spoken to it, so every conversation is started by the owner's account, through the reader.
-- **A one-to-one started is an owner-account room, read-only,** as any room the bot is not in (「The rooms」):
-  `human-reader` alone and no `identity`, unless the bot is already in a one-to-one numbered the same, which is
-  then the bot's. Starting it sends nothing: Telegram makes a one-to-one stand only once a message is in it, so
+- **A one-to-one started is an owner-account room,** as any room the bot is not in (「The rooms」): read-only,
+  `human-reader` alone and no `identity` until the receiving side reads it, unless the bot is already in a
+  one-to-one numbered the same, which is then the bot's. Starting it sends nothing: Telegram makes a one-to-one stand only once a message is in it, so
   the room answered is the one the first message will make, under the person's number, titled with the
   contact's name. A one-to-one the account already has comes to that room.
 - **A group started is a Telegram group the owner's account makes,** under the title asked, with the contacts
@@ -221,7 +226,7 @@ English lines of `policy/telegram.toml`, each the detail of a `platform` refusal
 | a sticker where no set is configured | `platform` | `sticker_unset` |
 | a send asked to be spoken in a mode that is not running, the owner's voice or the avatar's while the reader does not have the account connected among them, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
 | a send in the owner's account, in the owner's voice or the avatar's, of a verb other than `text`, `photo`, `album`, `document`, `audio`, `typing` and `delete` | `platform` | `owner_verb` |
-| a send in any voice but the owner's own into a room the bot is not in (「The rooms」) | `platform` | `read_only` |
+| a send in any voice but the owner's own into a room the bot is not in, the avatar's but where the receiving side reads the room (「The rooms」) | `platform` | `read_only` |
 | any other refusal Telegram gives | `platform` | Telegram's own description |
 | every picture of a send missed | `no-picture-sent` | each picture with its reason, below |
 
@@ -289,18 +294,20 @@ the agent's by the avatar prefix, and the owner's own words, in `human-reader`, 
 - **The prefix reads as written**: it is put before the plain words as it stands and before the markup escaped,
   so nothing in it is read as a mark.
 - **`typing` and `delete` carry no words** and so no prefix.
-- **A room the bot is not in takes no avatar send**: it is refused with the policy's `read_only`, as a send in any
-  voice but the owner's own is (「The rooms」).
+- **A room the bot is not in takes an avatar send only where the receiving side reads it**, so only a room added
+  on this provider; elsewhere it is refused with the policy's `read_only` (「The rooms」). Whether the receiving
+  side reads a room is asked of it at the send, as the room's answer asks it.
 - **A line the avatar sent is the agent's own wherever it is read back.** A message from the owner's number, in a
-  room of the bot's, whose words begin with the prefix is handed over as the agent's: under the room's
-  `identity`, the bot's number, in the `human-avatar` mode, with the prefix and the one space after it taken off
+  room with an `identity` (a room of the bot's, or one the receiving side reads), whose words begin with the
+  prefix is handed over as the agent's: under the room's
+  `identity`, in the `human-avatar` mode, with the prefix and the one space after it taken off
   its words and off the words typed under a file. It holds on every road the owner's account's lines come back
   by: the bot account's reading of a new message or an edit, once the echo note has gone or after a restart, and
   the reader's live reading and history walk. A line an echo note still answers is not handed over at all.
 - **The prefix read back is the deployment's,** `BMO_TELEGRAM_AVATAR_PREFIX`, else the policy's: a send that named
   a prefix of its own is read back as the agent's only where it named the same one.
-- **A prefixed line in a room the bot is not in is the owner's own.** No avatar send goes there, so such a line is
-  one the owner typed, and it is handed over as his.
+- **A prefixed line in a room with no `identity` is the owner's own.** No avatar send goes there, so such a line
+  is one the owner typed, and it is handed over as his.
 - **An unprefixed line from the owner's number is the owner's own words** wherever it is read.
 
 ## The dialect: `telegram-html`

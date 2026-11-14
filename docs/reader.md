@@ -30,7 +30,7 @@ reader」), and it reaches nothing but the service and Telegram.
   messages went out as and the words Telegram holds for each, by which the service knows the bot account's sight
   of them as their echo.
 - **The rooms of the account.** Every chat the owner's account is in is listed, for a person to choose a room
-  among them; one the bot is not in is read-only (`docs/telegram.md`, 「The rooms」).
+  among them; one the bot is not in is read-only until it is added (`docs/telegram.md`, 「The rooms」).
 - **Contacts and conversations started.** The account's contacts are listed, and a one-to-one or a group with
   them is started in the owner's account, which the bot cannot do (「Contacts and starting a conversation」).
 - **History.** The past messages of the rooms the receiver names are walked back and handed over as history.

@@ -14,6 +14,7 @@ use bmo_chat::{
   ChatHealth, ChatMediaRequest, ChatMediaResult, ChatModeStanding, ChatNumberRanges, ChatNumberSpace,
   ChatNumbering, ChatPicture, ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal,
   ChatSendRequest, ChatSendResult, ChatStart, ChatStartResult, ChatVoice, MessageFile, ProviderRoom,
+  RoomQuery,
 };
 use serde::Serialize;
 use telegram_dialect::TelegramHtml;
@@ -25,7 +26,7 @@ use crate::reader::{
   ReaderClient, ReaderContact, ReaderFetch, ReaderHealth, ReaderMessage, ReaderRead, ReaderRoom,
   ReaderStart,
 };
-use crate::seam::Standing;
+use crate::seam::{Standing, read_asked};
 use crate::seen::Seen;
 use crate::send::{Sending, Speaker, refused};
 use crate::telegram::Telegram;
@@ -119,8 +120,46 @@ pub struct TelegramProvider {
   reader_health: Mutex<ReaderHealth>,
   standing: Arc<Standing>,
   reading: Mutex<Option<JoinHandle<()>>>,
+  // The receiving side the provider was started with, asked whether it reads a room the bot is not in.
+  receiver: Mutex<Option<Arc<dyn ChatReceiver>>>,
   // The folder the reader keeps the profile pictures in.
   avatars: PathBuf,
+}
+
+// Whether the receiving side reads a room: its `read`, and not where it does not answer or holds nothing of it.
+async fn read_of(receiver: &dyn ChatReceiver, chat_id: i64) -> bool {
+  let query = RoomQuery {
+    via: crate::VIA.to_owned(),
+  };
+
+  matches!(receiver.room(chat_id, query).await, Ok(Some(held)) if read_asked(&held))
+}
+
+// Each of `chat_ids` asked by `ask`, `ASKED_AT_ONCE` at a time; one whose asking came to no answer counts false.
+async fn asked_each<F, Asking>(chat_ids: &[i64], ask: F) -> BTreeMap<i64, bool>
+where
+  F: Fn(i64) -> Asking,
+  Asking: Future<Output = bool> + Send + 'static,
+{
+  let mut answers = BTreeMap::new();
+
+  for some in chat_ids.chunks(ASKED_AT_ONCE) {
+    let mut asking = JoinSet::new();
+
+    for &chat_id in some {
+      let answer = ask(chat_id);
+
+      asking.spawn(async move { (chat_id, answer.await) });
+    }
+
+    while let Some(answer) = asking.join_next().await {
+      if let Ok((chat_id, yes)) = answer {
+        answers.insert(chat_id, yes);
+      }
+    }
+  }
+
+  answers
 }
 
 /// The name a voice or a verb crosses the wire by.
@@ -155,6 +194,7 @@ impl TelegramProvider {
       }),
       standing,
       reading: Mutex::default(),
+      receiver: Mutex::default(),
       avatars,
     }
   }
@@ -241,34 +281,58 @@ impl TelegramProvider {
   // Whether the bot is in each of `chat_ids`, Telegram asked `ASKED_AT_ONCE` rooms at a time; a room whose asking
   // came to no answer counts as one the bot is not in.
   async fn bot_in_each(&self, chat_ids: &[i64]) -> BTreeMap<i64, bool> {
-    let mut present = BTreeMap::new();
+    let telegram = self.telegram.clone();
 
-    for some in chat_ids.chunks(ASKED_AT_ONCE) {
-      let mut asking = JoinSet::new();
+    asked_each(chat_ids, move |chat_id| {
+      let telegram = telegram.clone();
 
-      for &chat_id in some {
-        let telegram = self.telegram.clone();
-
-        asking.spawn(async move { (chat_id, telegram.bot_in(chat_id).await) });
-      }
-
-      while let Some(answer) = asking.join_next().await {
-        if let Ok((chat_id, bot_in)) = answer {
-          present.insert(chat_id, bot_in);
-        }
-      }
-    }
-
-    present
+      async move { telegram.bot_in(chat_id).await }
+    })
+    .await
   }
 
-  // A room a conversation came to: the bot's where the bot is in it, and the owner's account's, read-only, where
-  // it is not (docs/telegram.md, 「Contacts and starting a conversation」).
+  // The receiving side the provider was started with, where it has been.
+  fn receiver(&self) -> Option<Arc<dyn ChatReceiver>> {
+    self.receiver.lock().unwrap_or_else(PoisonError::into_inner).clone()
+  }
+
+  /// Whether the receiving side reads a room through the owner's account: its `read` of the room. One that has not
+  /// started the provider, does not answer, or holds nothing of the room reads it not (docs/telegram.md, 「The
+  /// rooms」).
+  pub async fn read_by_receiver(&self, chat_id: i64) -> bool {
+    match self.receiver() {
+      Some(receiver) => read_of(receiver.as_ref(), chat_id).await,
+      None => false,
+    }
+  }
+
+  // Whether the receiving side reads each of `chat_ids`, asked `ASKED_AT_ONCE` rooms at a time.
+  async fn read_each(&self, chat_ids: &[i64]) -> BTreeMap<i64, bool> {
+    let Some(receiver) = self.receiver() else {
+      return chat_ids.iter().map(|&chat_id| (chat_id, false)).collect();
+    };
+
+    asked_each(chat_ids, move |chat_id| {
+      let receiver = receiver.clone();
+
+      async move { read_of(receiver.as_ref(), chat_id).await }
+    })
+    .await
+  }
+
+  // A room of the owner's account the bot is not in, under `title`, as the receiving side's reading of it makes
+  // it.
+  async fn account_room(&self, chat_id: i64, title: Option<String>) -> ProviderRoom {
+    self.telegram.account_room_of(chat_id, title, self.read_by_receiver(chat_id).await)
+  }
+
+  // A room a conversation came to: the bot's where the bot is in it, and the owner's account's where it is not
+  // (docs/telegram.md, 「Contacts and starting a conversation」).
   async fn started_room(&self, chat_id: i64, title: Option<String>) -> ProviderRoom {
     if self.telegram.bot_in(chat_id).await {
       self.telegram.room_of(chat_id, title, self.active_voices())
     } else {
-      self.telegram.account_room_of(chat_id, title)
+      self.account_room(chat_id, title).await
     }
   }
 
@@ -331,6 +395,7 @@ impl ChatProvider for TelegramProvider {
 
   async fn start(&self, receiver: Arc<dyn ChatReceiver>) -> Result<(), ChatFailure> {
     self.refresh_reader().await;
+    *self.receiver.lock().unwrap_or_else(PoisonError::into_inner) = Some(receiver.clone());
 
     let reading = tokio::spawn(self.telegram.clone().read(receiver));
 
@@ -428,11 +493,11 @@ impl ChatProvider for TelegramProvider {
       .find(|room| room.chat_id == room_id);
 
     if let Some(room) = listed {
-      return Ok(Some(self.telegram.account_room_of(room_id, room.title)));
+      return Ok(Some(self.account_room(room_id, room.title).await));
     }
 
     if self.telegram.has_seen(room_id) {
-      return Ok(Some(self.telegram.account_room_of(room_id, None)));
+      return Ok(Some(self.account_room(room_id, None).await));
     }
 
     // A one-to-one with a contact stands before its first message, under the contact's number.
@@ -447,7 +512,11 @@ impl ChatProvider for TelegramProvider {
       .into_iter()
       .find(|contact| contact.id == room_id);
 
-    Ok(contact.map(|contact| self.telegram.account_room_of(room_id, Some(contact.name))))
+    let Some(contact) = contact else {
+      return Ok(None);
+    };
+
+    Ok(Some(self.account_room(room_id, Some(contact.name)).await))
   }
 
   async fn owner_room(&self) -> Result<Option<i64>, ChatFailure> {
@@ -475,6 +544,8 @@ impl ChatProvider for TelegramProvider {
     let asked: Vec<i64> = titles.keys().chain(&bot_rooms).copied().collect();
     let present = self.bot_in_each(&asked).await;
     let bot_in = |chat_id: &i64| present.get(chat_id).copied().unwrap_or(false);
+    let account_only: Vec<i64> = titles.keys().copied().filter(|chat_id| !bot_in(chat_id)).collect();
+    let read = self.read_each(&account_only).await;
     let voices = self.active_voices();
     let mut rooms = BTreeMap::new();
 
@@ -482,7 +553,9 @@ impl ChatProvider for TelegramProvider {
       let room = if bot_in(&chat_id) {
         self.telegram.room_of(chat_id, title, voices.clone())
       } else {
-        self.telegram.account_room_of(chat_id, title)
+        self
+          .telegram
+          .account_room_of(chat_id, title, read.get(&chat_id).copied().unwrap_or(false))
       };
 
       rooms.insert(chat_id, room);
@@ -547,9 +620,15 @@ impl ChatProvider for TelegramProvider {
       }));
     }
 
-    // A room the bot is not in takes the owner's own words alone (docs/telegram.md, 「The rooms」).
+    // A room the bot is not in takes the owner's own words, and the avatar's where the receiving side reads it
+    // (docs/telegram.md, 「The rooms」).
     if request.mode != Some(ChatVoice::HumanReader) && !self.telegram.bot_in(request.room_id).await {
-      return Ok(refused(POLICY.read_only()));
+      let answered_as_owner =
+        request.mode == Some(ChatVoice::HumanAvatar) && self.read_by_receiver(request.room_id).await;
+
+      if !answered_as_owner {
+        return Ok(refused(POLICY.read_only()));
+      }
     }
 
     match request.mode {

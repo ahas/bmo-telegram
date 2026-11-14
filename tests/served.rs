@@ -14,6 +14,7 @@ use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use bmo_chat::{ChatProvider, ChatReceiver, ChatReceiverLink};
 use bmo_telegram::file_ids::FileIds;
+use bmo_telegram::policy::POLICY;
 use bmo_telegram::provider::TelegramProvider;
 use bmo_telegram::reader::ReaderClient;
 use bmo_telegram::routes::service;
@@ -40,6 +41,9 @@ const CONTACT: i64 = 66;
 // The group a start makes.
 const MADE_GROUP: i64 = -4_000_001;
 const OTHER_ROOM: i64 = -200;
+// A group and a one-to-one of the owner's account the bot is not in, both added, so the receiver reads them.
+const ADDED_ROOM: i64 = -250;
+const ADDED_PERSON: i64 = 77;
 // A room nobody lists and the bot is not in.
 const UNKNOWN_ROOM: i64 = -300;
 // A chat number the stand-in reader's account cannot resolve.
@@ -118,7 +122,15 @@ async fn receiver_served(kept: Arc<Kept>) -> String {
       let bytes = axum::body::to_bytes(request.into_body(), usize::MAX).await.unwrap_or_default();
       let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
 
-      kept.handed.lock().unwrap().push((path, body.clone()));
+      kept.handed.lock().unwrap().push((path.clone(), body.clone()));
+
+      let added = [ADDED_ROOM, ADDED_PERSON].iter().find(|room| path == format!("/rooms/{room}"));
+
+      if let (true, Some(room)) = (method == axum::http::Method::GET, added) {
+        return Json(json!({ "id": room, "listened": true, "read": true, "oldestMessageId": null,
+          "oldestSentAt": null }))
+        .into_response();
+      }
 
       if method == axum::http::Method::PUT {
         (StatusCode::CREATED, Json(body)).into_response()
@@ -749,10 +761,7 @@ async fn a_room_the_bot_is_not_in_takes_only_the_owner_s_own_words() {
 
         assert_eq!(status, 422, "{mode} {kind} {room}");
         assert_eq!(refused["code"], "platform", "{mode} {kind} {room}");
-        assert_eq!(
-          refused["error"],
-          "Telegram: The bot is not in this room: it is the owner's account's alone, and takes only the owner's own words.",
-        );
+        assert_eq!(refused["error"], format!("Telegram: {}", POLICY.refusals.read_only));
       }
     }
   }
@@ -778,6 +787,58 @@ async fn a_room_the_bot_is_not_in_takes_only_the_owner_s_own_words() {
   .await;
 
   assert_eq!(status, 201, "a room the bot is in takes the bot's sends");
+}
+
+/// A room of the owner's account the bot is not in that the receiver reads, as an added room is, can be answered
+/// as the owner: it takes the owner's own voice and the avatar's, the bot's number stands as the agent's identity
+/// and no person of a one-to-one is named; an avatar send into it goes through the owner's account behind the
+/// prefix, and a send by the bot is still refused (docs/telegram.md, 「The rooms」, 「The avatar」).
+#[tokio::test]
+async fn a_room_the_bot_is_not_in_that_the_receiver_reads_takes_the_avatar_through_the_owner_s_account() {
+  let served = stood(true).await;
+  served.provider.refresh_reader().await;
+  served.seen.room(ADDED_ROOM);
+  served.seen.room(ADDED_PERSON);
+
+  for (room, kind) in [(ADDED_ROOM, "group"), (ADDED_PERSON, "group")] {
+    let (status, answer) = asked_get(&served.base, &format!("/rooms/{room}")).await;
+
+    assert_eq!(status, 200);
+    assert_eq!(
+      answer,
+      json!({ "id": room, "owns": true, "identity": BOT, "kind": kind, "privateTo": null, "title": null,
+        "modes": ["human-reader", "human-avatar"] })
+    );
+  }
+
+  let (status, answer) = asked(
+    &served.base,
+    "/sends",
+    json!({ "roomId": ADDED_PERSON, "kind": "text", "fields": { "text": "on my way" }, "mode": "human-avatar" }),
+  )
+  .await;
+
+  assert_eq!(status, 201);
+  assert_eq!(answer, json!({ "messageId": 900, "missed": [] }));
+
+  let said = served.asked.lock().unwrap().clone();
+
+  assert_eq!(said.len(), 1, "the avatar went through the reader");
+  assert_eq!(said[0]["chatId"], ADDED_PERSON);
+  assert_eq!(said[0]["text"], format!("{}on my way", POLICY.avatar.prefix));
+
+  for mode in [Value::Null, json!("bot-account")] {
+    let (status, refused) = asked(
+      &served.base,
+      "/sends",
+      json!({ "roomId": ADDED_ROOM, "kind": "text", "fields": { "text": "an answer" }, "mode": mode }),
+    )
+    .await;
+
+    assert_eq!((status, refused["code"].clone()), (422, json!("platform")), "{mode}");
+  }
+
+  assert_eq!(served.asked.lock().unwrap().len(), 1, "the bot's voice never reached the reader");
 }
 
 /// The repository's own routes beside the protocol's: what stands of each part, the profile pictures the

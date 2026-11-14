@@ -94,7 +94,9 @@ What the provider hands over:
   it is as far as Telegram says (`docs/telegram.md`, 「Reading a room」).
 - **The room's title** crosses as the context's `roomTitle`, the room facts (`kind`, `identity`, `privateTo`)
   with every hand-over, and the message's time in epoch milliseconds. A hand-over from a room the bot is not in
-  carries no `identity`: the service takes off the one the reader gave before handing it on.
+  carries the facts the room's own answer gives (`docs/telegram.md`, 「The rooms」): where the receiver does not
+  read the room, the service takes off the `identity` the reader gave; where it reads it, the service keeps the
+  identity and takes off `privateTo`.
 
 Where the receiver does not answer, the provider's fallback is the boundary's: a room it says nothing of counts
 as listened, a room it answers 404 for is not listened to, and a `GET /rooms` that fails stands the history walk
@@ -125,11 +127,14 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `POST /owner/delete` | `chatId`, `messageId` | an empty object once the message is deleted for everyone; or `refused` (`unavailable`, or `gone` where the account holds no line under the number) with `error` |
 
 The service answers `GET /rooms` from `/reader/dialogs` and the rooms the bot is in (`docs/telegram.md`, 「The
-rooms」): each room once, as a room of the provider's own, with the bot's number as the identity where the bot is
-in it and null where it is not, `owner` for the owner's one-to-one and `group` for any other, the person of a
-one-to-one as `privateTo`, the account's title for it, and as `modes` the declaration's active voices where the
-bot is in it and `human-reader` alone where it is not. The mode a room was added in is the receiver's. bmo-chat's provider server orders and pages the list; a reader that does not answer it is
-a failure of the route. Whether the bot is in a group or a channel is asked of the Bot API, `getChatMember` with
+rooms」): each room once, as a room of the provider's own, `owner` for the owner's one-to-one and `group` for any
+other, the account's title for it. Where the bot is in it, the identity is the bot's number, the person of a
+one-to-one is `privateTo`, and `modes` are the declaration's active voices. Where the bot is not in it, the
+receiver is asked whether it reads the room, eight rooms at a time: a room it reads carries the bot's number as
+the identity, no `privateTo`, and `human-reader` and `human-avatar` as `modes`; any other carries no identity,
+the person of a one-to-one as `privateTo`, and `human-reader` alone. The mode a room was added in is the
+receiver's. bmo-chat's provider server orders and pages the list; a reader that does not answer it is a failure
+of the route. Whether the bot is in a group or a channel is asked of the Bot API, `getChatMember` with
 the bot's own number; a one-to-one is the bot's where its person has written to the bot privately, by the
 service's own record, and no Bot API call answers it.
 
