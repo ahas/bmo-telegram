@@ -34,6 +34,8 @@ reader」), and it reaches nothing but the service and Telegram.
 - **Contacts and conversations started.** The account's contacts are listed, and a one-to-one or a group with
   them is started in the owner's account, which the bot cannot do (「Contacts and starting a conversation」).
 - **History.** The past messages of the rooms the receiver names are walked back and handed over as history.
+- **Who is writing and who is reachable.** People's typing and their status, which the Bot API never shows a
+  bot, are heard on the account and handed to the service (「Typing and presence」).
 - **One chat's recent messages.** A dialog is read by its number for the supervisor's road, newest first,
   without a room standing for it and without touching the history walk or the record.
 - **Profile pictures.** The pictures of every room and every sender the provider has seen are kept current.
@@ -151,6 +153,34 @@ reader」), and it reaches nothing but the service and Telegram.
   reaches no further back than the room's live reading: what the walk handed over below the receiver's first
   message stands under the walk's numbers, and a fill reaching it would hand it over again. The walk's
   progress is left as it stands.
+
+## Typing and presence
+
+What the service tells the receiving side of them is `docs/telegram.md`, 「Typing and presence」; this is how the
+reader hears them.
+
+- **Which rooms tell.** The service says of each room whether its people's typing and presence are the reader's
+  to tell (`tells` on `POST /reader/listened`): a room the receiver listens to, and, where the bot is not in it,
+  only one the receiver asked to be read. The reader keeps each answer for thirty seconds, so a person typing on
+  does not ask it again each time.
+- **A typing action** is Telegram's update of a user typing in a private chat, a group, or a supergroup or
+  channel, each naming its room as the service numbers rooms. An action of writing a message (typing,
+  recording or uploading a voice note, a round note, a video, a photo or a file, choosing a sticker, a contact
+  or a place) is a mark `on`; a cancel action is the mark off; any other action, such as an emoji's animation
+  or speaking in a call, is no mark. One whose sender is not a user, the owner's account's own and the
+  provider's bot's are passed over.
+- **The people told of** are gathered from the rooms the receiver names (`GET /reader/rooms`) whose people the
+  service says tell: the person of a one-to-one, and a group's or a channel's members, as many as the account
+  is shown, up to five hundred a room, as the profile pictures read them. The account itself and the
+  provider's bot are left out.
+- **A whole list** of their statuses, as each member came with it, is handed over fifteen seconds after the
+  account connects, once the service counts the account connected, and again every ten minutes, each time with
+  the people gathered again. A person Telegram gives no status for, as for a bot, is left out and so stands
+  unknown. Where the receiver does not name its rooms, no list is handed over that time.
+- **A status update** of a person told of is handed over at once, one person not making a whole list; one of
+  anyone else is passed over.
+- **Online lapses by itself.** A status online until a moment is handed over online, and, unless another
+  status comes first, offline at that moment with that moment as last seen.
 
 ## One chat's recent messages
 

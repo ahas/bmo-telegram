@@ -190,7 +190,7 @@ describe("a room's recent past", () => {
   test("a room whose people are the reader's is filled under the live numbers, the owner's lines as the owner's", async () => {
     const chatId = 5_000_000_123;
     const asked: unknown[] = [];
-    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: true }) };
+    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: true, tells: false }) };
     const store = new ReaderStore(":memory:");
 
     const outcome = await fillNamedRoom({ client: linesClient(asked), peers, service, store }, chatId, since);
@@ -207,7 +207,7 @@ describe("a room's recent past", () => {
 
   test("a supergroup is filled whoever reads its people", async () => {
     const chatId = -1000000000003;
-    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: false }) };
+    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: false, tells: false }) };
 
     const outcome = await fillNamedRoom({ client: linesClient([]), peers, service, store: new ReaderStore(":memory:") }, chatId, since);
 
@@ -217,7 +217,7 @@ describe("a room's recent past", () => {
   test("a room the bot account numbers is refused before its past is read", async () => {
     const chatId = -5000000002;
     const asked: unknown[] = [];
-    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: false }) };
+    const service = { ...keptService({ rooms: named(chatId) }), listened: async () => ({ listened: true, people: false, tells: false }) };
 
     await expect(fillNamedRoom({ client: linesClient(asked), peers, service, store: new ReaderStore(":memory:") }, chatId, since)).rejects.toBeInstanceOf(
       FillUnnumbered,

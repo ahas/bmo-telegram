@@ -42,10 +42,12 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 ### Capabilities
 
 All twelve send verbs, and `replyTo`, `fetchMedia`, `avatars`, `history`, `roomList`, `contactList`,
-`startChat` and `startGroup`. All but `replyTo` are the owner's account's: each is declared only while the reader
-mode is active, and `history` and `avatars` only while their part stands (`GET /status`). The rooms `roomList`
-lists are the bot's and the owner's account's (「The rooms」); the contacts and the conversations started are the
-owner's account's alone (「Contacts and starting a conversation」).
+`startChat`, `startGroup`, `peopleTyping` and `presence`; not `memberList`. All but the send verbs and `replyTo`
+are the owner's account's: each is declared only while the reader mode is active, and `history` and `avatars`
+only while their part stands (`GET /status`). The rooms `roomList` lists are the bot's and the owner's
+account's (「The rooms」); the contacts and the conversations started are the owner's account's alone
+(「Contacts and starting a conversation」); who is writing and who is reachable are heard by the owner's
+account alone (「Typing and presence」).
 
 ### The rooms
 
@@ -174,6 +176,36 @@ owner's account's alone (「Contacts and starting a conversation」).
   back in either: the sender holds it already, so the bot account's sight of it is that send's echo (「The
   owner's voice」).
 
+## Typing and presence
+
+Who is writing in a room now and who is reachable now, told to the receiving side as bmo-chat's
+`docs/contract.md` states them (「Typing and presence」). Neither is a message.
+
+- **The owner's account hears both; the bot account hears neither.** The Bot API hands a bot no person's typing
+  and no person's status, so `peopleTyping` and `presence` are declared exactly while the reader mode is active,
+  and the reader is what hears them (`docs/reader.md`, 「Typing and presence」).
+- **Only rooms the receiving side listens to are told of.** In a room the bot is not in, which stands read-only
+  until the receiving side reads it (「The rooms」), they are told only where the receiving side asked for the
+  room to be read (`read`).
+- **Never told of:** the owner's account, which the provider reads by, and the provider's own bot, whose typing
+  is the answerer's.
+- **A typing mark** is a person's typing action in a private chat, a group or a channel, `on`, its life the six
+  seconds of the policy's `[typing] lasts_ms`. Telegram tells the action again every few seconds while the
+  person goes on, and each is told as it comes; a cancel action is told off.
+- **A person's presence** is told for the people who stand in such a room: the person of a one-to-one, and the
+  members of a group or a channel as far as the account may list them. Telegram's status maps as below, each under
+  the person's own privacy setting:
+
+| Telegram's status | `state` | `lastSeenAt` |
+|---|---|---|
+| online, until a moment it lapses | `online` until that moment, then `offline` | null while online; the moment it lapsed once offline |
+| offline, with the moment last seen | `offline` | that moment |
+| recently, within a week, within a month, or a long time ago | `offline` | null |
+
+- **A whole list** of everyone told of is told once the account has connected and again every ten minutes, so a
+  receiving side that restarted, or a room added since, stands on the present; between them each change is told
+  as Telegram tells it.
+
 ## Sends
 
 Every send is one verb, answered with the message it went out as or acted on. A send Telegram turns down for
@@ -194,7 +226,7 @@ never offered again.
 | `sticker` | for an emoji, a sticker of the configured set that carries it, picked at random among them, refused where the set carries none; for an item, the sticker whose Telegram file id is the item's `id`, which asks for no set |
 | `reaction` | the emoji on the message; an empty emoji takes the reaction off |
 | `pin` | the message pinned, quietly where `silent`, or unpinned |
-| `typing` | the typing mark; taking it off asks Telegram nothing |
+| `typing` | the bot's chat action, a mark of about five seconds the Bot API cannot take off, so taking it off asks Telegram nothing; for the answerer alone (below) |
 | `edit` | the message's words; an edit to the words the message already says is no failure |
 | `delete` | the message |
 
@@ -210,6 +242,11 @@ never offered again.
   missed as `not-an-address`, `outside-data-root` or `missing-file`. With no picture root configured, no file
   path is sent. The file and the root are both resolved to where they really stand before either is read, so a
   symbolic link inside the root that reaches a file outside it is `outside-data-root`.
+- **A person's typing goes only in their own voice.** A `typing` send in the bot's voice is the answerer's,
+  shown as the bot's; one in the owner's voice is his own, shown in his account (「The owner's voice」). A
+  `typing` send in the bot's voice that names an account (`accountId`) is that account's own typing, and the
+  provider holds no Telegram account of anyone but the owner, so it is refused `platform` with the policy's
+  `typing_account` rather than shown as the bot writing.
 - **What went is not kept here.** Keeping a copy of a send is the sender's, under the number the result gives.
   The provider notes only, for a few minutes, the messages a send in the owner's account went out as, to know
   their echo (「The owner's voice」).
@@ -227,6 +264,7 @@ English lines of `policy/telegram.toml`, each the detail of a `platform` refusal
 | a send asked to be spoken in a mode that is not running, the owner's voice or the avatar's while the reader does not have the account connected among them, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
 | a send in the owner's account, in the owner's voice or the avatar's, of a verb other than `text`, `photo`, `album`, `document`, `audio`, `typing` and `delete` | `platform` | `owner_verb` |
 | a send in any voice but the owner's own into a room the bot is not in, the avatar's but where the receiving side reads the room (「The rooms」) | `platform` | `read_only` |
+| a `typing` send in the bot's voice, or naming none, that names an account | `platform` | `typing_account` |
 | any other refusal Telegram gives | `platform` | Telegram's own description |
 | every picture of a send missed | `no-picture-sent` | each picture with its reason, below |
 

@@ -149,6 +149,8 @@ pub struct KeptReceiver {
   pub avatar_changes: Mutex<Vec<AvatarChange>>,
   pub reaction_changes: Mutex<Vec<bmo_chat::ReactionChange>>,
   pub deletions: Mutex<Vec<bmo_chat::Deletion>>,
+  pub typing_marks: Mutex<Vec<bmo_chat::TypingMark>>,
+  pub presence_changes: Mutex<Vec<bmo_chat::PresenceChange>>,
   pub hand_over_failure: Mutex<Option<String>>,
   pub room_failure: Mutex<Option<String>>,
   pub rooms_failure: Mutex<Option<String>>,
@@ -168,6 +170,8 @@ impl KeptReceiver {
         avatar_changes: Mutex::default(),
         reaction_changes: Mutex::default(),
         deletions: Mutex::default(),
+        typing_marks: Mutex::default(),
+        presence_changes: Mutex::default(),
         hand_over_failure: Mutex::default(),
         room_failure: Mutex::default(),
         rooms_failure: Mutex::default(),
@@ -245,6 +249,18 @@ impl ChatReceiver for KeptReceiver {
 
   async fn deleted(&self, deletion: bmo_chat::Deletion) -> Result<(), ChatFailure> {
     self.deletions.lock().unwrap().push(deletion);
+
+    Ok(())
+  }
+
+  async fn typing_marked(&self, mark: bmo_chat::TypingMark) -> Result<(), ChatFailure> {
+    self.typing_marks.lock().unwrap().push(mark);
+
+    Ok(())
+  }
+
+  async fn presence_changed(&self, change: bmo_chat::PresenceChange) -> Result<(), ChatFailure> {
+    self.presence_changes.lock().unwrap().push(change);
 
     Ok(())
   }

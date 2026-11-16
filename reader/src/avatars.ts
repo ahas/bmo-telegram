@@ -109,7 +109,7 @@ async function writeAvatar(path: string, bytes: Uint8Array): Promise<void> {
 // members once and takes them from there.
 const memberLimit = 500;
 
-export async function roomMembers(deps: AvatarDeps, rooms: readonly AvatarSubject[]): Promise<Map<number, Api.User>> {
+export async function roomMembers(deps: Pick<AvatarDeps, "client">, rooms: readonly AvatarSubject[]): Promise<Map<number, Api.User>> {
   const members = new Map<number, Api.User>();
 
   for (const room of rooms) {

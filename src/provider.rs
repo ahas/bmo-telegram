@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use bmo_chat::{
   ChatAvatar, ChatAvatarKind, ChatCapability, ChatContact, ChatContactKind, ChatDialect, ChatFailure,
   ChatHealth, ChatMediaRequest, ChatMediaResult, ChatModeStanding, ChatNumberRanges, ChatNumberSpace,
-  ChatNumbering, ChatPicture, ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal,
+  ChatNumbering, ChatPicture, ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal, ChatSend,
   ChatSendRequest, ChatSendResult, ChatStartRequest, ChatStartResult, ChatVoice, MessageFile, ProviderRoom,
   RoomQuery,
 };
@@ -168,6 +168,14 @@ pub fn wire_name(value: &impl Serialize) -> String {
     .ok()
     .and_then(|named| named.as_str().map(str::to_owned))
     .unwrap_or_default()
+}
+
+/// Whether a send is a typing mark in the bot's voice, or naming none, for an account: that account's own typing,
+/// not the answerer's.
+pub fn typing_for_an_account(request: &ChatSendRequest) -> bool {
+  matches!(request.send, ChatSend::Typing { .. })
+    && matches!(request.mode, None | Some(ChatVoice::BotAccount))
+    && request.account_id.is_some()
 }
 
 impl TelegramProvider {
@@ -453,6 +461,9 @@ impl ChatProvider for TelegramProvider {
       can.remove(&ChatCapability::ContactList);
       can.remove(&ChatCapability::StartChat);
       can.remove(&ChatCapability::StartGroup);
+      // The bot account hears nobody's typing or status: only the owner's account does.
+      can.remove(&ChatCapability::PeopleTyping);
+      can.remove(&ChatCapability::Presence);
     }
 
     if !reading || self.standing.history().is_some() {
@@ -621,6 +632,12 @@ impl ChatProvider for TelegramProvider {
         label: self.label().to_owned(),
         speaker: speaker.clone(),
       }));
+    }
+
+    // A person's typing goes only in their own voice: one in the bot's voice for an account is that account's,
+    // and the provider holds no Telegram account of theirs (docs/telegram.md, 「Sends」).
+    if typing_for_an_account(&request) {
+      return Ok(refused(POLICY.typing_account()));
     }
 
     // A room the bot is not in takes the owner's own words, and the avatar's where the receiving side reads it

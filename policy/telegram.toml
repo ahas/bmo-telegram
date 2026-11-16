@@ -7,9 +7,10 @@
 [telegram]
 # What the platform is called where a person reads it.
 label = "Telegram"
-# What the provider can do. Fetching a picture on demand, avatars, history, the list of rooms, the contacts and
-# starting a conversation are the owner's account's, and stop being true where that mode is not active.
-can = ["text", "photo", "album", "document", "audio", "voice", "sticker", "reaction", "pin", "typing", "edit", "delete", "replyTo", "fetchMedia", "avatars", "history", "roomList", "contactList", "startChat", "startGroup"]
+# What the provider can do. Fetching a picture on demand, avatars, history, the list of rooms, the contacts,
+# starting a conversation, and hearing who is typing and who is online are the owner's account's, and stop
+# being true where that mode is not active.
+can = ["text", "photo", "album", "document", "audio", "voice", "sticker", "reaction", "pin", "typing", "edit", "delete", "replyTo", "fetchMedia", "avatars", "history", "roomList", "contactList", "startChat", "startGroup", "peopleTyping", "presence"]
 # The modes an answer cannot be pinned to a message of: what the owner's account read, the bot did not see.
 # How Telegram describes a message not there to act on — deleted, never sent, or past the time it could be
 # changed — read without regard to case. Asking again would get the same answer.
@@ -35,6 +36,9 @@ mode_missing = "Telegram does not read by that mode"
 # A send in the owner's own account of a {verb} it does not carry: it takes words, files, the typing mark and a
 # delete alone.
 owner_verb = "The owner's own account sends only text, photos, albums, documents, audio, the typing mark and deletes, not {verb}."
+# A typing send in the bot's voice that names an account: that account's typing, which only its own Telegram
+# account could show, and the provider holds none of it.
+typing_account = "Telegram shows typing only as the bot, for the answerer, or in the owner's own account; the provider holds no Telegram account of the account this typing is for."
 # A send into a room the bot is not in, in any voice but the owner's own, or in the avatar's where the room is not
 # added: such a room is the owner's account's alone.
 read_only = "The bot is not in this room: it is the owner's account's alone, and takes only the owner's own words, and the avatar's once the room is added."
@@ -71,6 +75,11 @@ megabytes = "{megabytes} MB"
 # send nor the deployment names one, so a reader of the room tells them from the owner's own.
 [avatar]
 prefix = "🤖 "
+
+# A person's typing as the owner's account hears it: how long a mark stands unless Telegram tells it again, which
+# Telegram does every few seconds while the person goes on.
+[typing]
+lasts_ms = 6000
 
 # What the provider gathers of a message.
 [gathering]

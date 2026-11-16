@@ -88,16 +88,8 @@ async fn serve() -> Result<(), String> {
     )
     .with_avatar_prefix(config.avatar_prefix),
   );
-  let link = ChatReceiverLink::new(config.receiver_url.as_str(), config.receiver_token.as_str());
-  let receiver: Arc<dyn ChatReceiver> = Arc::new(link);
-  let seam = Arc::new(Seam {
-    token: config.token,
-    receiver: receiver.clone(),
-    seen: seen.clone(),
-    standing: standing.clone(),
-    presence: telegram.clone(),
-    avatar: telegram.avatar().clone(),
-  });
+  let seam_presence = telegram.clone();
+  let avatar = telegram.avatar().clone();
   let sending = Sending {
     picture_root: config.picture_root,
     sticker_set: config.sticker_set,
@@ -106,10 +98,23 @@ async fn serve() -> Result<(), String> {
     telegram,
     sending,
     Some(reader),
-    seen,
-    standing,
+    seen.clone(),
+    standing.clone(),
     config.data.join("avatars"),
   ));
+  // The link reads the provider's declaration at each typing mark and presence change, and drops one whose
+  // capability the provider does not declare now.
+  let link = ChatReceiverLink::new(config.receiver_url.as_str(), config.receiver_token.as_str())
+    .declared_by(&provider);
+  let receiver: Arc<dyn ChatReceiver> = Arc::new(link);
+  let seam = Arc::new(Seam {
+    token: config.token,
+    receiver: receiver.clone(),
+    seen,
+    standing,
+    presence: seam_presence,
+    avatar,
+  });
 
   provider.start(receiver).await.map_err(|why| why.to_string())?;
 

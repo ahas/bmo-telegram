@@ -13,7 +13,7 @@ use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use bmo_chat::{
   AvatarChange, ChatFailure, ChatReceiver, ErrorCode, GatheredPatch, HandedMessage, MessageOrigin,
-  ReceiverRoom, RoomQuery, RoomsQuery, WireError,
+  PersonPresence, PresenceChange, ReceiverRoom, RoomQuery, RoomsQuery, TypingMark, WireError,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -101,6 +101,8 @@ pub fn seam_router(seam: Arc<Seam>) -> Router {
     .route("/reader/avatars", post(avatars))
     .route("/reader/reactions", post(reactions))
     .route("/reader/deleted", post(deleted))
+    .route("/reader/typing", post(typing))
+    .route("/reader/presence", post(presence))
     // A gathered file crosses whole in its hand-over, so the seam takes a body as large as one the receiver keeps.
     .layer(DefaultBodyLimit::max(POLICY.gathering.seam_body_bytes))
     .layer(from_fn_with_state(seam.clone(), authorized))
@@ -212,10 +214,13 @@ async fn listened(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Res
     Err(_) => (true, false),
   };
   // A person's words are the reader's to hand over only in a room the bot is not in that the receiving side
-  // asked to be read.
-  let people = asked && !seam.presence.bot_in(room.chat_id).await;
+  // asked to be read; a person's typing and presence wherever the room is listened to, but in a room the bot is
+  // not in only where the receiving side asked for it to be read (docs/telegram.md, 「Typing and presence」).
+  let bot_in = (asked || listened) && seam.presence.bot_in(room.chat_id).await;
+  let people = asked && !bot_in;
+  let tells = listened && (asked || bot_in);
 
-  Json(json!({ "listened": listened, "people": people })).into_response()
+  Json(json!({ "listened": listened, "people": people, "tells": tells })).into_response()
 }
 
 // The rooms whose history may be walked, each with the oldest message the receiver holds of it.
@@ -350,5 +355,58 @@ async fn deleted(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Resp
   match seam.receiver.deleted(deletion).await {
     Ok(()) => Json(Value::Object(serde_json::Map::new())).into_response(),
     Err(why) => failure(ErrorCode::Failed, format!("the deletion was not handed over: {why}")),
+  }
+}
+
+/// The body of `POST /reader/typing`: a person writing in a room now, or no longer.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TypingHeard {
+  room_id: i64,
+  person_id: i64,
+  on: bool,
+}
+
+async fn typing(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Response {
+  let heard: TypingHeard = match body_of(&body) {
+    Ok(heard) => heard,
+    Err(why) => return failure(ErrorCode::BadRequest, why),
+  };
+  let mark = TypingMark {
+    via: VIA.to_owned(),
+    room_id: heard.room_id,
+    person_id: heard.person_id,
+    on: heard.on,
+    lasts_ms: Some(POLICY.typing.lasts_ms),
+  };
+
+  match seam.receiver.typing_marked(mark).await {
+    Ok(()) => Json(Value::Object(serde_json::Map::new())).into_response(),
+    Err(why) => failure(ErrorCode::Failed, format!("the typing mark was not handed over: {why}")),
+  }
+}
+
+/// The body of `POST /reader/presence`: people's presence, one as it changes or everyone told of as a whole list.
+#[derive(Deserialize)]
+struct PresenceHeard {
+  people: Vec<PersonPresence>,
+  #[serde(default)]
+  whole: bool,
+}
+
+async fn presence(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Response {
+  let heard: PresenceHeard = match body_of(&body) {
+    Ok(heard) => heard,
+    Err(why) => return failure(ErrorCode::BadRequest, why),
+  };
+  let change = PresenceChange {
+    via: VIA.to_owned(),
+    people: heard.people,
+    whole: heard.whole,
+  };
+
+  match seam.receiver.presence_changed(change).await {
+    Ok(()) => Json(Value::Object(serde_json::Map::new())).into_response(),
+    Err(why) => failure(ErrorCode::Failed, format!("the presence was not handed over: {why}")),
   }
 }

@@ -267,16 +267,6 @@ async fn stood(reader_standing: bool) -> Served {
     seen.clone(),
     file_ids.clone(),
   ));
-  let link = ChatReceiverLink::new(receiver_base.as_str(), RECEIVER_TOKEN);
-  let receiver: Arc<dyn ChatReceiver> = Arc::new(link);
-  let seam = Arc::new(Seam {
-    token: TOKEN.to_owned(),
-    receiver: receiver.clone(),
-    seen: seen.clone(),
-    standing: standing.clone(),
-    presence: telegram.clone(),
-    avatar: telegram.avatar().clone(),
-  });
 
   let pictures = tempdir().expect("a temporary folder");
   let avatars = pictures.path().join("avatars");
@@ -291,9 +281,20 @@ async fn stood(reader_standing: bool) -> Served {
     Sending::default(),
     Some(reader),
     seen.clone(),
-    standing,
+    standing.clone(),
     avatars,
   ));
+  // The link told of its provider, as the service's binary tells it.
+  let link = ChatReceiverLink::new(receiver_base.as_str(), RECEIVER_TOKEN).declared_by(&provider);
+  let receiver: Arc<dyn ChatReceiver> = Arc::new(link);
+  let seam = Arc::new(Seam {
+    token: TOKEN.to_owned(),
+    receiver: receiver.clone(),
+    seen: seen.clone(),
+    standing,
+    presence: telegram.clone(),
+    avatar: telegram.avatar().clone(),
+  });
 
   provider.start(receiver.clone()).await.expect("the provider starts");
 
@@ -401,8 +402,56 @@ async fn the_declaration_names_the_provider_its_modes_and_its_dialect() {
       "contactList",
       "startChat",
       "startGroup",
+      "peopleTyping",
+      "presence",
     ])
   );
+}
+
+/// Who is writing and who is reachable reach the receiving side while the owner's account is read, the only road
+/// that hears them, and are dropped unsent while it is not (docs/telegram.md, 「Typing and presence」).
+#[tokio::test]
+async fn typing_and_presence_reach_the_receiver_only_while_the_reader_stands() {
+  let with = stood(true).await;
+  let without = stood(false).await;
+  let typing = json!({ "roomId": ROOM, "personId": PERSON, "on": true });
+  let presence =
+    json!({ "people": [{ "personId": PERSON, "state": "online", "lastSeenAt": null }], "whole": true });
+
+  for served in [&with, &without] {
+    served.provider.refresh_reader().await;
+
+    assert_eq!(asked(&served.base, "/reader/typing", typing.clone()).await.0, 200);
+    assert_eq!(asked(&served.base, "/reader/presence", presence.clone()).await.0, 200);
+  }
+
+  let told = |served: &Served| {
+    served
+      .kept
+      .handed
+      .lock()
+      .unwrap()
+      .iter()
+      .filter(|(path, _)| path == "/typing-marks" || path == "/presence-changes")
+      .cloned()
+      .collect::<Vec<_>>()
+  };
+
+  assert_eq!(
+    told(&with),
+    [
+      (
+        "/typing-marks".to_owned(),
+        json!({ "via": "telegram", "roomId": ROOM, "personId": PERSON, "on": true, "lastsMs": 6000 })
+      ),
+      (
+        "/presence-changes".to_owned(),
+        json!({ "via": "telegram", "people": [{ "personId": PERSON,
+        "state": "online", "lastSeenAt": null }], "whole": true })
+      ),
+    ]
+  );
+  assert!(told(&without).is_empty());
 }
 
 /// The service answers ready with the reader behind it and without one: the owner's account is what stands

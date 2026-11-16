@@ -82,6 +82,8 @@ with the receiver's token, as the protocol states it. It holds no client of its 
 | `PUT /rooms/{roomId}/messages/{messageId}` | a message, whatever its origin: `live`, `edit` or `history`, with its files where they are already gathered, or `gathering` where they follow |
 | `PATCH /rooms/{roomId}/messages/{messageId}` | the files a message's gathering promised, or why they were not kept |
 | `POST /avatar-changes` | the rooms and people whose kept profile picture changed |
+| `POST /typing-marks` | a person writing in a room now, or no longer, with the policy's six-second life (`docs/telegram.md`, 「Typing and presence」); the link drops it unsent while `peopleTyping` is not declared |
+| `POST /presence-changes` | whether people are reachable now, one person as their status changes or every person told of as a whole list; the link drops it unsent while `presence` is not declared |
 
 What the provider hands over:
 
@@ -153,10 +155,12 @@ sight of it is not handed to the receiver a second time.
 | Route | Body | Answer |
 |---|---|---|
 | `POST /reader/inbound` | `kind` `message` with `roomId`, `messageId` and a handed message as the protocol states it, or `kind` `gathered` with `roomId`, `messageId` and `patch` (`files`, or `gatherFailure`) | `{}` once the service has handed it on, and for a message whose origin is `history` `kept`; the receiver's failure in the error shape. A body up to 48 MiB is taken, so a gathered file of up to the receiver's 25 MiB cap crosses whole as base64 |
-| `POST /reader/listened` | `chatId` | `listened` (boolean), the receiver's answer or its fallback; `people` (boolean), whether a person's words in the room are the reader's to hand over: the bot is not in the room and the receiver asked for it to be read (`docs/telegram.md`, 「The rooms」) |
+| `POST /reader/listened` | `chatId` | `listened` (boolean), the receiver's answer or its fallback; `people` (boolean), whether a person's words in the room are the reader's to hand over: the bot is not in the room and the receiver asked for it to be read (`docs/telegram.md`, 「The rooms」); `tells` (boolean), whether its people's typing and presence are the reader's to tell: the room is listened to and either the bot is in it or the receiver asked for it to be read (「Typing and presence」) |
 | `GET /reader/rooms` | | `rooms`, each `chatId`, `oldestMessageId` and `oldestSentAt`, as the receiver answers them; 503 `not-ready` with the reason while the receiver does not say |
 | `POST /reader/reactions` | `roomId`, `messageId` or `stamp` (`senderId`, `sentAt`), `reactions` (each `personId` and `emojis`) and `whole` | `{}` once the service has handed it on as a reaction change; the receiver's failure in the error shape |
 | `POST /reader/deleted` | `roomId`, `messageIds` and `stamps` (each `senderId` and `sentAt`) | `{}` once the service has handed it on as a deletion; the receiver's failure in the error shape |
+| `POST /reader/typing` | `roomId`, `personId`, `on` (boolean) | `{}` once the service has handed it on as a typing mark under the policy's life; the receiver's failure in the error shape |
+| `POST /reader/presence` | `people` (each `personId`, `state` and `lastSeenAt`, a number or null) and `whole` | `{}` once the service has handed it on as a presence change; the receiver's failure in the error shape |
 | `GET /reader/seen` | | `rooms` and `people`: every room and sender the provider has handed a message of over or sent into |
 | `POST /reader/avatars` | `rooms`, `people` | `{}` once word of the changed pictures has gone to the receiver, or stood down |
 

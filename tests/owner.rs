@@ -507,6 +507,39 @@ async fn the_avatar_s_typing_mark_and_delete_go_through_the_owner_s_account() {
   );
 }
 
+/// A person's typing goes only in their own voice: the owner's in his account whatever account the send names, and
+/// another account's, in the bot's voice, refused rather than shown as the bot writing (docs/telegram.md,
+/// 「Sends」).
+#[tokio::test]
+async fn a_typing_mark_for_another_account_is_refused_and_the_owner_s_goes_in_his_account() {
+  let up = standing(Some(true)).await;
+  let typing = |mode: Option<ChatVoice>| ChatSendRequest {
+    mode,
+    account_id: Some(31),
+    ..ChatSendRequest::new(GROUP, ChatSend::Typing { on: true })
+  };
+
+  for mode in [None, Some(ChatVoice::BotAccount)] {
+    assert_eq!(
+      up.provider.send(typing(mode)).await.unwrap(),
+      ChatSendResult::Refused(POLICY.typing_account())
+    );
+  }
+
+  assert_eq!(
+    up.provider.send(typing(Some(ChatVoice::HumanReader))).await.unwrap(),
+    ChatSendResult::Sent(ChatSent {
+      message_id: None,
+      missed: Vec::new()
+    })
+  );
+  assert!(up.bot.asked().is_empty());
+  assert_eq!(
+    up.asked.lock().unwrap().clone(),
+    [("typing".to_owned(), json!({ "chatId": GROUP, "on": true }))]
+  );
+}
+
 #[tokio::test]
 async fn a_line_the_avatar_sent_read_back_past_its_echo_is_the_agent_s_own_and_an_unprefixed_one_the_owner_s()
  {

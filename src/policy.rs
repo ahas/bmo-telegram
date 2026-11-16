@@ -23,6 +23,7 @@ pub struct Policy {
   pub pictures: Pictures,
   pub owner: Owner,
   pub avatar: Avatar,
+  pub typing: Typing,
   pub gathering: Gathering,
   pub kinds: Kinds,
 }
@@ -49,6 +50,7 @@ pub struct Refusals {
   pub mode_missing: String,
   pub owner_verb: String,
   pub read_only: String,
+  pub typing_account: String,
 }
 
 /// A picture's placeholder, why one did not go, and how one is redrawn.
@@ -82,6 +84,13 @@ pub struct Owner {
 #[serde(deny_unknown_fields)]
 pub struct Avatar {
   pub prefix: String,
+}
+
+/// A person's typing as the owner's account hears it: how long a mark stands unless it is told again.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Typing {
+  pub lasts_ms: u64,
 }
 
 /// What the provider gathers of a message: why a file was not kept, and the names a file with none is given.
@@ -184,6 +193,11 @@ impl Policy {
   /// A send in any voice but the owner's own into a room the bot is not in.
   pub fn read_only(&self) -> ChatRefusal {
     self.platform(self.refusals.read_only.clone())
+  }
+
+  /// A typing send in the bot's voice for an account the provider holds no Telegram account of.
+  pub fn typing_account(&self) -> ChatRefusal {
+    self.platform(self.refusals.typing_account.clone())
   }
 
   /// A send Telegram refused, in Telegram's own description of it.

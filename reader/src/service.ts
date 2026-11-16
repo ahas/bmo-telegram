@@ -3,6 +3,7 @@
 // its rooms, asked through the service, which is the only process that talks to another unit.
 
 import type { ReactionsSeen, RoomDeletion } from "./aftermath";
+import type { PresenceHeard, TypingHeard } from "./presence";
 
 // A message as it crosses the chat protocol (bmo-chat's `docs/contract.md`, 「Messages」). Its time is an
 // integer of epoch milliseconds.
@@ -33,11 +34,13 @@ export interface HandedContext {
   tag?: string;
 }
 
-/** What the service says of reading a room: whether the receiver listens to it, and whether a person's words in
- * it are the reader's to hand over — a room the bot is not in that the receiver asked to be read. */
+/** What the service says of reading a room: whether the receiver listens to it, whether a person's words in it
+ * are the reader's to hand over — a room the bot is not in that the receiver asked to be read — and whether its
+ * people's typing and presence are the reader's to tell: a listened room the bot is in, or one asked to be read. */
 export interface RoomReading {
   listened: boolean;
   people: boolean;
+  tells: boolean;
 }
 
 export interface RoomFacts {
@@ -93,6 +96,10 @@ export interface Service {
   reactions(seen: ReactionsSeen): Promise<void>;
   // Messages of one room deleted, carried on as a deletion.
   deleted(deletion: RoomDeletion): Promise<void>;
+  // A person writing in a room now, or no longer, carried on as a typing mark.
+  typing(heard: TypingHeard): Promise<void>;
+  // People's presence, carried on as a presence change.
+  presence(heard: PresenceHeard): Promise<void>;
 }
 
 /** The provider's key, written onto every message it hands over. */
@@ -125,9 +132,9 @@ export function serviceAt(port: number, token: string): Service {
     },
     inbound: async (inbound) => await (await call("POST", "/reader/inbound", inbound)).json() as { kept?: boolean },
     listened: async (chatId) => {
-      const answer = await (await call("POST", "/reader/listened", { chatId })).json() as { listened?: boolean; people?: boolean };
+      const answer = await (await call("POST", "/reader/listened", { chatId })).json() as { listened?: boolean; people?: boolean; tells?: boolean };
 
-      return { listened: answer.listened !== false, people: answer.people === true };
+      return { listened: answer.listened !== false, people: answer.people === true, tells: answer.tells === true };
     },
     rooms: async () => {
       const response = await call("GET", "/reader/rooms", undefined, true);
@@ -146,6 +153,12 @@ export function serviceAt(port: number, token: string): Service {
     },
     deleted: async (deletion) => {
       await call("POST", "/reader/deleted", deletion);
+    },
+    typing: async (heard) => {
+      await call("POST", "/reader/typing", heard);
+    },
+    presence: async (heard) => {
+      await call("POST", "/reader/presence", heard);
     },
   };
 }

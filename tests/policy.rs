@@ -3,7 +3,7 @@
 
 use bmo_chat::{ChatCapability, ChatRefusal, MissedPictureReason};
 use bmo_telegram::policy::{
-  Avatar, Gathering, Kinds, Owner, POLICY, Pictures, Platform, Policy, Refusals, fill,
+  Avatar, Gathering, Kinds, Owner, POLICY, Pictures, Platform, Policy, Refusals, Typing, fill,
 };
 use strum::VariantArray;
 
@@ -15,6 +15,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     pictures,
     owner,
     avatar,
+    typing,
     gathering,
     kinds,
   } = &*POLICY;
@@ -33,6 +34,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     mode_missing,
     owner_verb,
     read_only,
+    typing_account,
   } = refusals;
   let Pictures {
     mark,
@@ -51,6 +53,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     megabytes,
   } = owner;
   let Avatar { prefix } = avatar;
+  let Typing { lasts_ms } = typing;
   let Gathering {
     file_not_kept,
     seam_body_bytes,
@@ -106,6 +109,7 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
     mode_missing,
     owner_verb,
     read_only,
+    typing_account,
     mark,
     refused,
     failed,
@@ -156,7 +160,16 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
 
   assert!(lines.iter().all(|line| !line.trim().is_empty()), "a line of the policy is empty");
   assert_eq!(label, "Telegram");
-  assert_eq!(can.len(), ChatCapability::VARIANTS.len(), "every capability is declared");
+  // Every capability but the members of a room, which the provider does not list.
+  assert_eq!(
+    can.iter().copied().collect::<std::collections::BTreeSet<_>>(),
+    ChatCapability::VARIANTS
+      .iter()
+      .copied()
+      .filter(|one| *one != ChatCapability::MemberList)
+      .collect(),
+  );
+  assert_eq!(*lasts_ms, 6_000);
   assert_eq!(gone_descriptions.len(), 3);
   assert_eq!(caption_refused_descriptions.len(), 2);
   assert_eq!((*upload_quality, *kept_quality), (90, 80));

@@ -8,6 +8,7 @@ import { fileIdOf, messageFileKind, messageHasPhoto, pictureOf, readerFileOf, se
 import { deletionsOf, reactionsOf, SeenMessages } from "./aftermath";
 import { mtproto, mtprotoEvents, mtprotoSessions } from "./mtproto";
 import { fill, POLICY } from "./policy";
+import { startHearing } from "./presence";
 import { base64Of, handedMessage, roomFacts } from "./service";
 
 import type { Api, TelegramClient as Client } from "telegram";
@@ -280,6 +281,8 @@ export async function startReader(deps: ReaderDeps): Promise<Client> {
   // What the reader saw of each message, so a deletion or a reaction the account names by its own number finds
   // the message in a room that numbers it apart (docs/reader.md, 「What it hands over」).
   const seen = new SeenMessages();
+  // Who is writing and who is reachable (docs/reader.md, 「Typing and presence」).
+  const hearing = startHearing({ client, service: deps.service, peers: deps.peers });
 
   client.addEventHandler(async (event: NewMessageEvent) => {
     const message = event.message;
@@ -310,6 +313,8 @@ export async function startReader(deps: ReaderDeps): Promise<Client> {
         if (reactions !== null) {
           await deps.service.reactions(reactions);
         }
+      } else {
+        await hearing.update(update);
       }
     } catch (error) {
       console.error("reader aftermath failed:", error);

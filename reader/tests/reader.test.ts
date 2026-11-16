@@ -22,27 +22,27 @@ const person = { id: 55, bot: false };
 
 describe("handsOver", () => {
   test("another bot's words go wherever the room is listened to", () => {
-    expect(handsOver(otherBot, { listened: true, people: false }, botId)).toBe(true);
-    expect(handsOver(otherBot, { listened: false, people: true }, botId)).toBe(false);
+    expect(handsOver(otherBot, { listened: true, people: false, tells: false }, botId)).toBe(true);
+    expect(handsOver(otherBot, { listened: false, people: true, tells: false }, botId)).toBe(false);
   });
 
   test("the provider's own bot is the bot account's to read", () => {
-    expect(handsOver({ id: botId, bot: true }, { listened: true, people: true }, botId)).toBe(false);
+    expect(handsOver({ id: botId, bot: true }, { listened: true, people: true, tells: false }, botId)).toBe(false);
   });
 
   test("a person's words go only where the room's people are the reader's", () => {
-    expect(handsOver(person, { listened: true, people: true }, botId)).toBe(true);
-    expect(handsOver(person, { listened: true, people: false }, botId)).toBe(false);
-    expect(handsOver(person, { listened: false, people: true }, botId)).toBe(false);
+    expect(handsOver(person, { listened: true, people: true, tells: false }, botId)).toBe(true);
+    expect(handsOver(person, { listened: true, people: false, tells: false }, botId)).toBe(false);
+    expect(handsOver(person, { listened: false, people: true, tells: false }, botId)).toBe(false);
   });
 
   test("the owner's own words go where the room's people are the reader's, but for the reader's own sends", () => {
     const owner = { id: OWNER_ID, bot: false, out: true };
 
-    expect(handsOver(owner, { listened: true, people: true }, botId)).toBe(true);
-    expect(handsOver({ ...owner, ownSend: true }, { listened: true, people: true }, botId)).toBe(false);
-    expect(handsOver(owner, { listened: true, people: false }, botId)).toBe(false);
-    expect(handsOver(owner, { listened: false, people: true }, botId)).toBe(false);
+    expect(handsOver(owner, { listened: true, people: true, tells: false }, botId)).toBe(true);
+    expect(handsOver({ ...owner, ownSend: true }, { listened: true, people: true, tells: false }, botId)).toBe(false);
+    expect(handsOver(owner, { listened: true, people: false, tells: false }, botId)).toBe(false);
+    expect(handsOver(owner, { listened: false, people: true, tells: false }, botId)).toBe(false);
   });
 });
 
@@ -70,7 +70,7 @@ describe("ingest", () => {
   };
 
   test("an outgoing message in a room whose people are the reader's goes as the owner's words", async () => {
-    const { service, deps } = readerOf({ listened: true, people: true });
+    const { service, deps } = readerOf({ listened: true, people: true, tells: false });
 
     await ingest(deps, client, eventOf(301, true));
     await ingest(deps, client, eventOf(302, false));
@@ -85,7 +85,7 @@ describe("ingest", () => {
 
   test("a message the reader's own send went out as is not handed over", async () => {
     const sends = new OwnSends();
-    const { service, deps } = readerOf({ listened: true, people: true }, sends);
+    const { service, deps } = readerOf({ listened: true, people: true, tells: false }, sends);
 
     sends.note(roomId, [401]);
     await ingest(deps, client, eventOf(401, true));
@@ -96,7 +96,7 @@ describe("ingest", () => {
 
   test("an outgoing message read while the reader's own send into the room is still going waits for it", async () => {
     const sends = new OwnSends();
-    const { service, deps } = readerOf({ listened: true, people: true }, sends);
+    const { service, deps } = readerOf({ listened: true, people: true, tells: false }, sends);
     let answer = () => {};
     const sending = sends.sending(roomId, async () => await new Promise<number>((resolve) => (answer = () => resolve(501))), (id) => [id]);
     const read = ingest(deps, client, eventOf(501, true));
@@ -110,7 +110,7 @@ describe("ingest", () => {
 
   test("a sticker goes under its placeholder with the sticker in its metadata, its scene following as a sticker", async () => {
     const { Api } = mtproto();
-    const { service, deps } = readerOf({ listened: true, people: true });
+    const { service, deps } = readerOf({ listened: true, people: true, tells: false });
     const message = new Api.Message({
       id: 701,
       message: "",
@@ -146,7 +146,7 @@ describe("ingest", () => {
   });
 
   test("an outgoing message in a room the bot is in is the bot account's to read", async () => {
-    const { service, deps } = readerOf({ listened: true, people: false });
+    const { service, deps } = readerOf({ listened: true, people: false, tells: false });
 
     await ingest(deps, client, eventOf(601, true));
 

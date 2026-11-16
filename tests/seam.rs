@@ -9,7 +9,7 @@ use axum::Router;
 use axum::http::StatusCode;
 use axum::response::Json;
 use axum::routing::{get, post};
-use bmo_chat::{FileItem, MessageFile, ReceiverRoom};
+use bmo_chat::{ChatPresence, ChatPresenceState, FileItem, MessageFile, ReceiverRoom, TypingMark};
 use bmo_telegram::avatar::AvatarLines;
 use bmo_telegram::compose::Part;
 use bmo_telegram::policy::POLICY;
@@ -370,11 +370,11 @@ async fn what_the_reader_hands_over_goes_on_to_the_receiver_and_its_room_and_sen
   assert_eq!((history.status, history.body), (200, json!({ "kept": true })));
   assert_eq!(
     seam.post("/reader/listened", &json!({ "chatId": -9 })).await.unwrap().body,
-    json!({ "listened": false, "people": false })
+    json!({ "listened": false, "people": false, "tells": false })
   );
   assert_eq!(
     seam.post("/reader/listened", &json!({ "chatId": -1001 })).await.unwrap().body,
-    json!({ "listened": true, "people": false })
+    json!({ "listened": true, "people": false, "tells": true })
   );
   assert_eq!(seam.get("/reader/rooms").await.unwrap().body["rooms"][0]["oldestMessageId"], 5);
   assert_eq!(
@@ -468,7 +468,8 @@ async fn a_line_the_avatar_sent_read_back_through_the_reader_goes_on_as_the_agen
 }
 
 /// A person's words are the reader's to hand over only in a room the bot is not in whose `read` the receiving
-/// side answers true; being listened to is no such request (docs/telegram.md, 「The rooms」).
+/// side answers true; being listened to is no such request (docs/telegram.md, 「The rooms」). Their typing and
+/// presence are the reader's to tell in a listened room the bot is in as well (「Typing and presence」).
 #[tokio::test]
 async fn a_person_s_words_are_handed_over_only_where_the_receiver_asked_for_a_room_the_bot_is_not_in() {
   let (receiver, _heard) = KeptReceiver::new();
@@ -486,19 +487,27 @@ async fn a_person_s_words_are_handed_over_only_where_the_receiver_asked_for_a_ro
   let seam = Wire::loopback(served.port, TOKEN);
   let people = async |chat_id: i64| {
     let answer = seam.post("/reader/listened", &json!({ "chatId": chat_id })).await.unwrap().body;
-    (answer["listened"].clone(), answer["people"].clone())
+    (answer["listened"].clone(), answer["people"].clone(), answer["tells"].clone())
   };
 
   assert_eq!(
     people(BOT_ROOM).await,
-    (json!(true), json!(false)),
-    "the bot's own room is read by the bot"
+    (json!(true), json!(false), json!(true)),
+    "the bot's own room is read by the bot, and its people's typing told"
   );
-  assert_eq!(people(-1004).await, (json!(true), json!(true)), "a room the receiver asked to be read");
-  assert_eq!(people(-1005).await, (json!(true), json!(false)), "a room listened to but not asked for");
+  assert_eq!(
+    people(-1004).await,
+    (json!(true), json!(true), json!(true)),
+    "a room the receiver asked to be read"
+  );
+  assert_eq!(
+    people(-1005).await,
+    (json!(true), json!(false), json!(false)),
+    "a room listened to but not asked for"
+  );
   assert_eq!(
     people(-1006).await,
-    (json!(false), json!(false)),
+    (json!(false), json!(false), json!(false)),
     "a room the receiver holds nothing of"
   );
 }
@@ -517,7 +526,7 @@ async fn where_the_receiver_does_not_answer_each_need_falls_back_as_the_boundary
 
   assert_eq!(
     seam.post("/reader/listened", &json!({ "chatId": -9 })).await.unwrap().body,
-    json!({ "listened": true, "people": false })
+    json!({ "listened": true, "people": false, "tells": false })
   );
 
   let rooms = seam.get("/reader/rooms").await.unwrap();
@@ -590,6 +599,61 @@ async fn a_reaction_and_a_deletion_the_reader_sees_go_on_to_the_receiver() {
   );
   assert_eq!(change.reactions[0].emojis, ["\u{1F44D}"]);
   assert_eq!(receiver.deletions.lock().unwrap()[0].message_ids, [7, 8]);
+}
+
+/// Who is writing and who is reachable, as the reader hears them, go on as the protocol's typing mark, under the
+/// policy's life, and presence change (docs/boundary-api.md, 「The service's routes, called by the reader」).
+#[tokio::test]
+async fn typing_and_presence_the_reader_hears_go_on_to_the_receiver() {
+  let (receiver, _heard) = KeptReceiver::new();
+  let served = seam_over(receiver.clone()).await;
+  let seam = Wire::loopback(served.port, TOKEN);
+  let typing = json!({ "roomId": BOT_ROOM, "personId": 55, "on": true });
+  let presence = json!({
+    "people": [
+      { "personId": 55, "state": "online", "lastSeenAt": null },
+      { "personId": 56, "state": "offline", "lastSeenAt": 1_700_000_000_000_i64 }
+    ],
+    "whole": true
+  });
+
+  assert_eq!(seam.post("/reader/typing", &typing).await.unwrap().status, 200);
+  assert_eq!(seam.post("/reader/presence", &presence).await.unwrap().status, 200);
+  assert_eq!(seam.post("/reader/typing", &json!({ "roomId": 1 })).await.unwrap().status, 400);
+
+  assert_eq!(
+    receiver.typing_marks.lock().unwrap().clone(),
+    [TypingMark {
+      via: "telegram".to_owned(),
+      room_id: BOT_ROOM,
+      person_id: 55,
+      on: true,
+      lasts_ms: Some(6_000),
+    }]
+  );
+
+  let change = receiver.presence_changes.lock().unwrap()[0].clone();
+
+  assert_eq!((change.via.as_str(), change.whole), ("telegram", true));
+  assert_eq!(
+    change.people.iter().map(|one| (one.person_id, one.presence)).collect::<Vec<_>>(),
+    [
+      (
+        55,
+        ChatPresence {
+          state: ChatPresenceState::Online,
+          last_seen_at: None
+        }
+      ),
+      (
+        56,
+        ChatPresence {
+          state: ChatPresenceState::Offline,
+          last_seen_at: Some(1_700_000_000_000)
+        }
+      ),
+    ]
+  );
 }
 
 /// A reaction update of the bot account names the message by the bot's number and the person by theirs, with
