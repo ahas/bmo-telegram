@@ -254,12 +254,14 @@ fn the_bots_number_is_read_off_its_token_until_the_platform_says_it() {
   let seen = Arc::new(Seen::in_memory());
   let file_ids = Arc::new(FileIds::in_memory());
 
+  let spool = std::path::PathBuf::from("spool");
+
   assert_eq!(
-    Telegram::new("123456:secret", "", 42, None, seen.clone(), file_ids.clone()).me(),
+    Telegram::new("123456:secret", "", 42, None, seen.clone(), file_ids.clone(), spool.clone()).me(),
     123_456
   );
   assert_eq!(
-    Telegram::new("", "", 42, None, seen, file_ids).configured(),
+    Telegram::new("", "", 42, None, seen, file_ids, spool).configured(),
     Some(TOKEN_MISSING.to_owned())
   );
 }

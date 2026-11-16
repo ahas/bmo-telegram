@@ -7,7 +7,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use bmo_chat::{
-  AlbumItem, ChatRefusal, ChatSendResult, ChatSent, FileItem, MissedPicture, MissedPictureReason,
+  AlbumItem, ChatRefusal, ChatSendResult, ChatSent, FileBody, FileItem, MissedPicture, MissedPictureReason,
 };
 use reqwest::multipart::{Form, Part as Field};
 use serde::Serialize;
@@ -94,7 +94,7 @@ pub struct Picture {
 enum Source {
   Web,
   Kept,
-  Inline { bytes: Vec<u8>, mime: String },
+  Inline { bytes: FileBody, mime: String },
 }
 
 impl Picture {
@@ -285,7 +285,12 @@ impl Speaker {
     let unreached = || format!("image download failed: {address}");
 
     match &picture.source {
-      Source::Inline { bytes, mime } => Ok((bytes.clone(), mime.clone())),
+      // A picture is drawn whole before it goes up, wherever its bytes were kept.
+      Source::Inline { bytes, mime } => {
+        let bytes = bytes.read().await.map_err(|_| unreached())?;
+
+        Ok((bytes, mime.clone()))
+      }
       Source::Kept => {
         let bytes = tokio::fs::read(address).await.map_err(|_| unreached())?;
         let kind = raster_type(&bytes).unwrap_or("application/octet-stream").to_owned();

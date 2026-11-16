@@ -3,6 +3,7 @@
 //! promised and gathered after. The room questions the chat protocol asks are answered here too.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
@@ -103,7 +104,8 @@ fn member(answer: &Value) -> bool {
 
 impl Telegram {
   /// The bot account with its token, asking the Bot API at `api`, the owner's number, the reader where one
-  /// stands behind it, the record of what it has seen and that of the ids its files crossed with.
+  /// stands behind it, the record of what it has seen, that of the ids its files crossed with, and the folder
+  /// gathered files and the files of a multipart send stand in on this machine's disk.
   pub fn new(
     token: &str,
     api: &str,
@@ -111,12 +113,13 @@ impl Telegram {
     reader: Option<ReaderClient>,
     seen: Arc<Seen>,
     file_ids: Arc<FileIds>,
+    spool: PathBuf,
   ) -> Self {
     let api = BotApi::new(api, token);
     let me = api.token_identity().unwrap_or_default();
 
     Self {
-      gatherer: Arc::new(Gatherer::new(api.clone(), reader, file_ids.clone())),
+      gatherer: Arc::new(Gatherer::new(api.clone(), reader, file_ids.clone(), spool)),
       file_ids,
       api,
       token_set: !token.trim().is_empty(),
@@ -301,13 +304,26 @@ impl Telegram {
     self.file_ids.of(chat_id, message_id)
   }
 
-  // The files gathered for a message, handed over as what its promise came to.
+  /// The folder this account's files stand in on this machine's disk: what the gathering writes a gathered file
+  /// to, and what the protocol server writes the file parts of a multipart send to as they arrive.
+  pub fn spool(&self) -> PathBuf {
+    self.gatherer.spool()
+  }
+
+  // The files gathered for a message, handed over as what its promise came to. A file the gathering wrote to
+  // this machine's disk goes with the patch and is removed once the receiving side took it.
   async fn hand_gathered(
+    gatherer: &Gatherer,
     receiver: &dyn ChatReceiver,
     room_id: i64,
     message_id: i64,
     gathered: Result<Vec<MessageFile>, String>,
   ) {
+    // What the guard removes is its own list, dropped when the patch has been taken.
+    let _held = match &gathered {
+      Ok(files) => gatherer.hold(files),
+      Err(_) => gatherer.hold(&[]),
+    };
     let patch = match gathered {
       Ok(files) if !files.is_empty() => GatheredPatch::kept(files),
       Ok(_) => GatheredPatch::not_kept(POLICY.gathering.file_not_kept.clone()),
@@ -339,7 +355,7 @@ impl Telegram {
         Ok(files)
       };
 
-      Self::hand_gathered(receiver.as_ref(), room_id, message_id, gathered).await;
+      Self::hand_gathered(gatherer.as_ref(), receiver.as_ref(), room_id, message_id, gathered).await;
     });
   }
 

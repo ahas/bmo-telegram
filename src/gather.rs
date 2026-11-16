@@ -1,13 +1,16 @@
 //! What a message carries, gathered for the receiver (docs/telegram.md, 「Reading a room」): its picture, its
 //! file, and the sticker and custom emoji assets among its expressions, each fetched through the Bot API, or
-//! past the Bot API's ceiling for a bot through the reader. What is gathered crosses as bytes under the file's
-//! own name and its id; where the receiver keeps it is the receiver's. A picture is kept as `telegram-picture`
-//! keeps one.
+//! past the Bot API's ceiling for a bot through the reader. What is gathered crosses under the file's own name
+//! and its id; where the receiver keeps it is the receiver's. A file the reader hands is written into the spool
+//! folder and handed on kept there, so it crosses as a part rather than as bytes held whole in memory
+//! (`docs/telegram.md`, 「Reading a room」). A picture is kept as `telegram-picture` keeps one.
 
 use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use bmo_chat::{ChatFileKind, MessageFile};
+use bmo_chat::{ChatFileKind, FileBody, MessageFile};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use telegram_picture::{Keeping, kept, raster_type};
@@ -168,23 +171,88 @@ fn file_id_of(unique: Option<&str>, place: &str) -> String {
   unique.filter(|unique| !unique.is_empty()).unwrap_or(place).to_owned()
 }
 
-/// The gathering: the Bot API, the reader for what is past its ceiling, the files gathered lately, and the
-/// record of the id each message's picture or file crossed with.
+// The next number a gathered file is named with, so two gatherings of one message never share a file.
+static GATHERED: AtomicU64 = AtomicU64::new(0);
+
+// What the reader handed, whole in memory: its answer is JSON, which carries a file inline.
+async fn whole(body: FileBody) -> Result<Vec<u8>, String> {
+  match body {
+    FileBody::Inline(bytes) => Ok(bytes),
+    body => body.read().await.map_err(|why| why.to_string()),
+  }
+}
+
+/// The gathered files a provider holds on its own disk, which it removes once the body carrying them has been
+/// taken (`docs/telegram.md`, 「Reading a room」).
+pub struct Spooled(Vec<PathBuf>);
+
+impl Drop for Spooled {
+  fn drop(&mut self) {
+    for path in &self.0 {
+      let _ = std::fs::remove_file(path);
+    }
+  }
+}
+
+/// The gathering: the Bot API, the reader for what is past its ceiling, the files gathered lately, the record
+/// of the id each message's picture or file crossed with, and the folder a gathered file stands in on this
+/// machine's disk while the receiving side takes it.
 pub struct Gatherer {
   api: BotApi,
   reader: Option<ReaderClient>,
   remembered: Mutex<Remembered>,
   file_ids: Arc<FileIds>,
+  spool: PathBuf,
 }
 
 impl Gatherer {
-  pub fn new(api: BotApi, reader: Option<ReaderClient>, file_ids: Arc<FileIds>) -> Self {
+  pub fn new(api: BotApi, reader: Option<ReaderClient>, file_ids: Arc<FileIds>, spool: PathBuf) -> Self {
     Self {
       api,
       reader,
       remembered: Mutex::default(),
       file_ids,
+      spool,
     }
+  }
+
+  /// The folder gathered files stand in on this machine's disk, which is also where the files of a send that
+  /// arrived as a multipart body are written as they arrive.
+  pub fn spool(&self) -> PathBuf {
+    self.spool.clone()
+  }
+
+  // The file the gathered bytes are written to, under a name no other gathering holds.
+  async fn write(&self, bytes: &[u8]) -> std::io::Result<PathBuf> {
+    tokio::fs::create_dir_all(&self.spool).await?;
+    let path = self.spool.join(format!("gathered-{}", GATHERED.fetch_add(1, Ordering::Relaxed)));
+
+    match tokio::fs::write(&path, bytes).await {
+      Ok(()) => Ok(path),
+      Err(why) => {
+        let _ = tokio::fs::remove_file(&path).await;
+        Err(why)
+      }
+    }
+  }
+
+  /// Every file of `files` the provider holds on its own disk, gathered into one guard that removes them when
+  /// the body carrying them has been taken.
+  pub fn hold(&self, files: &[MessageFile]) -> Spooled {
+    Spooled(
+      files
+        .iter()
+        .filter_map(|file| match &file.bytes {
+          FileBody::Stored(stored) if self.kept_there(stored.path()) => Some(stored.path().to_path_buf()),
+          _ => None,
+        })
+        .collect(),
+    )
+  }
+
+  // Whether a file on disk is one this gathering wrote: it stands in the spool folder and nowhere else.
+  fn kept_there(&self, path: &std::path::Path) -> bool {
+    path.parent() == Some(self.spool.as_path())
   }
 
   fn holds(&self, key: &str, unique: Option<&str>) -> bool {
@@ -195,14 +263,15 @@ impl Gatherer {
     self.remembered.lock().unwrap_or_else(PoisonError::into_inner).keep(key, unique);
   }
 
-  // A file's bytes past the Bot API's ceiling, through the reader.
+  // A file's bytes past the Bot API's ceiling, through the reader, whole in memory: the seam's answer is JSON,
+  // which carries them inline.
   async fn through_reader(&self, chat_id: i64, message_id: i64, sent_at: i64) -> Result<Vec<u8>, String> {
     let Some(reader) = &self.reader else {
       return Err("the file exceeds the Bot API's ceiling and no reader stands".to_owned());
     };
 
     match reader.file(chat_id, message_id, sent_at).await {
-      ReaderFetch::Fetched(file) => Ok(file.bytes),
+      ReaderFetch::Fetched(file) => whole(file.bytes).await,
       ReaderFetch::Unavailable(why) | ReaderFetch::NoReader(why) => Err(why),
     }
   }
@@ -231,9 +300,15 @@ impl Gatherer {
     let mime = file.mime_type.clone().unwrap_or_else(|| "application/octet-stream".to_owned());
     let sent_at = raw.get("date").and_then(Value::as_i64).unwrap_or_default();
     let bytes = if oversized(file.file_size) {
-      self.through_reader(chat_id, message_id, sent_at).await?
+      let fetched = self.through_reader(chat_id, message_id, sent_at).await?;
+      let path = self
+        .write(&fetched)
+        .await
+        .map_err(|why| format!("the gathered file was not kept on disk: {why}"))?;
+
+      FileBody::stored(path)
     } else {
-      self.api.file_bytes(&file.file_id).await?
+      self.api.file_bytes(&file.file_id).await?.into()
     };
     let id = file_id_of(file.file_unique_id.as_deref(), "file");
 
@@ -261,7 +336,7 @@ impl Gatherer {
     let bytes = if oversized(picture.file_size) {
       match &self.reader {
         Some(reader) => match reader.picture(chat_id, message_id, Some(sent_at)).await {
-          ReaderFetch::Fetched(file) => Ok(file.bytes),
+          ReaderFetch::Fetched(file) => whole(file.bytes).await,
           ReaderFetch::Unavailable(why) | ReaderFetch::NoReader(why) => Err(why),
         },
         None => Err("the picture exceeds the Bot API's ceiling and no reader stands".to_owned()),
@@ -292,7 +367,7 @@ impl Gatherer {
       id,
       name: format!("{message_id}.{}", picture_extension(&mime)),
       mime,
-      bytes: kept,
+      bytes: kept.into(),
       kind: Some(ChatFileKind::Photo),
     })
   }
@@ -331,7 +406,7 @@ impl Gatherer {
       id,
       name,
       mime: mime.to_owned(),
-      bytes,
+      bytes: bytes.into(),
       kind: Some(ChatFileKind::Sticker),
     })
   }

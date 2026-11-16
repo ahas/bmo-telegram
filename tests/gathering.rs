@@ -10,7 +10,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::response::Json;
 use axum::routing::post;
-use bmo_chat::{ChatReceiver, MessageFile};
+use bmo_chat::{ChatReceiver, FileBody, MessageFile};
 use bmo_telegram::file_ids::FileIds;
 use bmo_telegram::gather::sticker_format;
 use bmo_telegram::policy::POLICY;
@@ -21,6 +21,7 @@ use bmo_telegram::wire::Wire;
 use image::{DynamicImage, ImageFormat, RgbImage, RgbaImage};
 use serde_json::{Value, json};
 use support::{BotApiStandIn, KeptReceiver, OWNER, TOKEN, bot_api, file_of, next, serve};
+use tempfile::{TempDir, tempdir};
 
 const ROOM: i64 = -100;
 const SENT_AT: i64 = 1_700_000_000;
@@ -57,6 +58,9 @@ struct Account {
   receiver: Arc<KeptReceiver>,
   heard: tokio::sync::mpsc::UnboundedReceiver<(String, Value)>,
   api: Arc<BotApiStandIn>,
+  // The folder gathered files stand in on this machine's disk, kept for the test's length.
+  spool: std::path::PathBuf,
+  _spool: TempDir,
 }
 
 impl Account {
@@ -65,13 +69,18 @@ impl Account {
   }
 }
 
-// The bot account over a stand-in of the Bot API, with a reader where one is given.
+// The bot account over a stand-in of the Bot API, with a reader where one is given, its gathered files written
+// into a folder of the test's own.
 async fn account(reader: Option<ReaderClient>) -> Account {
   let api = Arc::new(BotApiStandIn::default());
   let address = bot_api(api.clone()).await;
   let (receiver, heard) = KeptReceiver::new();
+  let held = tempdir().expect("a temporary folder");
+  let spool = held.path().join("spool");
 
   Account {
+    spool: spool.clone(),
+    _spool: held,
     telegram: Telegram::new(
       TOKEN,
       &address,
@@ -79,6 +88,7 @@ async fn account(reader: Option<ReaderClient>) -> Account {
       reader,
       Arc::new(Seen::in_memory()),
       Arc::new(FileIds::in_memory()),
+      spool,
     ),
     receiver,
     heard,
@@ -93,7 +103,7 @@ async fn reader_handing(bytes: &'static [u8]) -> ReaderClient {
       id: "document-9".to_owned(),
       name: name.to_owned(),
       mime: "application/octet-stream".to_owned(),
-      bytes: bytes.to_vec(),
+      bytes: bytes.to_vec().into(),
       kind: None,
     })
     .unwrap();
@@ -192,7 +202,8 @@ async fn a_document_is_fetched_through_the_bot_api_and_handed_over_under_its_own
   assert_eq!((file.name.as_str(), file.mime.as_str()), ("report v1.pdf", "application/pdf"));
   assert_eq!(file.id, "doc-unique");
   assert_eq!(account.telegram.file_id_of(ROOM, 40).as_deref(), Some("doc-unique"));
-  assert_eq!(file.bytes, b"bytes of files/doc-1");
+  assert_eq!(file.bytes, FileBody::from(b"bytes of files/doc-1".to_vec()));
+  assert!(!account.spool.exists(), "a file under the Bot API's ceiling never reaches the disk");
 }
 
 #[tokio::test]
@@ -270,10 +281,16 @@ async fn a_file_past_the_bot_api_s_ceiling_is_asked_of_the_reader_and_with_none_
   let file = file_of(&gathered["files"][0]);
 
   assert_eq!(read.api.methods(), Vec::<String>::new());
+  assert_eq!(file.id, "big-2");
   assert_eq!(
-    (file.id.as_str(), file.bytes.as_slice()),
-    ("big-2", b"read by the owner's account".as_slice())
+    file.bytes.read().await.expect("the gathered file's bytes"),
+    b"read by the owner's account"
   );
+
+  // The file stood on the provider's disk while it crossed and is gone now the receiving side took it.
+  let stood = std::fs::read_dir(&read.spool).expect("the gathering wrote the spool folder");
+
+  assert_eq!(stood.count(), 0, "the gathered file was let go with the patch that carried it");
 }
 
 #[tokio::test]
@@ -342,9 +359,10 @@ async fn every_kind_of_picture_is_kept_as_a_picture_is_kept_a_large_one_brought_
       .unwrap();
 
     let picture = file_of(&next(&mut account.heard).await.1["files"][0]);
-    let read = image::load_from_memory(&picture.bytes).unwrap();
+    let held = picture.bytes.read().await.expect("the picture's bytes went with it");
+    let read = image::load_from_memory(&held).unwrap();
 
-    kept.push((picture.mime, read.width(), read.height(), picture.bytes == *bytes));
+    kept.push((picture.mime, read.width(), read.height(), held == *bytes));
   }
 
   assert_eq!(

@@ -15,7 +15,7 @@ use telegram_dialect::js;
 
 use crate::compose::{Part, avatar_caption, avatar_text_parts, caption, text_parts};
 use crate::echoes::Echoes;
-use crate::files::audio_type;
+use crate::files::{audio_type, sound_head};
 use crate::pictures::Picture;
 use crate::policy::{POLICY, fill};
 use crate::provider::wire_name;
@@ -147,7 +147,28 @@ async fn file_of(
   })?;
   let name = picture.address.rsplit('/').next().unwrap_or_default().to_owned();
 
-  Ok(FileItem { name, mime, bytes })
+  Ok(FileItem {
+    name,
+    mime,
+    bytes: bytes.into(),
+  })
+}
+
+// One file of the owner's album, kept for sending or missed for why it cannot go: no bytes to read at all, or a
+// size Telegram refuses. The size is asked of the file where it stands, so none is read whole to count it.
+async fn refused_size(file: FileItem) -> Result<FileItem, MissedPicture> {
+  let detail = match file.bytes.size().await {
+    Err(why) => Some(why.to_string()),
+    Ok(size) => refusal(&file.name, size),
+  };
+
+  match detail {
+    Some(detail) => Err(MissedPicture {
+      address: file.name,
+      reason: MissedPictureReason::Platform { detail },
+    }),
+    None => Ok(file),
+  }
 }
 
 /// The owner's account as one send uses it: the bot account's sending, for where a picture is read from and the
@@ -217,7 +238,7 @@ impl OwnerVoice<'_> {
       ChatSend::Audio { audio, file_name } => {
         let items = [AlbumItem::File(FileItem {
           name: file_name.clone(),
-          mime: audio_type(audio).1.to_owned(),
+          mime: audio_type(&sound_head(audio).await).1.to_owned(),
           bytes: audio.clone(),
         })];
 
@@ -281,14 +302,13 @@ impl OwnerVoice<'_> {
     let mut files = Vec::new();
 
     for item in items {
-      match file_of(speaker, root, item).await {
-        Ok(file) => match refusal(&file.name, file.bytes.len() as u64) {
-          Some(detail) => missed.push(MissedPicture {
-            address: file.name.clone(),
-            reason: MissedPictureReason::Platform { detail },
-          }),
-          None => files.push(file),
-        },
+      let taken = match file_of(speaker, root, item).await {
+        Ok(file) => refused_size(file).await,
+        Err(one) => Err(one),
+      };
+
+      match taken {
+        Ok(file) => files.push(file),
         Err(one) => missed.push(one),
       }
     }

@@ -198,12 +198,13 @@ impl ChatReceiver for KeptReceiver {
     &self,
     room_id: i64,
     message_id: i64,
-    message: HandedMessage,
+    mut message: HandedMessage,
   ) -> Result<HeldMessage, ChatFailure> {
     if let Some(why) = self.hand_over_failure.lock().unwrap().clone() {
       return Err(why.into());
     }
 
+    carried(&mut message.files).await?;
     let mut kept = serde_json::to_value(&message)?;
     kept["roomId"] = json!(room_id);
     kept["messageId"] = json!(message_id);
@@ -218,8 +219,9 @@ impl ChatReceiver for KeptReceiver {
     &self,
     room_id: i64,
     message_id: i64,
-    patch: GatheredPatch,
+    mut patch: GatheredPatch,
   ) -> Result<HandedMessage, ChatFailure> {
+    carried(&mut patch.files).await?;
     self.keep("gathered", &patch)?;
     let mut held = self.held.lock().unwrap();
     let message = held.get_mut(&(room_id, message_id)).ok_or("the receiver holds no such message")?;
@@ -293,4 +295,18 @@ pub async fn next(heard: &mut UnboundedReceiver<(String, Value)>) -> (String, Va
 /// A message file as it crossed the wire, its bytes read back.
 pub fn file_of(item: &Value) -> MessageFile {
   serde_json::from_value(item.clone()).expect("a message file")
+}
+
+/// What the receiving side does with a body that crossed with a file kept on the sender's disk: it has the bytes
+/// in hand, read off the disk they came as a part from (`docs/telegram.md`, 「Reading a room」).
+pub(crate) async fn carried(files: &mut [MessageFile]) -> Result<(), ChatFailure> {
+  for file in files {
+    if let bmo_chat::FileBody::Stored(stored) = &file.bytes {
+      let bytes = tokio::fs::read(stored.path()).await.map_err(|why| why.to_string())?;
+
+      file.bytes = bytes.into();
+    }
+  }
+
+  Ok(())
 }

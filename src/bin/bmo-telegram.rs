@@ -85,6 +85,7 @@ async fn serve() -> Result<(), String> {
       Some(reader.clone()),
       seen.clone(),
       Arc::new(FileIds::kept_in(config.data.join("file-ids.jsonl"))),
+      config.data.join("spool"),
     )
     .with_avatar_prefix(config.avatar_prefix),
   );

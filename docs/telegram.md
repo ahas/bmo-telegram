@@ -159,6 +159,12 @@ account alone (「Typing and presence」).
   through the reader; with no reader standing, a picture goes without its bytes and another file is not kept.
   This ceiling is the provider's own concern in reading a room, and no declaration carries it: the dialect's
   file limit is the larger one a bot may send.
+- **A file gathered past that ceiling is written into the provider's spool folder** and handed on as a file kept
+  there (`docs/boundary-api.md`, 「Configuration」), so it crosses as a part of the body it is gathered into and
+  the receiving side writes it to its own disk as it arrives rather than holding it whole in its memory. The
+  provider removes the file once the receiving side took that body. A picture is redrawn for keeping and goes as
+  its bytes wherever it was fetched from, since keeping reads the whole picture, and the refetch of a message's
+  files answers them inline as the protocol states.
 - **Every file a message carried crosses with its id,** the same each time the same file crosses. The bot
   account names a file by Telegram's `file_unique_id` for it (a picture's by its largest size's), and where a
   file comes with none, by its place in the message: `picture`, `file`, `sticker`, or `emoji-` and the custom
@@ -232,6 +238,11 @@ never offered again.
 | `edit` | the message's words; an edit to the words the message already says is no failure |
 | `delete` | the message |
 
+- **A file goes up in the Bot API's own multipart form,** the part carrying its bytes. Bytes handed over in
+  memory go as they are; a file that arrived as a part of a multipart send and stands on the provider's disk is
+  streamed off that disk as it goes up, so a large file is never held whole. The size Telegram is told for such a
+  part is the file's own. A sound's type is read off its first bytes wherever those stand. A send naming a file
+  without its bytes is refused with the reason the bytes were named for.
 - **The configured sticker set is the deployment's emotion set.** It holds one sticker for each emotion,
   entered with the emoji that stands for that emotion, so a sticker send's emoji asks for that emotion's
   sticker; a set may hold more than one for a feeling, and one of them is picked. A changed emotion list

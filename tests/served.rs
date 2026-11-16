@@ -259,6 +259,7 @@ async fn stood(reader_standing: bool) -> Served {
   let standing = Arc::new(Standing::default());
   let reader = ReaderClient::new(Wire::loopback(reader_port, TOKEN));
   let file_ids = Arc::new(FileIds::in_memory());
+  let pictures = tempdir().expect("a temporary folder");
   let telegram = Arc::new(Telegram::new(
     BOT_TOKEN,
     &bot,
@@ -266,9 +267,9 @@ async fn stood(reader_standing: bool) -> Served {
     Some(reader.clone()),
     seen.clone(),
     file_ids.clone(),
+    pictures.path().join("spool"),
   ));
 
-  let pictures = tempdir().expect("a temporary folder");
   let avatars = pictures.path().join("avatars");
 
   let person = avatars.join("person");

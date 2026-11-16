@@ -122,6 +122,7 @@ async fn standing(reader: Option<bool>) -> Standing {
     None,
     seen.clone(),
     Arc::new(FileIds::in_memory()),
+    std::path::PathBuf::from("spool"),
   ));
   let reader = match reader {
     Some(connected) => {
@@ -242,7 +243,7 @@ async fn the_owner_s_files_go_through_the_reader_a_document_kept_whole_whatever_
     ..ChatSendRequest::new(
       GROUP,
       ChatSend::Document {
-        bytes: vec![1, 2, 3],
+        bytes: vec![1, 2, 3].into(),
         file_name: "scan.jpg".to_owned(),
       },
     )
@@ -422,7 +423,7 @@ async fn the_avatar_s_every_part_carries_the_prefix_and_the_owner_s_own_words_ca
       ..ChatSendRequest::new(
         GROUP,
         ChatSend::Document {
-          bytes: vec![1, 2, 3],
+          bytes: vec![1, 2, 3].into(),
           file_name: "notes.txt".to_owned(),
         },
       )

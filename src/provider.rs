@@ -490,6 +490,12 @@ impl ChatProvider for TelegramProvider {
     }
   }
 
+  // Each file of a multipart send is written here as it arrives, and each file the gathering fetched past the
+  // Bot API's ceiling stands here until the receiving side took it (docs/telegram.md, 「Reading a room」).
+  fn spool(&self) -> PathBuf {
+    self.telegram.spool()
+  }
+
   async fn room(&self, room_id: i64) -> Result<Option<ProviderRoom>, ChatFailure> {
     if self.telegram.bot_in(room_id).await {
       return Ok(Some(self.telegram.bot_room(room_id, self.active_voices()).await));

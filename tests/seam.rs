@@ -123,7 +123,7 @@ async fn the_reader_is_asked_for_its_health_its_fetches_its_pictures_and_the_own
   let file = FileItem {
     name: "a.pdf".to_owned(),
     mime: "application/pdf".to_owned(),
-    bytes: vec![1, 2],
+    bytes: vec![1, 2].into(),
   };
 
   assert!(reader.health().await.connected);
@@ -146,7 +146,7 @@ async fn the_reader_is_asked_for_its_health_its_fetches_its_pictures_and_the_own
       id: "photo-6".to_owned(),
       name: "6.jpg".to_owned(),
       mime: "image/jpeg".to_owned(),
-      bytes: vec![1, 2, 3],
+      bytes: vec![1, 2, 3].into(),
       kind: None,
     })
   );

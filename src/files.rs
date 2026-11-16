@@ -5,7 +5,9 @@
 
 use std::time::Duration;
 
+use bmo_chat::FileBody;
 use regex::RegexBuilder;
+use reqwest::Body;
 use reqwest::multipart::{Form, Part as Field};
 use serde_json::json;
 use telegram_dialect::telegram::transcript_parts;
@@ -57,8 +59,73 @@ fn reply_field(form: Form, reply_to: Option<i64>) -> Form {
   }
 }
 
-fn file_part(bytes: &[u8], name: &str, mime: &str) -> Result<Field, bmo_chat::ChatFailure> {
-  Ok(Field::bytes(bytes.to_vec()).file_name(name.to_owned()).mime_str(mime)?)
+// One voice send, in the shape its two tries share: the file, the caption it may carry, the message it answers.
+struct Voiced<'a> {
+  chat_id: i64,
+  audio: &'a FileBody,
+  file_name: &'a str,
+  mime: &'a str,
+  first: Option<&'a str>,
+  shown: Option<&'a str>,
+  reply_to: Option<i64>,
+}
+
+// The form one try of a voice goes up in, its caption read as the try asks for one or as the voice's own.
+async fn voice_form(voice: &Voiced<'_>, captioned: bool) -> Result<Form, bmo_chat::ChatFailure> {
+  let mut form = Form::new().text("chat_id", voice.chat_id.to_string());
+
+  match (voice.first, voice.shown, captioned) {
+    (Some(first), _, true) => form = form.text("caption", first.to_owned()).text("parse_mode", "HTML"),
+    (None, Some(shown), _) => form = form.text("caption", shown.to_owned()),
+    _ => {}
+  }
+
+  let field = file_part(voice.audio, voice.file_name, voice.mime).await?;
+
+  Ok(reply_field(form.part("voice", field), voice.reply_to))
+}
+
+// The field a file goes up as: bytes in memory as they are, a file kept on this machine's disk streamed off it
+// while it goes up, so a large one is never held whole (docs/telegram.md, 「Sends」). A file named without its
+// bytes is refused with the reason it was named for.
+async fn file_part(body: &FileBody, name: &str, mime: &str) -> Result<Field, bmo_chat::ChatFailure> {
+  let refused = |why: std::io::Error| -> bmo_chat::ChatFailure {
+    format!("{name} was not read for sending: {why}").into()
+  };
+  let size = body.size().await.map_err(refused)?;
+  let part = match body {
+    FileBody::Inline(bytes) => Field::bytes(bytes.clone()),
+    FileBody::Stored(stored) => match tokio::fs::File::open(stored.path()).await {
+      Err(why) => return Err(refused(why)),
+      Ok(file) => Field::stream_with_length(Body::from(file), size),
+    },
+    // The size above refused it already, since a file with no bytes has no size to tell.
+    FileBody::Withheld => {
+      return Err(refused(std::io::Error::other("the file was named without its bytes")));
+    }
+  };
+
+  Ok(part.file_name(name.to_owned()).mime_str(mime)?)
+}
+
+// A sound's first bytes, read wherever the sound stands: enough of them to tell one type from another, and no
+// more of a file kept on disk than the few bytes asked for.
+const SOUND_HEAD: usize = 12;
+
+pub(crate) async fn sound_head(body: &FileBody) -> Vec<u8> {
+  if let FileBody::Inline(bytes) = body {
+    return bytes.iter().take(SOUND_HEAD).copied().collect();
+  }
+
+  let Ok(mut reader) = body.reader().await else {
+    return Vec::new();
+  };
+  let mut head = Vec::with_capacity(SOUND_HEAD);
+
+  match tokio::io::AsyncReadExt::read_buf(&mut reader, &mut head).await {
+    Ok(_) => head,
+    Err(_) => Vec::new(),
+  }
 }
 
 impl Speaker {
@@ -83,16 +150,28 @@ impl Speaker {
   }
 
   /// A file sent as a document under its own name.
-  pub async fn document(&self, chat_id: i64, bytes: &[u8], file_name: &str, reply_to: Option<i64>) -> Sent {
-    let field = file_part(bytes, file_name, "application/octet-stream")?;
+  pub async fn document(
+    &self,
+    chat_id: i64,
+    bytes: &FileBody,
+    file_name: &str,
+    reply_to: Option<i64>,
+  ) -> Sent {
+    let field = file_part(bytes, file_name, "application/octet-stream").await?;
 
     self.file("sendDocument", chat_id, field, "document", reply_to).await
   }
 
   /// A sound sent as a file the room can play and download, under the type its bytes read as.
-  pub async fn audio(&self, chat_id: i64, audio: &[u8], file_name: &str, reply_to: Option<i64>) -> Sent {
-    let (_, mime) = audio_type(audio);
-    let field = file_part(audio, file_name, mime)?;
+  pub async fn audio(
+    &self,
+    chat_id: i64,
+    audio: &FileBody,
+    file_name: &str,
+    reply_to: Option<i64>,
+  ) -> Sent {
+    let (_, mime) = audio_type(&sound_head(audio).await);
+    let field = file_part(audio, file_name, mime).await?;
 
     self.file("sendAudio", chat_id, field, "audio", reply_to).await
   }
@@ -103,30 +182,26 @@ impl Speaker {
   pub async fn voice(
     &self,
     chat_id: i64,
-    audio: &[u8],
+    audio: &FileBody,
     caption: Option<&str>,
     transcript: Option<&str>,
     reply_to: Option<i64>,
   ) -> Sent {
-    let (extension, mime) = audio_type(audio);
+    let (extension, mime) = audio_type(&sound_head(audio).await);
     let file_name = format!("voice.{extension}");
     let mut parts = transcript.map(transcript_parts).unwrap_or_default();
     let first = (!parts.is_empty()).then(|| parts.remove(0));
     let shown = caption.filter(|caption| first.is_none() && !caption.trim().is_empty());
-    let form = |captioned: bool| -> Result<Form, bmo_chat::ChatFailure> {
-      let mut form = Form::new().text("chat_id", chat_id.to_string());
-
-      match (&first, shown) {
-        (Some(first), _) if captioned => {
-          form = form.text("caption", first.clone()).text("parse_mode", "HTML");
-        }
-        (None, Some(shown)) => form = form.text("caption", shown.to_owned()),
-        _ => {}
-      }
-
-      Ok(reply_field(form.part("voice", file_part(audio, &file_name, mime)?), reply_to))
+    let voiced = Voiced {
+      chat_id,
+      audio,
+      file_name: &file_name,
+      mime,
+      first: first.as_deref(),
+      shown,
+      reply_to,
     };
-    let mut answered = self.call_form("sendVoice", form(true)?).await?;
+    let mut answered = self.call_form("sendVoice", voice_form(&voiced, true).await?).await?;
 
     // Only an explicit refusal of the caption is safe to try again: a voice that may already have gone must not
     // go twice.
@@ -136,7 +211,7 @@ impl Speaker {
       && caption_refused(answered.description.as_deref().unwrap_or_default())
     {
       parts.insert(0, first.clone());
-      answered = self.call_form("sendVoice", form(false)?).await?;
+      answered = self.call_form("sendVoice", voice_form(&voiced, false).await?).await?;
     }
 
     let Some(voice) = message_id(&answered) else {

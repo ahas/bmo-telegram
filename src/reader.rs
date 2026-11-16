@@ -335,6 +335,28 @@ impl ReaderClient {
     }
   }
 
+  // Each file as the seam takes it, its bytes inline: a file kept on this machine's disk is read whole for the
+  // one call that cannot carry a part, and a file named without them is not carried at all.
+  async fn carried(&self, route: &str, files: &[FileItem]) -> Result<Vec<FileItem>, NotCarried> {
+    let not_carried = |why: String| NotCarried {
+      route: route.to_owned(),
+      why,
+    };
+    let mut carried = Vec::with_capacity(files.len());
+
+    for file in files {
+      let bytes = file.bytes.read().await.map_err(|why| not_carried(format!("{}: {why}", file.name)))?;
+
+      carried.push(FileItem {
+        name: file.name.clone(),
+        mime: file.mime.clone(),
+        bytes: bytes.into(),
+      });
+    }
+
+    Ok(carried)
+  }
+
   async fn as_owner(&self, route: &str, body: &Value) -> Result<AsOwner<Value>, NotCarried> {
     let not_carried = |why: String| NotCarried {
       route: route.to_owned(),
@@ -383,7 +405,10 @@ impl ReaderClient {
     caption: &Part,
     reply_to: Option<i64>,
   ) -> Result<AsOwner<Vec<OwnerSent>>, NotCarried> {
-    let body = json!({ "chatId": chat_id, "files": files, "caption": caption.plain,
+    // The seam carries every file inline, as base64, so a file the service holds on its own disk is read whole
+    // for this one call (docs/boundary-api.md, 「The reader's routes, called by the service」).
+    let carried = self.carried("/owner/album", files).await?;
+    let body = json!({ "chatId": chat_id, "files": carried, "caption": caption.plain,
       "captionMarkup": caption.markup, "replyToMessageId": reply_to });
     let sent = self.as_owner("/owner/album", &body).await?;
 

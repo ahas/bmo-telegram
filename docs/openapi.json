@@ -896,8 +896,7 @@
               "fields": {
                 "properties": {
                   "bytes": {
-                    "contentEncoding": "base64",
-                    "type": "string"
+                    "$ref": "#/components/schemas/FileBody"
                   },
                   "fileName": {
                     "type": "string"
@@ -925,8 +924,7 @@
               "fields": {
                 "properties": {
                   "audio": {
-                    "contentEncoding": "base64",
-                    "type": "string"
+                    "$ref": "#/components/schemas/FileBody"
                   },
                   "fileName": {
                     "type": "string"
@@ -954,8 +952,7 @@
               "fields": {
                 "properties": {
                   "audio": {
-                    "contentEncoding": "base64",
-                    "type": "string"
+                    "$ref": "#/components/schemas/FileBody"
                   },
                   "caption": {
                     "type": [
@@ -1515,12 +1512,33 @@
           }
         ]
       },
-      "FileItem": {
-        "description": "A file as it crosses the wire with no identifier of its own, as a send carries it inline.",
-        "properties": {
-          "bytes": {
+      "FileBody": {
+        "description": "A file's bytes: inline as base64, or the part of a multipart body that carries them. An answer that names a file without its bytes leaves the field out.",
+        "oneOf": [
+          {
             "contentEncoding": "base64",
             "type": "string"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "part": {
+                "description": "The name of the part of this multipart body that carries the bytes.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "part"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "FileItem": {
+        "description": "A file as it crosses the wire with no identifier of its own, as a send carries it.",
+        "properties": {
+          "bytes": {
+            "$ref": "#/components/schemas/FileBody"
           },
           "mime": {
             "type": "string"
@@ -1540,8 +1558,8 @@
         "description": "A file a message carried, as a provider hands it over or fetches it again.",
         "properties": {
           "bytes": {
-            "contentEncoding": "base64",
-            "type": "string"
+            "$ref": "#/components/schemas/FileBody",
+            "description": "Left out, and read as withheld, where an answer names the file without its bytes."
           },
           "id": {
             "description": "The provider's identifier of the file among its message's files: the same each time the same file\ncrosses, and never shared by two files of one message.",
@@ -1568,8 +1586,7 @@
         "required": [
           "id",
           "name",
-          "mime",
-          "bytes"
+          "mime"
         ],
         "type": "object"
       },
@@ -2657,6 +2674,28 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ChatSendRequest"
+              }
+            },
+            "multipart/form-data": {
+              "encoding": {
+                "body": {
+                  "contentType": "application/json"
+                }
+              },
+              "schema": {
+                "additionalProperties": {
+                  "contentMediaType": "application/octet-stream",
+                  "type": "string"
+                },
+                "properties": {
+                  "body": {
+                    "$ref": "#/components/schemas/ChatSendRequest"
+                  }
+                },
+                "required": [
+                  "body"
+                ],
+                "type": "object"
               }
             }
           },

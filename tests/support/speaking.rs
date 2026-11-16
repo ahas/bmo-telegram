@@ -287,6 +287,7 @@ pub async fn provider_served(stand_in: Arc<BotSends>, sending: Sending) -> (Stri
     None,
     seen.clone(),
     Arc::new(FileIds::in_memory()),
+    std::path::PathBuf::from("spool"),
   ));
   let provider = Arc::new(TelegramProvider::new(
     telegram,
