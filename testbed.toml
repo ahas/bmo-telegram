@@ -1,6 +1,5 @@
 # How the testbed tests, checks, builds and deploys this repository, in the testbed's declaration format.
-# The Cargo suite is the workspace's; the bun suite is the owner's reader in `reader/`. No build or deploy is
-# declared until the service has its binary and its units.
+# The Cargo suite is the workspace's; the bun suite is the owner's reader in `reader/`.
 
 testbed = 0
 name = "telegram"
@@ -25,19 +24,10 @@ repository = "bmo-chat"
 reason = "A file goes up to the Bot API as a multipart form, which reqwest's multipart feature builds; the shared line has no multipart body."
 line = 'reqwest = { version = "0.13.5", features = ["json", "multipart", "query", "stream"] }'
 
-[[check.step]]
-id = "check"
-command = "cargo check --workspace --all-targets"
-lane = "wide"
-
-[[check.step]]
-id = "clippy"
-command = "cargo clippy --workspace --all-targets -- -D warnings"
-lane = "wide"
-
-[[check.step]]
-id = "fmt"
-command = "cargo fmt --all --check"
+# No Cargo static step is declared. The testbed's own Cargo workspace check formats and lints every member,
+# every target compiled, through its Cargo verb in the shared build directory wherever a change marks a crate,
+# and the change check compiles every crate a change marks; a change that marks none has no Rust to judge. The
+# reader's type check is declared because nothing else reaches it.
 
 [[check.step]]
 id = "reader-types"
