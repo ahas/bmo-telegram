@@ -10,8 +10,8 @@ use bmo_chat::{ChatSend, ChatSendResult, FileBody};
 use bmo_telegram::policy::POLICY;
 use bmo_telegram::send::{Sending, sent};
 use serde_json::json;
-use tempfile::tempdir;
 use support::speaking::{BotSends, ROOM, refusal, send, sha, speaker};
+use tempfile::tempdir;
 
 // Sounds and a file made for the check: a voice's OGG head, an MP3's, and a document's bytes.
 const OGG: &[u8] = &[0x4f, 0x67, 0x67, 0x53, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4];
