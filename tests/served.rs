@@ -363,7 +363,7 @@ async fn the_declaration_names_the_provider_its_modes_and_its_dialect() {
     answer["dialect"],
     json!({
       "name": "telegram-html",
-      "limits": { "text": 4096, "caption": 1024, "albumPhotos": 10, "fileBytes": 20000000 },
+      "limits": { "text": 4096, "caption": 1024, "albumPhotos": 10, "fileBytes": 50000000 },
       "writing": WRITING,
       "foldable": true,
     })

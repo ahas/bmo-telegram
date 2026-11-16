@@ -10,10 +10,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use bmo_chat::{ChatFileKind, MessageFile};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use telegram_dialect::FILE_LIMIT;
 use telegram_picture::{Keeping, kept, raster_type};
 
-use crate::bot_api::BotApi;
+use crate::bot_api::{BotApi, DOWNLOAD_LIMIT};
 use crate::file_ids::FileIds;
 use crate::policy::POLICY;
 use crate::reader::{ReaderClient, ReaderFetch};
@@ -126,9 +125,9 @@ pub fn bot_file(message: &Value) -> Option<BotFile> {
   })
 }
 
-// Whether a file is past the Bot API's ceiling for a bot.
+// Whether a file is past the Bot API's ceiling for a bot's download.
 fn oversized(size: Option<i64>) -> bool {
-  size.is_some_and(|size| u64::try_from(size).unwrap_or_default() > FILE_LIMIT)
+  size.is_some_and(|size| u64::try_from(size).unwrap_or_default() > DOWNLOAD_LIMIT)
 }
 
 // The extension a picture's type implies.

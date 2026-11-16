@@ -9,6 +9,10 @@ use serde_json::{Value, json};
 /// Where the Bot API is asked unless the configuration names another address.
 pub const TELEGRAM: &str = "https://api.telegram.org";
 
+/// The largest file the Bot API hands a bot to download, in bytes; a larger one is fetched through the
+/// reader.
+pub const DOWNLOAD_LIMIT: u64 = 20_000_000;
+
 /// The Bot API behind one bot's token.
 #[derive(Debug, Clone)]
 pub struct BotApi {

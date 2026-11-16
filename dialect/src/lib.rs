@@ -13,8 +13,8 @@ use bmo_chat::{ChatDialect, ChatDialectLimits, ChatMarkup};
 /// The most pictures Telegram puts in one album.
 pub const ALBUM_LIMIT: usize = 10;
 
-/// The largest file the Bot API hands a bot, in bytes.
-pub const FILE_LIMIT: u64 = 20_000_000;
+/// The largest file the Bot API takes from a bot to send, in bytes.
+pub const SEND_FILE_LIMIT: u64 = 50_000_000;
 
 /// The sentence a writer in a room of this dialect is told.
 pub const WRITING: &str = "This room shows formatting. Write markdown as the answer-shape rulebook describes: \
@@ -35,7 +35,7 @@ impl ChatDialect for TelegramHtml {
       text: Some(telegram::TEXT_LIMIT as u64),
       caption: Some(telegram::CAPTION_LIMIT as u64),
       album_photos: Some(ALBUM_LIMIT as u64),
-      file_bytes: Some(FILE_LIMIT),
+      file_bytes: Some(SEND_FILE_LIMIT),
     }
   }
 

@@ -11,7 +11,7 @@ fn the_dialect_declares_telegram_s_limits_and_folds() {
   assert_eq!(declared.limits.text, Some(4096));
   assert_eq!(declared.limits.caption, Some(1024));
   assert_eq!(declared.limits.album_photos, Some(10));
-  assert_eq!(declared.limits.file_bytes, Some(20_000_000));
+  assert_eq!(declared.limits.file_bytes, Some(50_000_000));
   assert!(declared.foldable);
   assert!(declared.writing.starts_with("This room shows formatting."));
   assert!(

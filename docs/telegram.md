@@ -155,8 +155,10 @@ account alone (「Typing and presence」).
   says `gathering`, and the assets follow as `gathered`. Each asset is the file Telegram keeps for it, so a room
   can draw it as the platform does: a still one as WebP, a video one as WebM and an animated one as its TGS
   scene. The placeholder stays the message's words for whatever cannot draw the sticker.
-- **A file past the Bot API's ceiling for a bot,** picture or other, is fetched through the reader; with no
-  reader standing, a picture goes without its bytes and another file is not kept.
+- **A file past the Bot API's ceiling for a bot's download,** 20,000,000 bytes, picture or other, is fetched
+  through the reader; with no reader standing, a picture goes without its bytes and another file is not kept.
+  This ceiling is the provider's own concern in reading a room, and no declaration carries it: the dialect's
+  file limit is the larger one a bot may send.
 - **Every file a message carried crosses with its id,** the same each time the same file crosses. The bot
   account names a file by Telegram's `file_unique_id` for it (a picture's by its largest size's), and where a
   file comes with none, by its place in the message: `picture`, `file`, `sticker`, or `emoji-` and the custom
@@ -354,7 +356,7 @@ The agent's markdown becomes Telegram's HTML. The dialect has:
 
 | Member | Value |
 |---|---|
-| `limits` | text 4096, caption 1024 (both counted in UTF-16 units), album 10 pictures, file 20,000,000 bytes |
+| `limits` | text 4096, caption 1024 (both counted in UTF-16 units), album 10 pictures, file 50,000,000 bytes, the largest file the Bot API takes from a bot to send |
 | `writing` | "This room shows formatting. Write markdown as the answer-shape rulebook describes: the send path turns it into this platform's own markup and escapes what has to be escaped, so never write a tag yourself. An answer folds into an expandable quote only where its send asks for a fold." |
 | `foldable` | true: an answer whose send asks for a fold folds into an expandable quote where it is long enough for one, its lead and a short closing line left open |
 | `convert` | markdown in, the HTML markup, the same words plain, and whether the markup says more than the plain text |
