@@ -1,4 +1,3 @@
 /target
 /reader/node_modules
-.graph/*
-!.graph/settings.toml
+.graph/

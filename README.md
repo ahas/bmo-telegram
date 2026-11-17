@@ -19,7 +19,6 @@ words, held by a separate process, the reader.
 | `tests/` | the checks that span the repository, and the service's tests |
 | `deploy/` | the two service units a deployment links: the Rust provider and the bun reader |
 | `docs/` | the canonical statements of what the provider does |
-| `.graph/` | the repository's code graph: one node per feature with its files, symbols, edges and boundary, written only by `bmo graph` |
 
 At the root stand the Cargo workspace manifest, which is also the service's package, the version in
 `VERSION`, `testbed.toml` (the testbed's declaration of how this repository is tested, checked, built and

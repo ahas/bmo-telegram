@@ -1,9 +1,0 @@
-repository = "bmo-telegram"
-base = false
-
-[coverage]
-# The service's package and the two workspace crates from the bmo-next layout, and the reader's bun package beside
-# them, but the crate root that only lists its modules and the reader's declaration of what a TOML import is.
-layout = "bmo-next"
-roots = ["reader/"]
-unindexed = ["src/lib.rs", "reader/src/toml.d.ts"]

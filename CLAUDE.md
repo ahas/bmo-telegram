@@ -12,10 +12,6 @@ the service calls, over the loopback.
   make it wrong or incomplete repairs it first, stating what is true now, and the code is then written to
   match. `docs/boundary-api.md` states every route this provider serves, every call it makes on another unit,
   the seam between its two processes and the configuration it reads.
-- **The code graph in `.graph/` is written only by `bmo graph`.** It holds one node per feature with its
-  files, exported names, edges and boundary; nothing else edits it, and a change brings its node up to date in
-  the checkout. Its area files are generated and untracked, so a fresh checkout builds them again, while
-  `settings.toml` is the repository's configuration and stays tracked.
 - **No `bmo-*` dependency but the base libraries** `bmo-chat`, `bmo-chat-client` and `bmo-ui`. Another unit is
   reached over HTTP, as the boundary states; a helper an old shared crate held is copied into a crate here.
   The reader depends on no `@bmo/` package. `tests/repository.rs` fails on either (`docs/checks.md`).

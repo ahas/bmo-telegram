@@ -19,7 +19,7 @@ example.
 
 - Every file git tracks, and every new file git would track.
 - Code, comments and strings.
-- Documents, the README and the graph under `.graph/`.
+- Documents and the README.
 - Test fixtures and examples.
 - Policy files and configuration examples.
 - Commit messages, branch names and tags.
