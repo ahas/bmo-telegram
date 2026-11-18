@@ -138,6 +138,14 @@ account alone (「Typing and presence」).
   name of the kind with its particulars (a photo, a location, a poll, a sticker with its emoji and set, a
   forwarded message's origin, a member joining or leaving, a pin, a call), with the words typed under it as
   the context's `spokenText`. The placeholders are this repository's policy (`policy/telegram.toml`).
+- **People joining and a person leaving are handed over as lines** (bmo-chat's `docs/contract.md`, 「Lines」),
+  the placeholder staying the message's text for a reader that does not render a line. Telegram's members joining
+  cross as `people-joined`, each member with their number and the name they go by; a member leaving crosses as
+  `person-left`, that member alone. The one Telegram names as the message's sender is the line's `by` only where
+  they are not among the people who came or the person who went, so a person who joins by a link or leaves of
+  their own accord carries no `by`, and one added or removed by someone else does. A joining or a leaving
+  Telegram says was done on behalf of a chat, by an anonymous administrator, carries no `by` either: its
+  sender is a stand-in Telegram writes for the chat, and nobody the room knows.
 - **Telegram's own payload** for a message of a listened room crosses as `metadata`: its words, their
   formatting, its sticker and the file it carries, each as Telegram wrote it and in that order.
 - **Every time crosses in epoch milliseconds, as the protocol states times.** Telegram's own `date` counts
@@ -176,7 +184,8 @@ account alone (「Typing and presence」).
   own room, and every message of it carries that number as `album`.
 - **An edit** is handed over as `edited` with the words, their formatting and the files it carries that were
   not gathered lately as the same files; a file that changed under its name is gathered again.
-- **A group the bot leaves** is handed over as the service message Telegram sends for it; a group moving to a
+- **A group the bot leaves** is handed over as the service message Telegram sends for it, a `person-left` line
+  naming the bot and, where someone took it out, them as `by`; a group moving to a
   supergroup's number is no message, and the reading goes on.
 - **The bot's own messages** are not read back in: a file it sent is the sender's to keep, and a pin it made
   is nobody's word.

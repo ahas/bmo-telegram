@@ -455,6 +455,11 @@ async fn a_group_the_bot_leaves_or_that_moves_hands_over_the_leaving_and_reads_o
   reading.abort();
 
   assert_eq!((left["roomId"].clone(), left["text"].clone()), (json!(room), json!("[Left] Helper")));
+  assert_eq!(
+    left["line"],
+    json!({ "code": "person-left", "fields": {
+      "person": { "senderId": 7_000_000_001_i64, "name": "Helper" }, "by": { "senderId": OWNER, "name": "Tester" } } })
+  );
   assert_eq!((word["roomId"].clone(), word["text"].clone()), (json!(after), json!("are you there")));
   assert_eq!(account.receiver.handed.lock().unwrap().len(), 2);
 }

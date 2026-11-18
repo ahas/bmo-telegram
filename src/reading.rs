@@ -2,11 +2,13 @@
 //! picture to gather first, a file to gather after, or nothing. Nothing of what a message means to the receiver
 //! is decided here: no allow list, no command, no routing. What is here is what only Telegram's reading can do.
 
-use bmo_chat::{ChatVoice, HandedMessage, InboundChatContext, MessageOrigin, RoomFacts, RoomKind};
+use bmo_chat::{
+  ChatVoice, HandedMessage, InboundChatContext, LinePerson, MessageLine, MessageOrigin, RoomFacts, RoomKind,
+};
 use serde_json::{Map, Value};
 
 use crate::VIA;
-use crate::kinds::{Message, describe, forwarded_from, is_image_file};
+use crate::kinds::{Message, User, describe, forwarded_from, is_image_file};
 use crate::policy::POLICY;
 
 /// The largest number a room is told apart by without losing a digit.
@@ -91,6 +93,37 @@ fn context(message: &Message) -> InboundChatContext {
   }
 }
 
+fn person(user: &User) -> LinePerson {
+  LinePerson::new(user.id, user.name())
+}
+
+// The line a message is where it is the platform's word of the room rather than anyone's: members joining, or a
+// member leaving. Whoever Telegram names as the sender is the line's `by` only where they are not among those
+// the line is about, since a person joining by a link or leaving of their own accord is their own sender. A
+// message said on behalf of a chat carries a stand-in sender Telegram writes for it, who is nobody's `by`. The
+// protocol's joining names at least one person, so a joining that names none is no line.
+fn line(message: &Message) -> Option<MessageLine> {
+  let by = |about: &[User]| {
+    message
+      .from
+      .as_ref()
+      .filter(|_| message.sender_chat.is_none())
+      .filter(|from| about.iter().all(|user| user.id != from.id))
+      .map(person)
+  };
+
+  if let Some(members) = message.new_chat_members.as_ref().filter(|members| !members.is_empty()) {
+    let people = members.iter().map(person).collect::<Vec<_>>();
+
+    return Some(MessageLine::people_joined(&people, by(members).as_ref()));
+  }
+
+  message
+    .left_chat_member
+    .as_ref()
+    .map(|member| MessageLine::person_left(&person(member), by(std::slice::from_ref(member)).as_ref()))
+}
+
 fn handed(message: &Message, text: &str, origin: MessageOrigin, owner_id: i64, me: i64) -> HandedMessage {
   HandedMessage {
     origin,
@@ -98,7 +131,7 @@ fn handed(message: &Message, text: &str, origin: MessageOrigin, owner_id: i64, m
     sender_name: sender_name(message),
     sent_at: message.date.saturating_mul(1000),
     text: format!("{}{text}", forwarded_from(message.forward_origin.as_ref())),
-    line: None,
+    line: line(message),
     reply_to_message_id: message.reply_to_message.as_ref().map(|replied| replied.message_id),
     via: VIA.to_owned(),
     album: None,

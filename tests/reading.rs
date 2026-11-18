@@ -228,6 +228,60 @@ fn the_other_kinds_are_kept_as_placeholders_and_the_bots_own_service_messages_ar
 }
 
 #[test]
+fn joining_and_leaving_are_lines_naming_who_brought_or_took_a_person_only_where_that_is_someone_else() {
+  let said = |from: i64, kind: &str| {
+    let json = format!(
+      r#"{{ "message_id": 6, "date": 5, "chat": {{ "id": -5, "type": "group" }}, "from": {{ "id": {from}, "is_bot": false, "first_name": "Host" }}, {kind} }}"#
+    );
+    let Reading::Said(handed) = read(&message(&json), ME, OWNER, true) else {
+      panic!("{kind} is said");
+    };
+
+    (handed.text, serde_json::to_value(handed.line).unwrap())
+  };
+  let joining = r#""new_chat_members": [ { "id": 1, "is_bot": false, "first_name": "A" }, { "id": 2, "is_bot": false, "first_name": "", "username": "bee" } ]"#;
+  let leaving = r#""left_chat_member": { "id": 1, "is_bot": false, "first_name": "A" }"#;
+  let people = json!([{ "senderId": 1, "name": "A" }, { "senderId": 2, "name": "bee" }]);
+  let a = json!({ "senderId": 1, "name": "A" });
+  let host = json!({ "senderId": 9, "name": "Host" });
+
+  // Brought in by someone else, and come in on their own: the sender is one of those who came.
+  assert_eq!(
+    said(9, joining),
+    (
+      fill(&kinds().joined, &[("members", "A, bee")]),
+      json!({ "code": "people-joined", "fields": { "people": people, "by": host } })
+    )
+  );
+  assert_eq!(said(2, joining).1, json!({ "code": "people-joined", "fields": { "people": people } }));
+
+  // Taken out by someone else, and gone of their own accord.
+  assert_eq!(
+    said(9, leaving),
+    (
+      fill(&kinds().left, &[("member", "A")]),
+      json!({ "code": "person-left", "fields": { "person": a, "by": host } })
+    )
+  );
+  assert_eq!(said(1, leaving).1, json!({ "code": "person-left", "fields": { "person": a } }));
+
+  // An anonymous administrator's doing: Telegram's stand-in sender for the chat is nobody's `by`.
+  let on_behalf = r#""sender_chat": { "id": -5, "type": "supergroup", "title": "Group" }, "#;
+
+  assert_eq!(
+    said(9, &format!("{on_behalf}{joining}")).1,
+    json!({ "code": "people-joined", "fields": { "people": people } })
+  );
+  assert_eq!(
+    said(9, &format!("{on_behalf}{leaving}")).1,
+    json!({ "code": "person-left", "fields": { "person": a } })
+  );
+
+  // Anyone's words are no line.
+  assert_eq!(said(9, r#""text": "hello""#).1, Value::Null);
+}
+
+#[test]
 fn an_edit_carries_the_platforms_own_words_formatting_and_file_in_order() {
   let json = r#"{ "message_id": 8, "date": 5, "edit_date": 6, "chat": { "id": -5, "type": "group" },
     "from": { "id": 9, "is_bot": false, "first_name": "Tester" }, "caption": "edited words",
