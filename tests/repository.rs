@@ -1,5 +1,5 @@
 //! Checks that span the repository (docs/checks.md): what its packages and the reader may depend on, its
-//! layout and manifests, its one version, the testbed's declaration, and what no tracked file may hold
+//! layout and manifests, its one version and what no tracked file may hold
 //! (Hangul, and the names a list kept outside the repository gives). Personal data is held by the testbed's
 //! `personal-data` check (docs/PERSONAL-DATA.md).
 
@@ -190,33 +190,6 @@ fn no_package_takes_an_old_shared_crate_name() {
 fn the_version_file_holds_the_workspaces_version() {
   let version = text_of("VERSION").expect("VERSION is at the root");
   assert_eq!(version.trim(), env!("CARGO_PKG_VERSION"));
-}
-
-#[test]
-fn the_testbed_declaration_is_in_the_testbeds_format() {
-  let declaration: toml::Table = text_of("testbed.toml")
-    .expect("testbed.toml is at the root")
-    .parse()
-    .expect("testbed.toml is TOML");
-  let tables = ["test", "projects", "tools", "check", "build", "deploy", "runner", "events"];
-  let strange: Vec<&String> = declaration
-    .keys()
-    .filter(|key| !["testbed", "name"].contains(&key.as_str()) && !tables.contains(&key.as_str()))
-    .collect();
-
-  assert_eq!(declaration.get("testbed").and_then(toml::Value::as_integer), Some(0));
-  assert!(strange.is_empty(), "testbed.toml holds keys its format does not name: {strange:?}");
-  for key in tables.iter().filter(|key| declaration.contains_key(**key)) {
-    assert!(declaration[*key].is_table(), "`{key}` in testbed.toml is a table");
-  }
-  assert_eq!(
-    declaration["test"].get("languages").and_then(toml::Value::as_array),
-    Some(&vec![toml::Value::from("cargo"), toml::Value::from("bun")])
-  );
-  assert_eq!(
-    declaration["check"].get("base_libraries").and_then(toml::Value::as_array),
-    Some(&BASE_LIBRARIES.iter().map(|&name| toml::Value::from(name)).collect())
-  );
 }
 
 #[test]

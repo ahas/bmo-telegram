@@ -33,7 +33,7 @@ deployed), `rustfmt.toml` and `CLAUDE.md`.
 | `docs/telegram.md` | The provider: its declaration, how it reads a room, what each send does, the owner's voice, the `telegram-html` dialect |
 | `docs/reader.md` | The reader: the owner's account, connecting, the history walk, profile pictures, and why it is TypeScript |
 | `docs/tools.md` | The hosted tool: its entry, arguments, the owner's word, and where the provider is reached |
-| `docs/checks.md` | The repository checks: dependencies, manifests, layout, the version, the testbed's declaration, Hangul, personal data and names |
+| `docs/checks.md` | The repository checks: dependencies, manifests, layout, the version, Hangul, personal data and names |
 | `docs/PERSONAL-DATA.md` | The repository's personal-data prohibition: what no tracked file may hold, what goes in its place, and the check that holds it |
 
 ## Version

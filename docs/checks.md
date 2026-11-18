@@ -15,8 +15,6 @@ personal-data check is the testbed's, enabled in the declaration, and runs with 
   repository is the reader's, in `reader/`.
 - **Layout.** No tracked path holds a directory named after the directory it stands in.
 - **The version.** `VERSION` holds the workspace's version, and the reader's `package.json` carries it.
-- **The testbed's declaration.** `testbed.toml` names only keys of the testbed's format, its major version,
-  the Cargo and bun suites and the three base libraries.
 - **Hangul.** No tracked file holds a Hangul character: every word this provider writes or matches on is
   English.
 - **The fixed marker.** `docs/api.md` opens its body with the fixed marker, `Fixed at` and the version `VERSION`
