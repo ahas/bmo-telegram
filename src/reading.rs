@@ -98,6 +98,7 @@ fn handed(message: &Message, text: &str, origin: MessageOrigin, owner_id: i64, m
     sender_name: sender_name(message),
     sent_at: message.date.saturating_mul(1000),
     text: format!("{}{text}", forwarded_from(message.forward_origin.as_ref())),
+    line: None,
     reply_to_message_id: message.reply_to_message.as_ref().map(|replied| replied.message_id),
     via: VIA.to_owned(),
     album: None,
