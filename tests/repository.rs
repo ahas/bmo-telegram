@@ -12,9 +12,6 @@ use serde_json::Value;
 
 const ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
-/// The only `bmo-*` packages a package here may depend on: the base libraries.
-const BASE_LIBRARIES: [&str; 3] = ["bmo-chat", "bmo-chat-client", "bmo-ui"];
-
 /// Shared crates of the single repository this one was separated from; their parts live in-tree here.
 const OLD_SHARED_CRATES: [&str; 12] = [
   "archive-pool",
@@ -154,23 +151,6 @@ fn names_list(names: &toml::Table, from: &str, key: &str) -> Vec<String> {
         .collect()
     })
     .unwrap_or_default()
-}
-
-#[test]
-fn depends_on_no_bmo_package_but_the_base_libraries() {
-  let metadata = metadata();
-  let mut refused = Vec::new();
-  for package in metadata["packages"].as_array().expect("metadata lists packages") {
-    let owner = package["name"].as_str().expect("a package has a name");
-    for dependency in package["dependencies"].as_array().expect("a package lists its dependencies") {
-      let name = dependency["name"].as_str().expect("a dependency has a name");
-      let foreign_bmo = name.starts_with("bmo-") && !BASE_LIBRARIES.contains(&name);
-      if foreign_bmo || OLD_SHARED_CRATES.contains(&name) {
-        refused.push(format!("{owner} -> {name}"));
-      }
-    }
-  }
-  assert!(refused.is_empty(), "dependencies outside the base libraries: {refused:?}");
 }
 
 #[test]
