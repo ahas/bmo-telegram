@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use bmo_chat::{
@@ -29,7 +30,7 @@ use crate::reader::{
 use crate::seam::{Standing, read_asked};
 use crate::seen::Seen;
 use crate::send::{Sending, Speaker, refused};
-use crate::telegram::Telegram;
+use crate::telegram::{Telegram, UNANSWERED_FRESH};
 
 /// Why the owner's account is not read by where no reader stands behind the service.
 pub const NO_READER: &str = "no reader stands behind the service";
@@ -124,7 +125,16 @@ pub struct TelegramProvider {
   receiver: Mutex<Option<Arc<dyn ChatReceiver>>>,
   // The folder the reader keeps the profile pictures in.
   avatars: PathBuf,
+  // The owner's account's chats as the reader last listed them, or why it could not, and when; held while the
+  // reader is asked, so one asker asks at a time and the others take its answer.
+  listed: tokio::sync::Mutex<Option<KeptDialogs>>,
 }
+
+// The owner's account's chats as the reader listed them, or why it could not, and when.
+type KeptDialogs = (Instant, Result<Vec<ReaderRoom>, String>);
+
+/// How long the list of the owner's account's chats stands before the reader is asked again.
+const DIALOGS_FRESH: Duration = Duration::from_secs(60);
 
 // Whether the receiving side reads a room: its `read`, and not where it does not answer or holds nothing of it.
 async fn read_of(receiver: &dyn ChatReceiver, chat_id: i64) -> bool {
@@ -204,6 +214,7 @@ impl TelegramProvider {
       reading: Mutex::default(),
       receiver: Mutex::default(),
       avatars,
+      listed: tokio::sync::Mutex::default(),
     }
   }
 
@@ -240,7 +251,20 @@ impl TelegramProvider {
       return Err(NO_READER.to_owned());
     };
 
-    reader.dialogs().await
+    let mut listed = self.listed.lock().await;
+    let kept = listed
+      .as_ref()
+      .filter(|(at, answer)| at.elapsed() < if answer.is_ok() { DIALOGS_FRESH } else { UNANSWERED_FRESH });
+
+    if let Some((_, answer)) = kept {
+      return answer.clone();
+    }
+
+    let answer = reader.dialogs().await;
+
+    *listed = Some((Instant::now(), answer.clone()));
+
+    answer
   }
 
   // Every contact of the owner's account, as the reader lists them.

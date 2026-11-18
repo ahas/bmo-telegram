@@ -61,6 +61,12 @@ account alone (「Typing and presence」).
 - **For a group or a channel** Telegram is asked once and its answer stands for ten minutes; a message the bot
   account reads in a room lets go of the answer kept for it, so a room the bot has just joined is asked again.
   Where Telegram cannot be asked, a room the provider has seen stands as the bot's.
+- **What Telegram says of a room is kept, so asking of a room again asks Telegram nothing.** A room's title as
+  Telegram tells the bot stands for ten minutes, and the list of the owner's account's chats for one minute. Where
+  Telegram did not answer, that stands for half a minute too, so a Telegram that is slow or out of reach is asked
+  once in that span however many rooms are asked of. One asker at a time asks Telegram for a title, and one for the
+  list: the others wait for that answer and take it. The owner's account is his own, and a list read for every
+  room every time a console shows its rooms is what gets an account limited.
 - **A room of the owner's account the bot is not in is the owner's account's alone.** It is listed and answered
   as a room of the provider's own, so it can be added. Until the receiving side reads it (below) it is
   read-only: its `modes` are `human-reader` alone, and only the owner's own words, a send naming that voice, go

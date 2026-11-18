@@ -44,6 +44,9 @@ pub struct Telegram {
   standing: Mutex<Option<String>>,
   // Whether Telegram said the bot is in a room, and when it said so.
   presence: Mutex<HashMap<i64, (bool, Instant)>>,
+  // What Telegram told the bot each room is titled, whether it answered, and when; held while Telegram is asked,
+  // so one asker asks at a time and the others take its answer.
+  titles: tokio::sync::Mutex<HashMap<i64, KeptTitle>>,
 }
 
 /// One update the Bot API delivered.
@@ -92,6 +95,13 @@ pub const TOKEN_MISSING: &str = "BMO_BOT_TOKEN not set";
 
 /// How long Telegram's answer to whether the bot is in a room stands before it is asked again.
 pub const PRESENCE_FRESH: Duration = Duration::from_secs(600);
+// A room's title as Telegram told it, whether Telegram answered, and when.
+type KeptTitle = (Option<String>, bool, Instant);
+
+/// How long a room's title as Telegram told it stands before Telegram is asked again.
+pub const TITLE_FRESH: Duration = Duration::from_secs(600);
+/// How long it stands that Telegram did not answer, so a Telegram out of reach is not asked for every room.
+pub const UNANSWERED_FRESH: Duration = Duration::from_secs(30);
 
 // Whether Telegram's answer for a member of a group says the member is in it.
 fn member(answer: &Value) -> bool {
@@ -131,6 +141,7 @@ impl Telegram {
       avatar: AvatarLines::new(owner_id, None),
       standing: Mutex::new(Some("the bot account has not been read yet".to_owned())),
       presence: Mutex::default(),
+      titles: tokio::sync::Mutex::default(),
     }
   }
 
@@ -241,9 +252,24 @@ impl Telegram {
 
   /// What Telegram calls a room, or null where it cannot or will not say.
   pub async fn room_title(&self, chat_id: i64) -> Option<String> {
-    let chat: Value = self.api.call("getChat", &json!({ "chat_id": chat_id })).await.ok()?;
+    let mut titles = self.titles.lock().await;
+    let kept = titles
+      .get(&chat_id)
+      .filter(|(_, answered, at)| at.elapsed() < if *answered { TITLE_FRESH } else { UNANSWERED_FRESH });
 
-    chat.get("title").and_then(Value::as_str).map(str::to_owned)
+    if let Some((title, _, _)) = kept {
+      return title.clone();
+    }
+
+    let chat: Result<Value, _> = self.api.call("getChat", &json!({ "chat_id": chat_id })).await;
+    let title = chat
+      .as_ref()
+      .ok()
+      .and_then(|chat| chat.get("title").and_then(Value::as_str).map(str::to_owned));
+
+    titles.insert(chat_id, (title.clone(), chat.is_ok(), Instant::now()));
+
+    title
   }
 
   /// A room of the bot's as the protocol shapes it, under `title` and taking `modes`: the number the bot's words
