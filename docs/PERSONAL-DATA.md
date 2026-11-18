@@ -48,16 +48,18 @@ names, so a name is held by review.
 
 ## The check
 
-The personal-data check in `tests/personal_data.rs` reads every tracked file, line by line, and fails on:
+The testbed's `personal-data` check, which the declaration enables, reads every tracked file, line by line,
+before anything is built, and fails on:
 
-- a mail address outside the neutral example domains;
+- a mail address outside the domains kept for documents;
 - a home path that names an account, on a Unix-like system or a Windows one, outside the neutral role names;
 - a telephone number written in groups, with an optional country or area code;
-- a token: a value of sixteen or more characters carrying a digit, assigned to a token, key, secret or
-  password name, or a key in the shape a vendor gives its own;
+- a token in the shape a vendor gives its own keys, a private key's opening line, or a bearer value;
 - a private network address: the IPv4 blocks 10/8, 172.16/12, 192.168/16 and the shared 100.64/10, the IPv4
   link-local block 169.254/16, the IPv6 unique-local prefix fc00::/7 and the IPv6 link-local prefix
   fe80::/10. A loopback address passes.
+
+The forms themselves are the testbed's policy (its `docs/checks.md`, 「The quick checks」).
 
 A failure names the file, the line and the kind, never the value it found. The check keeps no list of
 personal terms: it matches shapes. A rule the check cannot read, such as a name written into a commit

@@ -1,7 +1,7 @@
 # The repository checks
 
-`tests/repository.rs` holds the checks that span the repository, and `tests/personal_data.rs` the
-personal-data check. Each runs with the root package's tests.
+`tests/repository.rs` holds the checks that span the repository and runs with the root package's tests. The
+personal-data check is the testbed's, enabled in the declaration, and runs with the quick checks.
 
 - **Dependencies.** No package of the workspace depends on a `bmo-*` package but the base libraries,
   `bmo-chat`, `bmo-chat-client` and `bmo-ui`, nor on a crate named after a shared crate of the single
@@ -23,7 +23,7 @@ personal-data check. Each runs with the root package's tests.
   holds, in bold and ending in a full stop, so the fixed API names the version it is fixed at.
 - **Personal data.** No tracked file holds a mail address outside the reserved example domains, a home path
   outside the neutral role names, a telephone number, a token, or a private network address. A loopback
-  address passes. `docs/PERSONAL-DATA.md` states the rule, and `tests/personal_data.rs` reads every tracked
+  address passes. `docs/PERSONAL-DATA.md` states the rule, and the testbed's `personal-data` check reads every tracked
   file and reports the file, the line and the kind, never the value.
 - **Names.** No tracked file holds an agent's, a person's or a machine's name. No repository keeps the list of
   those names, so the check reads it from the file the variable `BMO_NAMES_LIST` names, outside the checkout:

@@ -9,7 +9,6 @@ mod file_ids;
 mod file_sends;
 mod gathering;
 mod owner;
-mod personal_data;
 mod picture_sends;
 mod policy;
 mod reading;

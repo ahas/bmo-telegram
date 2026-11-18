@@ -1,7 +1,7 @@
 //! Checks that span the repository (docs/checks.md): what its packages and the reader may depend on, its
 //! layout and manifests, its one version, the testbed's declaration, and what no tracked file may hold
-//! (Hangul, and the names a list kept outside the repository gives). Personal data has its own check,
-//! `personal_data.rs` (docs/PERSONAL-DATA.md).
+//! (Hangul, and the names a list kept outside the repository gives). Personal data is held by the testbed's
+//! `personal-data` check (docs/PERSONAL-DATA.md).
 
 use std::fs;
 use std::io::ErrorKind;
