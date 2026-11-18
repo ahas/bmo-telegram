@@ -14,7 +14,8 @@ the service calls, over the loopback.
   the seam between its two processes and the configuration it reads.
 - **No `bmo-*` dependency but the base libraries** `bmo-chat`, `bmo-chat-client` and `bmo-ui`. Another unit is
   reached over HTTP, as the boundary states; a helper an old shared crate held is copied into a crate here.
-  The reader depends on no `@bmo/` package. `tests/repository.rs` fails on either (`docs/checks.md`).
+  The reader depends on no `@bmo/` package. The testbed's `dependencies` check fails on the first and
+  `tests/repository.rs` on the second (`docs/checks.md`).
 - **The provider declares what it is.** Its modes, capabilities and dialect are its own declaration; nothing
   here names the receiver's internals or another provider, and nothing branches on an agent's name.
 - **English only** in code, comments, strings, tests, policy, documents and commit messages. A refusal is a
