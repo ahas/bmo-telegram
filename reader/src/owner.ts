@@ -1,8 +1,9 @@
 // What is sent through the owner's account, in the owner's own voice or the avatar's (docs/telegram.md, 「The
 // owner's voice」): one part of words, and one album of files, each answering an earlier message where it
-// names one, in the markup the service gives as HTML; the typing mark; and a message deleted. The service
-// divides a send into the parts and albums Telegram takes, and puts the avatar's prefix before its words,
-// before it asks; this is what the account is told for each, and what each went out as.
+// names one, in the markup the service gives as HTML; the typing mark; a message deleted; and the owner's own
+// reaction on a message. The service divides a send into the parts and albums Telegram takes, and puts the
+// avatar's prefix before its words, before it asks; this is what the account is told for each, and what each
+// went out as.
 
 import { accountMessageId, resolveEntity } from "./history";
 import { peerOf } from "./media";
@@ -155,19 +156,23 @@ export class ReplyUnreachable extends Error {
   }
 }
 
+// What the owner's account was asked to do to a message, as its refusal names it.
+export type MessageAct = "delete" | "react to";
+
 export class MessageGone extends Error {
-  constructor() {
-    super("Telegram has no message here for the owner's account to delete");
+  constructor(act: MessageAct) {
+    super(`Telegram has no message here for the owner's account to ${act}`);
   }
 }
 
 /** What is sent through the owner's account: one part of words, one album of files, the typing mark shown or
- * taken off, and a message deleted for everyone. */
+ * taken off, a message deleted for everyone, and the account's own reaction put on a message or taken off. */
 export interface OwnerAccount {
   say(words: OwnerWords): Promise<OwnerSent>;
   album(album: OwnerAlbum): Promise<OwnerSent[]>;
   typing(chatId: number, on: boolean): Promise<void>;
   delete(chatId: number, messageId: number): Promise<void>;
+  react(chatId: number, messageId: number, emoji: string): Promise<void>;
 }
 
 // How the account reads what it is given: the service's markup as HTML, plain words as they stand. The
@@ -294,9 +299,27 @@ export function heldOwnerAccount(client: () => TelegramClient | null, peers: Pee
       const { client: account, entity } = await readerTarget(client(), peers, chatId, null);
       const own = await heldLine(account, entity, chatId, messageId);
 
-      if (own === null) throw new MessageGone();
+      if (own === null) throw new MessageGone("delete");
 
       await account.deleteMessages(entity, [own], { revoke: true });
+    },
+
+    // The account's own reaction, as a person reacting would put it on: the emoji alone, or none to take it off.
+    // A reaction the message already carries from the account is Telegram's MESSAGE_NOT_MODIFIED, and no failure.
+    react: async (chatId, messageId, emoji) => {
+      const { client: account, entity } = await readerTarget(client(), peers, chatId, null);
+      const own = await heldLine(account, entity, chatId, messageId);
+
+      if (own === null) throw new MessageGone("react to");
+
+      const { Api } = mtproto();
+      const reaction = emoji === "" ? undefined : [new Api.ReactionEmoji({ emoticon: emoji })];
+
+      try {
+        await account.invoke(new Api.messages.SendReaction({ peer: entity, msgId: own, reaction }));
+      } catch (error) {
+        if ((error as { errorMessage?: unknown }).errorMessage !== "MESSAGE_NOT_MODIFIED") throw error;
+      }
     },
   };
 
@@ -305,6 +328,7 @@ export function heldOwnerAccount(client: () => TelegramClient | null, peers: Pee
     album: async (album) => await sends.sending(album.chatId, () => account.album(album), (sent) => sent.map((one) => one.id)),
     typing: account.typing,
     delete: account.delete,
+    react: account.react,
   };
 }
 

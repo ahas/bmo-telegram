@@ -1,8 +1,8 @@
 //! A send in the owner's account (docs/telegram.md, 「The owner's voice」, 「The avatar」): the words in the parts
 //! and the markup the bot's send would take, and files gathered into the albums Telegram takes, each sent
 //! through the reader over the seam and noted, so the bot account's sight of it is known as its echo; the
-//! typing mark, and a delete. The owner's own words go as they are, the avatar's behind its prefix. What the
-//! owner's account refuses comes back as the reader said it.
+//! typing mark, a delete, and the owner's own reaction. The owner's own words go as they are, the avatar's behind
+//! its prefix. What the owner's account refuses comes back as the reader said it.
 
 use std::path::Path;
 
@@ -210,7 +210,7 @@ impl OwnerVoice<'_> {
   }
 
   /// One send in the owner's account: words, a picture, a file, a sound or an album, each as the bot's send
-  /// would carry it, the typing mark, or a delete; any other verb refused.
+  /// would carry it, the typing mark, a delete, or a reaction in the owner's own voice; any other verb refused.
   pub async fn send(&self, request: &ChatSendRequest) -> Sent {
     let room = request.room_id;
     let reply_to = request.reply_to_message_id;
@@ -246,6 +246,10 @@ impl OwnerVoice<'_> {
       }
       ChatSend::Typing { on } => self.typing(room, *on).await,
       ChatSend::Delete { message_id } => self.delete(room, *message_id).await,
+      ChatSend::Reaction { message_id, emoji } => match self.prefix {
+        Some(_) => Ok(refused(POLICY.avatar_reaction())),
+        None => self.reaction(room, *message_id, emoji).await,
+      },
       other => Ok(refused(POLICY.owner_verb(&wire_name(&other.kind())))),
     }
   }
@@ -372,6 +376,15 @@ impl OwnerVoice<'_> {
   /// The message the owner's account holds under the number, deleted for everyone in the room.
   pub async fn delete(&self, chat_id: i64, message_id: i64) -> Sent {
     match self.reader.owner_delete(chat_id, message_id).await? {
+      AsOwner::Sent(()) => Ok(sent(Some(message_id))),
+      AsOwner::Refused { name, error } => Ok(refused(self.refusal(&name, &error))),
+    }
+  }
+
+  /// The emoji put on the message the owner's account holds under the number as the owner's own reaction, an
+  /// empty emoji taking his off.
+  pub async fn reaction(&self, chat_id: i64, message_id: i64, emoji: &str) -> Sent {
+    match self.reader.owner_reaction(chat_id, message_id, emoji).await? {
       AsOwner::Sent(()) => Ok(sent(Some(message_id))),
       AsOwner::Refused { name, error } => Ok(refused(self.refusal(&name, &error))),
     }

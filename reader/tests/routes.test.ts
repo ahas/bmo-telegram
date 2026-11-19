@@ -31,7 +31,12 @@ const owner: OwnerAccount = {
   delete: async (chatId, messageId) => {
     ownerAsked.push({ chatId, messageId });
 
-    if (messageId !== 900) throw new MessageGone();
+    if (messageId !== 900) throw new MessageGone("delete");
+  },
+  react: async (chatId, messageId, emoji) => {
+    ownerAsked.push({ chatId, messageId, emoji });
+
+    if (messageId !== 900) throw new MessageGone("react to");
   },
 };
 
@@ -119,6 +124,23 @@ describe("the reader's door", () => {
       { chatId: 5, on: true },
       { chatId: 5, messageId: 900 },
       { chatId: 5, messageId: 7 },
+    ]);
+  });
+
+  test("carries the owner's reaction and its taking off, and names one on a line the account does not hold gone", async () => {
+    const before = ownerAsked.length;
+
+    expect((await call("/owner/reaction", { chatId: 5, messageId: 900 }))[0]).toBe(400);
+    expect(await call("/owner/reaction", { chatId: 5, messageId: 900, emoji: "👍" })).toEqual([200, {}]);
+    expect(await call("/owner/reaction", { chatId: 5, messageId: 900, emoji: "" })).toEqual([200, {}]);
+    expect(await call("/owner/reaction", { chatId: 5, messageId: 7, emoji: "👍" })).toEqual([
+      200,
+      { refused: "gone", error: "Telegram has no message here for the owner's account to react to" },
+    ]);
+    expect(ownerAsked.slice(before)).toEqual([
+      { chatId: 5, messageId: 900, emoji: "👍" },
+      { chatId: 5, messageId: 900, emoji: "" },
+      { chatId: 5, messageId: 7, emoji: "👍" },
     ]);
   });
 });

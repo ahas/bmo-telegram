@@ -127,6 +127,7 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption` (the plain words), `captionMarkup` (the dialect's HTML, or null), `replyToMessageId` | `ids`, the message numbers in the order the files went, and `texts`, the words each holds as Telegram holds them; or `refused` with `error` |
 | `POST /owner/typing` | `chatId`, `on` (boolean) | an empty object once the typing mark is shown or taken off; or `refused` (`unavailable`) with `error` |
 | `POST /owner/delete` | `chatId`, `messageId` | an empty object once the message is deleted for everyone; or `refused` (`unavailable`, or `gone` where the account holds no line under the number) with `error` |
+| `POST /owner/reaction` | `chatId`, `messageId`, `emoji` (an empty one takes the account's reaction off) | an empty object once the reaction stands as the account's, or is taken off; or `refused` (`unavailable`, or `gone` where the account holds no line under the number) with `error` |
 
 The service answers `GET /rooms` from `/reader/dialogs` and the rooms the bot is in (`docs/telegram.md`, 「The
 rooms」): each room once, as a room of the provider's own, `owner` for the owner's one-to-one and `group` for any
@@ -145,7 +146,7 @@ send in the owner's account, one naming the voice `human-reader` or `human-avata
 `/owner/album` (whose files cross inline as base64, so a file the service holds on its own disk is read whole for
 that one call), divided by the service first into the parts, markup and albums the bot's send would take, the
 avatar's prefix already put before its words (`docs/telegram.md`, 「The owner's voice」, 「The avatar」); its typing
-mark goes by `/owner/typing` and a delete by `/owner/delete`. The reader sends the markup as HTML where one is
+mark goes by `/owner/typing`, a delete by `/owner/delete` and a reaction in the owner's own voice by `/owner/reaction`. The reader sends the markup as HTML where one is
 given, and `/owner/say` the plain words where the account refuses it. It finds a reply by the message's number on
 the owner's account, and refuses an `unreachable` one where that account has no line under it. The service notes
 each message the send went out as, under the number and the words the reader answered, so that the bot account's

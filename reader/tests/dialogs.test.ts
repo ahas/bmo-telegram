@@ -18,6 +18,7 @@ const owner: OwnerAccount = {
   album: async () => [],
   typing: async () => {},
   delete: async () => {},
+  react: async () => {},
 };
 
 // One dialog of the stand-in account: its number and title, and what its chat says of itself.

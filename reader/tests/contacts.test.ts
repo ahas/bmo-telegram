@@ -19,6 +19,7 @@ const owner: OwnerAccount = {
   album: async () => [],
   typing: async () => {},
   delete: async () => {},
+  react: async () => {},
 };
 const client = {} as TelegramClient;
 

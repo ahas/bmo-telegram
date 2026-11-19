@@ -290,7 +290,8 @@ English lines of `policy/telegram.toml`, each the detail of a `platform` refusal
 | a sticker the configured set does not carry | `platform` | `sticker_missing` |
 | a sticker where no set is configured | `platform` | `sticker_unset` |
 | a send asked to be spoken in a mode that is not running, the owner's voice or the avatar's while the reader does not have the account connected among them, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
-| a send in the owner's account, in the owner's voice or the avatar's, of a verb other than `text`, `photo`, `album`, `document`, `audio`, `typing` and `delete` | `platform` | `owner_verb` |
+| a send in the owner's account, in the owner's voice or the avatar's, of a verb other than `text`, `photo`, `album`, `document`, `audio`, `typing`, `delete` and `reaction` | `platform` | `owner_verb` |
+| a `reaction` in the avatar's voice | `platform` | `avatar_reaction` |
 | a send in any voice but the owner's own into a room the bot is not in, the avatar's but where the receiving side reads the room (「The rooms」) | `platform` | `read_only` |
 | a `typing` send in the bot's voice, or naming none, that names an account | `platform` | `typing_account` |
 | any other refusal Telegram gives | `platform` | Telegram's own description |
@@ -326,6 +327,11 @@ reads it as the owner's, never as the bot's. A send that names no voice, or `bot
   - **`typing`**: the typing mark shown in the room as the owner's account's, or taken off.
   - **`delete`**: the message the owner's account holds under the number, deleted for everyone in the room. A
     number the account holds no line under is refused marked `gone`, with the policy's `message_gone`.
+  - **`reaction`**, in the owner's own voice alone: the emoji put on the message the owner's account holds under
+    the number as the owner's own reaction, an empty emoji taking his off, so the room reads it as his and never
+    as the bot's. A reaction the message already carries from him is no failure. A number the account holds no
+    line under is refused marked `gone`, with the policy's `message_gone`. In the avatar's voice it is refused with
+    the policy's `avatar_reaction` (「The avatar」).
   - Any other verb is refused with the policy's `owner_verb`.
 - **A reply** is named by the send's `replyToMessageId`, the message's number as the protocol carries it. The
   reader finds that number's line on the owner's account and answers it; where the account has no line under
@@ -360,6 +366,8 @@ the agent's by the avatar prefix, and the owner's own words, in `human-reader`, 
 - **The prefix reads as written**: it is put before the plain words as it stands and before the markup escaped,
   so nothing in it is read as a mark.
 - **`typing` and `delete` carry no words** and so no prefix.
+- **A reaction is never the avatar's.** It carries no words, so nothing on it could mark it as the agent's, and
+  it would read as the owner's own: in the avatar's voice it is refused with the policy's `avatar_reaction`.
 - **A room the bot is not in takes an avatar send only where the receiving side reads it**, so only a room added
   on this provider; elsewhere it is refused with the policy's `read_only` (「The rooms」). Whether the receiving
   side reads a room is asked of it at the send, as the room's answer asks it.

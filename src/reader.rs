@@ -446,6 +446,20 @@ impl ReaderClient {
 
     Ok(map_sent(sent, |_| ()))
   }
+
+  /// The emoji put on the message the owner's account holds under the number as the account's own reaction, an
+  /// empty emoji taking it off.
+  pub async fn owner_reaction(
+    &self,
+    chat_id: i64,
+    message_id: i64,
+    emoji: &str,
+  ) -> Result<AsOwner<()>, NotCarried> {
+    let body = json!({ "chatId": chat_id, "messageId": message_id, "emoji": emoji });
+    let sent = self.as_owner("/owner/reaction", &body).await?;
+
+    Ok(map_sent(sent, |_| ()))
+  }
 }
 
 fn map_sent<T>(sent: AsOwner<Value>, read: impl FnOnce(Value) -> T) -> AsOwner<T> {

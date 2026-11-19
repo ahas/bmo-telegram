@@ -1,9 +1,10 @@
 //! A send in the owner's own voice (docs/telegram.md, 「The owner's voice」): the words and files the bot's send
 //! would carry, said through a fake reader and never by the bot, a send in no voice still the bot's, the echo
 //! of the owner's send as the bot account reads it not handed over again, the refusal while the reader has no
-//! account connected, and files gathered into the albums Telegram takes by their kinds, each file's size
-//! judged and a caption's line breaks read as a form carries them; a line the avatar sent, read back past its
-//! echo, handed over as the agent's own (docs/telegram.md, 「The avatar」).
+//! account connected, the owner's reaction put on in his account and the avatar's refused, and files gathered
+//! into the albums Telegram takes by their kinds, each file's size judged and a caption's line breaks read as a
+//! form carries them; a line the avatar sent, read back past its echo, handed over as the agent's own
+//! (docs/telegram.md, 「The avatar」).
 
 use crate::support;
 
@@ -45,6 +46,7 @@ fn fake_reader(connected: bool, asked: Asked) -> Router {
   let album_asked = asked.clone();
   let typing_asked = asked.clone();
   let delete_asked = asked.clone();
+  let reaction_asked = asked.clone();
 
   Router::new()
     .route(
@@ -92,6 +94,20 @@ fn fake_reader(connected: bool, asked: Asked) -> Router {
         let held = body["messageId"] == 900;
 
         delete_asked.lock().unwrap().push(("delete".to_owned(), body));
+
+        if held {
+          Json(json!({}))
+        } else {
+          Json(json!({ "refused": "gone", "error": "no line under that number" }))
+        }
+      }),
+    )
+    .route(
+      "/owner/reaction",
+      post(move |Json(body): Json<Value>| async move {
+        let held = body["messageId"] == 900;
+
+        reaction_asked.lock().unwrap().push(("reaction".to_owned(), body));
 
         if held {
           Json(json!({}))
@@ -504,6 +520,48 @@ async fn the_avatar_s_typing_mark_and_delete_go_through_the_owner_s_account() {
       ("typing".to_owned(), json!({ "chatId": GROUP, "on": true })),
       ("delete".to_owned(), json!({ "chatId": GROUP, "messageId": 900 })),
       ("delete".to_owned(), json!({ "chatId": GROUP, "messageId": 901 })),
+    ]
+  );
+}
+
+/// The owner's reaction goes on in his own account through the reader, never by the bot, and is taken off the same
+/// way; one on a number the account holds no line under is refused as gone, and the avatar's is refused, since
+/// nothing on a reaction could mark it as the agent's.
+#[tokio::test]
+async fn the_owner_s_reaction_goes_on_in_his_account_and_the_avatar_s_is_refused() {
+  let up = standing(Some(true)).await;
+  let react = |voice: ChatVoice, message_id: i64, emoji: &str| ChatSendRequest {
+    mode: Some(voice),
+    ..ChatSendRequest::new(
+      GROUP,
+      ChatSend::Reaction {
+        message_id,
+        emoji: emoji.to_owned(),
+      },
+    )
+  };
+  let went = ChatSendResult::Sent(ChatSent {
+    message_id: Some(900),
+    missed: Vec::new(),
+  });
+
+  assert_eq!(up.provider.send(react(ChatVoice::HumanReader, 900, "👍")).await.unwrap(), went);
+  assert_eq!(up.provider.send(react(ChatVoice::HumanReader, 900, "")).await.unwrap(), went);
+  assert_eq!(
+    up.provider.send(react(ChatVoice::HumanReader, 901, "👍")).await.unwrap(),
+    ChatSendResult::Refused(POLICY.message_gone("no line under that number"))
+  );
+  assert_eq!(
+    up.provider.send(react(ChatVoice::HumanAvatar, 900, "👍")).await.unwrap(),
+    ChatSendResult::Refused(POLICY.avatar_reaction())
+  );
+  assert!(up.bot.asked().is_empty());
+  assert_eq!(
+    up.asked.lock().unwrap().clone(),
+    [
+      ("reaction".to_owned(), json!({ "chatId": GROUP, "messageId": 900, "emoji": "👍" })),
+      ("reaction".to_owned(), json!({ "chatId": GROUP, "messageId": 900, "emoji": "" })),
+      ("reaction".to_owned(), json!({ "chatId": GROUP, "messageId": 901, "emoji": "👍" })),
     ]
   );
 }

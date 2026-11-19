@@ -1,7 +1,7 @@
 // The reader's routes, called by the service alone (docs/boundary-api.md, 「The reader's routes, called by the
 // service」): whether the owner's account is connected, the chats it is in, its contacts and a conversation
 // started with them, a picture or a file fetched through it, and a send through the owner's account, its typing
-// mark and a delete. Every route takes the seam's token.
+// mark, a delete and a reaction. Every route takes the seam's token.
 
 import { fetchFile, fetchPicture } from "./media";
 import { ChatUnresolved, DEFAULT_MAX, LARGEST_MAX } from "./messages";
@@ -180,6 +180,22 @@ function routes(deps: RoutesDeps): Record<string, (body: Body) => Promise<Respon
 
       return await asOwner(async () => {
         await deps.owner.delete(chatId, messageId);
+
+        return {};
+      });
+    },
+
+    "/owner/reaction": async (body) => {
+      if (!isNumber(body.chatId) || !isNumber(body.messageId) || !isText(body.emoji)) {
+        return failure("bad-request", "chatId and messageId (numbers) and emoji (string) are required", 400);
+      }
+
+      const chatId = body.chatId;
+      const messageId = body.messageId;
+      const emoji = body.emoji;
+
+      return await asOwner(async () => {
+        await deps.owner.react(chatId, messageId, emoji);
 
         return {};
       });

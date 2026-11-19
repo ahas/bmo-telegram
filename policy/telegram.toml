@@ -33,9 +33,12 @@ sticker_unset = "No sticker set is configured."
 # by.
 mode_down = "Telegram's {mode} mode is not running: {why}."
 mode_missing = "Telegram does not read by that mode"
-# A send in the owner's own account of a {verb} it does not carry: it takes words, files, the typing mark and a
-# delete alone.
-owner_verb = "The owner's own account sends only text, photos, albums, documents, audio, the typing mark and deletes, not {verb}."
+# A send in the owner's own account of a {verb} it does not carry: it takes words, files, the typing mark, a
+# delete and a reaction alone.
+owner_verb = "The owner's own account sends only text, photos, albums, documents, audio, the typing mark, deletes and reactions, not {verb}."
+# A reaction in the avatar's voice: it carries no words, so nothing could mark it as the agent's rather than the
+# owner's own.
+avatar_reaction = "A reaction in the avatar's voice would carry no mark of the agent and read as the owner's own, so the owner's account does not put it on."
 # A typing send in the bot's voice that names an account: that account's typing, which only its own Telegram
 # account could show, and the provider holds none of it.
 typing_account = "Telegram shows typing only as the bot, for the answerer, or in the owner's own account; the provider holds no Telegram account of the account this typing is for."

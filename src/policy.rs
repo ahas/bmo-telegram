@@ -49,6 +49,7 @@ pub struct Refusals {
   pub mode_down: String,
   pub mode_missing: String,
   pub owner_verb: String,
+  pub avatar_reaction: String,
   pub read_only: String,
   pub typing_account: String,
 }
@@ -188,6 +189,11 @@ impl Policy {
   /// A send in the owner's own account of a verb it does not carry.
   pub fn owner_verb(&self, verb: &str) -> ChatRefusal {
     self.platform(fill(&self.refusals.owner_verb, &[("verb", verb)]))
+  }
+
+  /// A reaction in the avatar's voice, which nothing on it could mark as the agent's.
+  pub fn avatar_reaction(&self) -> ChatRefusal {
+    self.platform(self.refusals.avatar_reaction.clone())
   }
 
   /// A send in any voice but the owner's own into a room the bot is not in.

@@ -102,6 +102,7 @@ describe("the reader's route for one chat", () => {
     album: async () => [],
     typing: async () => {},
     delete: async () => {},
+    react: async () => {},
   };
 
   const server = Bun.serve({
