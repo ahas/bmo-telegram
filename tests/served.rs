@@ -295,6 +295,7 @@ async fn stood(reader_standing: bool) -> Served {
     standing,
     presence: telegram.clone(),
     avatar: telegram.avatar().clone(),
+    lines: telegram.lines().clone(),
   });
 
   provider.start(receiver.clone()).await.expect("the provider starts");

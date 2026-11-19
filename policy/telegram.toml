@@ -34,11 +34,18 @@ sticker_unset = "No sticker set is configured."
 mode_down = "Telegram's {mode} mode is not running: {why}."
 mode_missing = "Telegram does not read by that mode"
 # A send in the owner's own account of a {verb} it does not carry: it takes words, files, the typing mark, a
-# delete and a reaction alone.
-owner_verb = "The owner's own account sends only text, photos, albums, documents, audio, the typing mark, deletes and reactions, not {verb}."
-# A reaction in the avatar's voice: it carries no words, so nothing could mark it as the agent's rather than the
-# owner's own.
-avatar_reaction = "A reaction in the avatar's voice would carry no mark of the agent and read as the owner's own, so the owner's account does not put it on."
+# delete, a reaction, a pin and an edit alone.
+owner_verb = "The owner's own account sends only text, photos, albums, documents, audio, the typing mark, deletes, reactions, pins and edits, not {verb}."
+# A reaction or a pin, the {verb}, in the avatar's voice: it carries no words, so nothing could mark it as the
+# agent's rather than the owner's own.
+avatar_unmarked = "A {verb} in the avatar's voice would carry no mark of the agent and read as the owner's own, so the owner's account does not make it."
+# An edit in the avatar's voice: the account cannot tell a line the avatar sent from one the owner typed.
+avatar_edit = "An edit in the avatar's voice could put the agent's words into a line the owner typed, so the owner's account does not make it."
+# An act in the owner's account on a number the provider cannot line up with a line of that account: the
+# ledger holds it under both accounts' numbering, or not at all in a room the bot account reads.
+line_unknown = "The provider cannot tell which line of the owner's account that number names"
+# An edit in the owner's voice of a line someone else sent: only its sender may change it.
+not_own_line = "The message is not the owner's own, so his account cannot edit it."
 # A typing send in the bot's voice that names an account: that account's typing, which only its own Telegram
 # account could show, and the provider holds none of it.
 typing_account = "Telegram shows typing only as the bot, for the answerer, or in the owner's own account; the provider holds no Telegram account of the account this typing is for."

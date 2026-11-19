@@ -4,7 +4,7 @@ import { lockOnceFree } from "../src/lock";
 import { readerHandler } from "../src/routes";
 import { BOT_ID, OWNER_ID } from "./support";
 
-import { MessageGone } from "../src/owner";
+import { LineUnmatched, MessageGone, NotOwnLine, TurnedDown } from "../src/owner";
 
 import type { OwnerAccount } from "../src/owner";
 
@@ -37,6 +37,31 @@ const owner: OwnerAccount = {
     ownerAsked.push({ chatId, messageId, emoji });
 
     if (messageId !== 900) throw new MessageGone("react to");
+  },
+  // The account holds 900, its own line, and 901, someone else's; a pin of 902 Telegram turns down.
+  pin: async (chatId, messageId, on, silent) => {
+    ownerAsked.push({ chatId, messageId, on, silent });
+
+    if (messageId === 902) throw new TurnedDown("CHAT_ADMIN_REQUIRED");
+    if (messageId !== 900 && messageId !== 901) throw new MessageGone(on ? "pin" : "unpin");
+
+    return on ? 77 : null;
+  },
+  edit: async (edit) => {
+    ownerAsked.push(edit);
+
+    if (edit.messageId === 901) throw new NotOwnLine();
+    if (edit.messageId !== 900) throw new MessageGone("edit");
+
+    return { id: 900, text: edit.text, edited: true };
+  },
+  // The account holds one line from 55 at any second, and none from anyone else.
+  line: async (stamp) => {
+    ownerAsked.push(stamp);
+
+    if (stamp.senderId !== 55) throw new LineUnmatched(0);
+
+    return 900;
   },
 };
 
@@ -141,6 +166,59 @@ describe("the reader's door", () => {
       { chatId: 5, messageId: 900, emoji: "👍" },
       { chatId: 5, messageId: 900, emoji: "" },
       { chatId: 5, messageId: 7, emoji: "👍" },
+    ]);
+  });
+
+  test("carries the owner's pin with the number of its service message, and names each refusal of the account", async () => {
+    const before = ownerAsked.length;
+
+    expect((await call("/owner/pin", { chatId: 5, messageId: 900, on: true }))[0]).toBe(400);
+    expect(await call("/owner/pin", { chatId: 5, messageId: 900, on: true, silent: true })).toEqual([200, { messageId: 77 }]);
+    expect(await call("/owner/pin", { chatId: 5, messageId: 901, on: false, silent: false })).toEqual([200, { messageId: null }]);
+    expect(await call("/owner/pin", { chatId: 5, messageId: 7, on: false, silent: false })).toEqual([
+      200,
+      { refused: "gone", error: "Telegram has no message here for the owner's account to unpin" },
+    ]);
+    expect(await call("/owner/pin", { chatId: 5, messageId: 902, on: true, silent: false })).toEqual([200, { refused: "turned-down", error: "CHAT_ADMIN_REQUIRED" }]);
+    expect(ownerAsked.slice(before)).toEqual([
+      { chatId: 5, messageId: 900, on: true, silent: true },
+      { chatId: 5, messageId: 901, on: false, silent: false },
+      { chatId: 5, messageId: 7, on: false, silent: false },
+      { chatId: 5, messageId: 902, on: true, silent: false },
+    ]);
+  });
+
+  test("answers the account's own number for a line named by its stamp, and names one it does not hold once gone", async () => {
+    const before = ownerAsked.length;
+    const stamp = { chatId: 5, sentAt: 1_700_000_000_000, words: "ab12" };
+
+    expect((await call("/owner/line", { chatId: 5, senderId: 55, sentAt: 1_700_000_000_000 }))[0]).toBe(400);
+    expect(await call("/owner/line", { ...stamp, senderId: 55 })).toEqual([200, { messageId: 900 }]);
+    expect(await call("/owner/line", { ...stamp, senderId: 56 })).toEqual([
+      200,
+      { refused: "gone", error: "the owner's account holds 0 lines from that sender at that second with those words" },
+    ]);
+    expect(ownerAsked.slice(before)).toEqual([
+      { ...stamp, senderId: 55 },
+      { ...stamp, senderId: 56 },
+    ]);
+  });
+
+  test("carries the owner's edit with the words his line now holds, and refuses one of a line not his own", async () => {
+    const before = ownerAsked.length;
+
+    expect((await call("/owner/edit", { chatId: 5, messageId: 900, text: "new", markup: 3 }))[0]).toBe(400);
+    expect(await call("/owner/edit", { chatId: 5, messageId: 900, text: "new", markup: "<b>new</b>" })).toEqual([
+      200,
+      { messageId: 900, text: "new", edited: true },
+    ]);
+    expect(await call("/owner/edit", { chatId: 5, messageId: 901, text: "new" })).toEqual([
+      200,
+      { refused: "not-own", error: "the message is not the owner's account's own, so it cannot edit it" },
+    ]);
+    expect(ownerAsked.slice(before)).toEqual([
+      { chatId: 5, messageId: 900, text: "new", markup: "<b>new</b>" },
+      { chatId: 5, messageId: 901, text: "new", markup: null },
     ]);
   });
 });

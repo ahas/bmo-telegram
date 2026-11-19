@@ -1,8 +1,10 @@
 //! A send in the owner's account (docs/telegram.md, 「The owner's voice」, 「The avatar」): the words in the parts
 //! and the markup the bot's send would take, and files gathered into the albums Telegram takes, each sent
 //! through the reader over the seam and noted, so the bot account's sight of it is known as its echo; the
-//! typing mark, a delete, and the owner's own reaction. The owner's own words go as they are, the avatar's behind
-//! its prefix. What the owner's account refuses comes back as the reader said it.
+//! typing mark, a delete, and the owner's own reaction, pin and edit, the edit and the pin noted as well. The
+//! owner's own words go as they are, the avatar's behind its prefix. The message a reply or an act names reaches
+//! the owner's account under that account's own number, the bot account's numbers looked up by the line's stamp.
+//! What the owner's account refuses comes back as the reader said it.
 
 use std::path::Path;
 
@@ -14,12 +16,13 @@ use telegram_dialect::ALBUM_LIMIT;
 use telegram_dialect::js;
 
 use crate::compose::{Part, avatar_caption, avatar_text_parts, caption, text_parts};
-use crate::echoes::Echoes;
+use crate::echoes::{Echoes, OwnerAct};
 use crate::files::{audio_type, sound_head};
+use crate::lines::Line;
 use crate::pictures::Picture;
 use crate::policy::{POLICY, fill};
 use crate::provider::wire_name;
-use crate::reader::{AsOwner, ReaderClient};
+use crate::reader::{AsOwner, NotCarried, ReaderClient};
 use crate::send::{Sent, Speaker, refused, sent};
 
 /// What Telegram makes of a file, by its own type, or by its name where none came with it.
@@ -123,10 +126,11 @@ pub fn caption_of(field: Option<&str>) -> String {
   js::trim(&field.unwrap_or_default().replace("\r\n", "\n").replace('\r', "\n")).to_owned()
 }
 
-// The names the owner's account refuses a send by: while it is not connected, and where it holds no line under
-// the number an act names.
+// The names the owner's account refuses a send by: while it is not connected, where it holds no line under the
+// number an act names, and where the line an edit names is not its own.
 const UNAVAILABLE: &str = "unavailable";
 const GONE: &str = "gone";
+const NOT_OWN: &str = "not-own";
 
 // One item of the owner's album as a file: one handed over as it is, one named by an address read where a
 // picture of the bot's may be read from.
@@ -171,6 +175,14 @@ async fn refused_size(file: FileItem) -> Result<FileItem, MissedPicture> {
   }
 }
 
+// What a number of the room names on the owner's account: the account's own number for the line, why it names
+// none, or the reader's refusal of another kind.
+enum Named {
+  Held(i64),
+  Unnamed(String),
+  Refused(ChatRefusal),
+}
+
 /// The owner's account as one send uses it: the bot account's sending, for where a picture is read from and the
 /// record of rooms sent into; the reader the owner's account is reached through; the notes of what went; the
 /// voice the send was asked in; and the prefix its words go behind, none for the owner's own words.
@@ -184,13 +196,64 @@ pub struct OwnerVoice<'a> {
 
 impl OwnerVoice<'_> {
   // What the owner's account refused, as the provider refuses it: the voice not running, a message no longer
-  // there, or the account's own words.
+  // there, a line not the owner's own, or the account's own words.
   fn refusal(&self, name: &str, error: &str) -> ChatRefusal {
     match name {
       UNAVAILABLE => POLICY.mode_down(&wire_name(&self.voice), Some(error)),
       GONE => POLICY.message_gone(error),
+      NOT_OWN => POLICY.not_own_line(),
       _ => POLICY.refused(error),
     }
+  }
+
+  // What the number `message_id` of the room names on the owner's account (docs/telegram.md, 「The owner's
+  // voice」): the number as it stands where it is the account's own, else the line the bot account's number was
+  // kept with, looked for on the account by its stamp.
+  async fn named(&self, chat_id: i64, message_id: i64) -> Result<Named, NotCarried> {
+    let stamp = match self.speaker.lines.line(chat_id, message_id) {
+      Line::Owners => return Ok(Named::Held(message_id)),
+      Line::Unknown => return Ok(Named::Unnamed(POLICY.refusals.line_unknown.clone())),
+      Line::Bots(stamp) => stamp,
+    };
+
+    Ok(match self.reader.owner_line(chat_id, &stamp).await? {
+      AsOwner::Sent(Some(own)) => Named::Held(own),
+      AsOwner::Sent(None) => Named::Unnamed(POLICY.refusals.line_unknown.clone()),
+      AsOwner::Refused { name, error } if name == GONE => Named::Unnamed(error),
+      AsOwner::Refused { name, error } => Named::Refused(self.refusal(&name, &error)),
+    })
+  }
+
+  // The owner's account's number for the message an act names, or the act refused: marked gone where the number
+  // names no line there.
+  async fn acted_on(
+    &self,
+    chat_id: i64,
+    message_id: i64,
+  ) -> Result<Result<i64, ChatSendResult>, NotCarried> {
+    Ok(match self.named(chat_id, message_id).await? {
+      Named::Held(own) => Ok(own),
+      Named::Unnamed(why) => Err(refused(POLICY.message_gone(&why))),
+      Named::Refused(refusal) => Err(refused(refusal)),
+    })
+  }
+
+  // The owner's account's number for the message a send answers, or the send refused where it names no line
+  // there, rather than sent without the reference.
+  async fn answering(
+    &self,
+    chat_id: i64,
+    reply_to: Option<i64>,
+  ) -> Result<Result<Option<i64>, ChatSendResult>, NotCarried> {
+    let Some(reply_to) = reply_to else {
+      return Ok(Ok(None));
+    };
+
+    Ok(match self.named(chat_id, reply_to).await? {
+      Named::Held(own) => Ok(Some(own)),
+      Named::Unnamed(why) => Err(refused(POLICY.refused(&why))),
+      Named::Refused(refusal) => Err(refused(refusal)),
+    })
   }
 
   // The markdown in the parts it goes out in, behind the prefix where there is one.
@@ -210,7 +273,8 @@ impl OwnerVoice<'_> {
   }
 
   /// One send in the owner's account: words, a picture, a file, a sound or an album, each as the bot's send
-  /// would carry it, the typing mark, a delete, or a reaction in the owner's own voice; any other verb refused.
+  /// would carry it, the typing mark, a delete, or a reaction, a pin or an edit in the owner's own voice; any
+  /// other verb refused.
   pub async fn send(&self, request: &ChatSendRequest) -> Sent {
     let room = request.room_id;
     let reply_to = request.reply_to_message_id;
@@ -247,8 +311,20 @@ impl OwnerVoice<'_> {
       ChatSend::Typing { on } => self.typing(room, *on).await,
       ChatSend::Delete { message_id } => self.delete(room, *message_id).await,
       ChatSend::Reaction { message_id, emoji } => match self.prefix {
-        Some(_) => Ok(refused(POLICY.avatar_reaction())),
+        Some(_) => Ok(refused(POLICY.avatar_unmarked(&wire_name(&request.send.kind())))),
         None => self.reaction(room, *message_id, emoji).await,
+      },
+      ChatSend::Pin {
+        message_id,
+        on,
+        silent,
+      } => match self.prefix {
+        Some(_) => Ok(refused(POLICY.avatar_unmarked(&wire_name(&request.send.kind())))),
+        None => self.pin(room, *message_id, *on, *silent).await,
+      },
+      ChatSend::Edit { message_id, text } => match self.prefix {
+        Some(_) => Ok(refused(POLICY.avatar_edit())),
+        None => self.edit(room, *message_id, text).await,
       },
       other => Ok(refused(POLICY.owner_verb(&wire_name(&other.kind())))),
     }
@@ -266,6 +342,10 @@ impl OwnerVoice<'_> {
     fold: bool,
     reply_to: Option<i64>,
   ) -> Sent {
+    let reply_to = match self.answering(chat_id, reply_to).await? {
+      Ok(reply_to) => reply_to,
+      Err(refusal) => return Ok(refusal),
+    };
     let mut first = None;
 
     for part in self.parts(markdown, fold) {
@@ -273,8 +353,13 @@ impl OwnerVoice<'_> {
 
       match self.reader.owner_say(chat_id, &part, silent, pinned).await? {
         AsOwner::Sent(went) => {
-          self.echoes.sent(chat_id, went.message_id, &went.words);
+          self.echoes.noted(OwnerAct::Said, chat_id, went.message_id, &went.words);
           self.speaker.spoke_in(chat_id);
+
+          if let Some(id) = went.message_id {
+            self.speaker.lines.owners(chat_id, id);
+          }
+
           first.get_or_insert(went.message_id);
         }
         AsOwner::Refused { name, error } => return Ok(refused(self.refusal(&name, &error))),
@@ -298,6 +383,10 @@ impl OwnerVoice<'_> {
     caption_field: Option<&str>,
     reply_to: Option<i64>,
   ) -> Sent {
+    let reply_to = match self.answering(chat_id, reply_to).await? {
+      Ok(reply_to) => reply_to,
+      Err(refusal) => return Ok(refusal),
+    };
     let speaker = self.speaker;
     let root = speaker.sending.picture_root.as_deref();
     let first_caption = self.caption(&caption_of(caption_field));
@@ -331,7 +420,11 @@ impl OwnerVoice<'_> {
           self.speaker.spoke_in(chat_id);
 
           for one in &went {
-            self.echoes.sent(chat_id, one.message_id, &one.words);
+            self.echoes.noted(OwnerAct::Said, chat_id, one.message_id, &one.words);
+
+            if let Some(id) = one.message_id {
+              self.speaker.lines.owners(chat_id, id);
+            }
           }
 
           first = first.or(went.into_iter().find_map(|one| one.message_id));
@@ -375,7 +468,12 @@ impl OwnerVoice<'_> {
 
   /// The message the owner's account holds under the number, deleted for everyone in the room.
   pub async fn delete(&self, chat_id: i64, message_id: i64) -> Sent {
-    match self.reader.owner_delete(chat_id, message_id).await? {
+    let own = match self.acted_on(chat_id, message_id).await? {
+      Ok(own) => own,
+      Err(refusal) => return Ok(refusal),
+    };
+
+    match self.reader.owner_delete(chat_id, own).await? {
       AsOwner::Sent(()) => Ok(sent(Some(message_id))),
       AsOwner::Refused { name, error } => Ok(refused(self.refusal(&name, &error))),
     }
@@ -384,8 +482,54 @@ impl OwnerVoice<'_> {
   /// The emoji put on the message the owner's account holds under the number as the owner's own reaction, an
   /// empty emoji taking his off.
   pub async fn reaction(&self, chat_id: i64, message_id: i64, emoji: &str) -> Sent {
-    match self.reader.owner_reaction(chat_id, message_id, emoji).await? {
+    let own = match self.acted_on(chat_id, message_id).await? {
+      Ok(own) => own,
+      Err(refusal) => return Ok(refusal),
+    };
+
+    match self.reader.owner_reaction(chat_id, own, emoji).await? {
       AsOwner::Sent(()) => Ok(sent(Some(message_id))),
+      AsOwner::Refused { name, error } => Ok(refused(self.refusal(&name, &error))),
+    }
+  }
+
+  /// The message the owner's account holds under the number pinned for everyone in the room, quietly where
+  /// `silent`, or unpinned; the service message Telegram wrote for a pin is noted as its echo.
+  pub async fn pin(&self, chat_id: i64, message_id: i64, on: bool, silent: bool) -> Sent {
+    let own = match self.acted_on(chat_id, message_id).await? {
+      Ok(own) => own,
+      Err(refusal) => return Ok(refusal),
+    };
+
+    match self.reader.owner_pin(chat_id, own, on, silent).await? {
+      AsOwner::Sent(service_message) => {
+        if let Some(service_message) = service_message {
+          self.echoes.noted(OwnerAct::Pinned, chat_id, Some(service_message), "");
+        }
+
+        Ok(sent(Some(message_id)))
+      }
+      AsOwner::Refused { name, error } => Ok(refused(self.refusal(&name, &error))),
+    }
+  }
+
+  /// The owner's own line the account holds under the number given the markdown's words, as one message in the
+  /// dialect's markup, never divided and never folded, as a caption goes; an edit that changed the line is noted
+  /// as its echo.
+  pub async fn edit(&self, chat_id: i64, message_id: i64, markdown: &str) -> Sent {
+    let own = match self.acted_on(chat_id, message_id).await? {
+      Ok(own) => own,
+      Err(refusal) => return Ok(refusal),
+    };
+
+    match self.reader.owner_edit(chat_id, own, &caption(markdown)).await? {
+      AsOwner::Sent(line) => {
+        if line.edited {
+          self.echoes.noted(OwnerAct::Edited, chat_id, line.message_id, &line.words);
+        }
+
+        Ok(sent(Some(message_id)))
+      }
       AsOwner::Refused { name, error } => Ok(refused(self.refusal(&name, &error))),
     }
   }

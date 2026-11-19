@@ -19,6 +19,9 @@ const owner: OwnerAccount = {
   typing: async () => {},
   delete: async () => {},
   react: async () => {},
+  pin: async () => null,
+  edit: async () => ({ id: 0, text: "", edited: false }),
+  line: async () => 0,
 };
 
 // One dialog of the stand-in account: its number and title, and what its chat says of itself.

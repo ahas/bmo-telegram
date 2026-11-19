@@ -20,6 +20,9 @@ const owner: OwnerAccount = {
   typing: async () => {},
   delete: async () => {},
   react: async () => {},
+  pin: async () => null,
+  edit: async () => ({ id: 0, text: "", edited: false }),
+  line: async () => 0,
 };
 const client = {} as TelegramClient;
 

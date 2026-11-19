@@ -13,6 +13,7 @@ pub mod file_ids;
 pub mod files;
 pub mod gather;
 pub mod kinds;
+pub mod lines;
 pub mod owner;
 pub mod pictures;
 pub mod policy;

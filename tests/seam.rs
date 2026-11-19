@@ -12,6 +12,7 @@ use axum::routing::{get, post};
 use bmo_chat::{ChatPresence, ChatPresenceState, FileItem, MessageFile, ReceiverRoom, TypingMark};
 use bmo_telegram::avatar::AvatarLines;
 use bmo_telegram::compose::Part;
+use bmo_telegram::lines::{Line, Lines};
 use bmo_telegram::policy::POLICY;
 use bmo_telegram::reader::{AsOwner, OwnerSent, ReaderClient, ReaderFetch, ReaderRoom};
 use bmo_telegram::seam::{Presence, Seam, Standing, seam_router};
@@ -249,11 +250,13 @@ struct Served {
   port: u16,
   receiver: Arc<KeptReceiver>,
   standing: Arc<Standing>,
+  lines: Arc<Lines>,
 }
 
 async fn seam_over(receiver: Arc<KeptReceiver>) -> Served {
   let seen = Arc::new(Seen::in_memory());
   let standing = Arc::new(Standing::default());
+  let lines = Arc::new(Lines::in_memory());
   let seam = Seam {
     token: TOKEN.to_owned(),
     receiver: receiver.clone(),
@@ -261,6 +264,7 @@ async fn seam_over(receiver: Arc<KeptReceiver>) -> Served {
     standing: standing.clone(),
     presence: Arc::new(InBotRoom),
     avatar: AvatarLines::new(OWNER, None),
+    lines: lines.clone(),
   };
   let port = serve(seam_router(Arc::new(seam))).await;
 
@@ -268,6 +272,7 @@ async fn seam_over(receiver: Arc<KeptReceiver>) -> Served {
     port,
     receiver,
     standing,
+    lines,
   }
 }
 
@@ -286,6 +291,28 @@ fn message(origin: &str, room_id: i64, message_id: i64, sender: i64) -> Value {
       "files": [], "gathering": true
     }
   })
+}
+
+/// A line the reader hands over in a room each account numbers apart stands in the ledger under the owner's
+/// account's number, so an act on it reaches that account as it stands (docs/telegram.md, 「The owner's voice」).
+#[tokio::test]
+async fn a_line_the_reader_hands_over_stands_under_the_owner_s_account_s_numbering() {
+  let (receiver, _heard) = KeptReceiver::new();
+  let served = seam_over(receiver).await;
+  let seam = Wire::loopback(served.port, TOKEN);
+  let group = -4_242;
+  // The bot account read a line of the room, so the room is one it reads.
+  let read = json!({ "message_id": 7, "date": 1_700_000_000, "chat": { "id": group, "type": "group" },
+    "from": { "id": 55, "is_bot": false, "first_name": "Someone" }, "text": "hello" });
+
+  served.lines.bots(&serde_json::from_value(read).unwrap());
+
+  assert_eq!(served.lines.line(group, 900), Line::Unknown);
+  assert_eq!(
+    seam.post("/reader/inbound", &message("live", group, 900, 56)).await.unwrap().status,
+    200
+  );
+  assert_eq!(served.lines.line(group, 900), Line::Owners);
 }
 
 /// A video the reader gathered crosses whole: a hand-over far past a web server's usual two megabytes, as a

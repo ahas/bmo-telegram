@@ -196,8 +196,8 @@ account alone (「Typing and presence」).
 - **The bot's own messages** are not read back in: a file it sent is the sender's to keep, and a pin it made
   is nobody's word.
 - **A message a send in the owner's account went out as,** in the owner's voice or the avatar's, is not read
-  back in either: the sender holds it already, so the bot account's sight of it is that send's echo (「The
-  owner's voice」).
+  back in either, nor an edit or a pin such a send made: the sender holds it already, so the bot account's sight
+  of it is that send's echo (「The owner's voice」).
 
 ## Typing and presence
 
@@ -276,8 +276,8 @@ never offered again.
   provider holds no Telegram account of anyone but the owner, so it is refused `platform` with the policy's
   `typing_account` rather than shown as the bot writing.
 - **What went is not kept here.** Keeping a copy of a send is the sender's, under the number the result gives.
-  The provider notes only, for a few minutes, the messages a send in the owner's account went out as, to know
-  their echo (「The owner's voice」).
+  The provider notes only, for a few minutes, the messages, edits and pins a send in the owner's account made, to
+  know their echo (「The owner's voice」).
 
 ### Refusals
 
@@ -287,11 +287,14 @@ English lines of `policy/telegram.toml`, each the detail of a `platform` refusal
 | When | Code | Detail |
 |---|---|---|
 | an act on a message Telegram no longer has, or will never let change again | `platform`, marked `gone` | `message_gone`, with Telegram's own description |
+| an act in the owner's account on a number that names no line there (「The owner's voice」) | `platform`, marked `gone` | `message_gone`, with the policy's `line_unknown` or the reader's words |
 | a sticker the configured set does not carry | `platform` | `sticker_missing` |
 | a sticker where no set is configured | `platform` | `sticker_unset` |
 | a send asked to be spoken in a mode that is not running, the owner's voice or the avatar's while the reader does not have the account connected among them, or one the provider does not read by | `platform` | `mode_down`, with the mode's reason or `mode_missing` |
-| a send in the owner's account, in the owner's voice or the avatar's, of a verb other than `text`, `photo`, `album`, `document`, `audio`, `typing`, `delete` and `reaction` | `platform` | `owner_verb` |
-| a `reaction` in the avatar's voice | `platform` | `avatar_reaction` |
+| a send in the owner's account, in the owner's voice or the avatar's, of a verb other than `text`, `photo`, `album`, `document`, `audio`, `typing`, `delete`, `reaction`, `pin` and `edit` | `platform` | `owner_verb` |
+| a `reaction` or a `pin` in the avatar's voice | `platform` | `avatar_unmarked` |
+| an `edit` in the avatar's voice | `platform` | `avatar_edit` |
+| an `edit` in the owner's voice of a line that is not his own | `platform` | `not_own_line` |
 | a send in any voice but the owner's own into a room the bot is not in, the avatar's but where the receiving side reads the room (「The rooms」) | `platform` | `read_only` |
 | a `typing` send in the bot's voice, or naming none, that names an account | `platform` | `typing_account` |
 | any other refusal Telegram gives | `platform` | Telegram's own description |
@@ -331,25 +334,63 @@ reads it as the owner's, never as the bot's. A send that names no voice, or `bot
     the number as the owner's own reaction, an empty emoji taking his off, so the room reads it as his and never
     as the bot's. A reaction the message already carries from him is no failure. A number the account holds no
     line under is refused marked `gone`, with the policy's `message_gone`. In the avatar's voice it is refused with
-    the policy's `avatar_reaction` (「The avatar」).
+    the policy's `avatar_unmarked` (「The avatar」).
+  - **`pin`**, in the owner's own voice alone: the message the owner's account holds under the number pinned for
+    everyone in the room, quietly where `silent`, or unpinned, so the room reads the pin as his and never as the
+    bot's. A number the account holds no line under is refused marked `gone`, with the policy's `message_gone`. In
+    the avatar's voice it is refused with the policy's `avatar_unmarked` (「The avatar」).
+  - **`edit`**, in the owner's own voice alone: the owner's own line the account holds under the number given the
+    send's words, as one message in the dialect's markup, never divided and never folded, and as its plain text
+    where Telegram refuses the markup. An edit to the words the line already says is no failure. A number the
+    account holds no line under is refused marked `gone`, with the policy's `message_gone`; a line that is not
+    the owner's own is refused with the policy's `not_own_line`. In the avatar's voice it is refused with the
+    policy's `avatar_edit` (「The avatar」).
+  - A `pin` or an `edit` Telegram turns down, for want of a right in the room or a message too long among
+    others, is refused with Telegram's own words.
   - Any other verb is refused with the policy's `owner_verb`.
 - **A reply** is named by the send's `replyToMessageId`, the message's number as the protocol carries it. The
   reader finds that number's line on the owner's account and answers it; where the account has no line under
   that number, the send is refused `unreachable` rather than sent without the reference the caller asked for.
+- **Which line a number names.** The number a reply, a `delete`, a `reaction`, a `pin` or an `edit` names is the
+  one the receiving side holds the line under, and the owner's account is asked for its own number for that
+  line:
+  - In a supergroup or a channel the number is everyone's, and stands as it is. So does a number the history
+    walk gave, which the reader turns back into the account's own.
+  - In any other room the bot account reads, each account numbers its own messages, and the receiving side holds
+    each line under the number of the account that read or sent it. The provider keeps a ledger of whose number
+    each line of such a room stands under, in its data folder (`docs/boundary-api.md`, 「Configuration」), so a
+    restart forgets none: a number a send in the owner's account answered, and a number the reader handed a line
+    over under, are the owner's account's; a number the bot account read a line under or sent one as is the bot
+    account's, kept with the line's stamp (its sender, the second it was sent in and the SHA-256 of its words),
+    the words as an edit last left them.
+  - A number of the owner's account's stands as it is. A number of the bot account's is looked for on the owner's
+    account by its stamp, among the room's lines of that second, and names the one line from that sender with
+    those words.
+  - A number the ledger holds as both accounts', a number it does not hold in a room it holds a line of the bot
+    account's for, and a stamp the owner's account holds no line or more than one line for, name no line: an act
+    on it is refused marked `gone`, with the policy's `message_gone` and the policy's `line_unknown` or the
+    reader's words, and a reply to it is refused `unreachable`. In a room the ledger holds no line of the bot
+    account's for, as one the bot account does not read, every number is the owner's account's, and stands as it
+    is.
 - **While the reader does not have the account connected**, or no reader stands behind the service, the send
   is refused `platform` with the policy's `mode_down`, naming the voice the send asked for, and the reader's
   reason. It is never sent by the bot instead.
 - **The number a send answers** is the one the owner's account gave the first message it went out as. In a
   supergroup or a channel that is the number everyone knows the message by; in any other room each account
-  numbers its own messages, and the bot account knows the message by another.
-- **Its echo is not handed over.** The bot account sees in its rooms what the owner's account sends there, as
-  a message from the owner's number, `BMO_OWNER_ID`. Each message a send in the owner's account went out as is
-  noted, in memory and for five minutes, by its room, the number the owner's account gave it and the words
-  Telegram holds for it. A message the bot account reads from the owner's number that answers a note is that
-  send's echo: the note is let go and the message is not handed over, since the sender holds it already. In a
-  supergroup or a channel the number answers the note; in any other room the words do, the oldest note first.
-  A message from the owner that comes while a send in the owner's account into its room is still going waits for
-  that send to end, gone out or failed, before it is matched.
+  numbers its own messages, and the bot account knows the message by another. An act answers the number it was
+  asked about.
+- **Its echo is not handed over.** The bot account sees in its rooms what the owner's account does there, all of
+  it from the owner's number, `BMO_OWNER_ID`: a message it sends as a new message, an edit as an edited message,
+  and a pin as the service message Telegram writes for it. Each of these a send in the owner's account made is
+  noted, in memory and for five minutes, by what it is (a message, an edit or a pin), its room, the number the
+  owner's account knows it by and the words Telegram holds for it, a pin's service message holding none. What the
+  bot account reads from the owner's number that answers a note of its own kind is that send's echo: the note is
+  let go and nothing is handed over, since the sender holds it already. In a supergroup or a channel the number
+  answers the note; in any other room the words do, the oldest note first, since there the bot account knows the
+  line by a number of its own, which the receiving side does not hold for it. An unpin, a pin Telegram wrote no
+  service message for (the message was pinned already) and an edit to the words the line already said show the bot
+  account nothing, and are not noted. Anything from the owner that comes while a send in the owner's account
+  into its room is still going waits for that send to end, gone out or failed, before it is matched.
 
 ### The avatar
 
@@ -366,8 +407,12 @@ the agent's by the avatar prefix, and the owner's own words, in `human-reader`, 
 - **The prefix reads as written**: it is put before the plain words as it stands and before the markup escaped,
   so nothing in it is read as a mark.
 - **`typing` and `delete` carry no words** and so no prefix.
-- **A reaction is never the avatar's.** It carries no words, so nothing on it could mark it as the agent's, and
-  it would read as the owner's own: in the avatar's voice it is refused with the policy's `avatar_reaction`.
+- **A reaction or a pin is never the avatar's.** Neither carries words, so nothing on it could mark it as the
+  agent's, and it would read as the owner's own: in the avatar's voice either is refused with the policy's
+  `avatar_unmarked`.
+- **An edit is never the avatar's.** The account cannot tell a line the avatar sent from one the owner typed, so an
+  edit in the avatar's voice could put the agent's words into a line read as his: it is refused with the policy's
+  `avatar_edit`.
 - **A room the bot is not in takes an avatar send only where the receiving side reads it**, so only a room added
   on this provider; elsewhere it is refused with the policy's `read_only` (「The rooms」). Whether the receiving
   side reads a room is asked of it at the send, as the room's answer asks it.

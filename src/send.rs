@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use crate::bot_api::{Answered, BotApi, kept_alive};
 use crate::compose::text_parts;
+use crate::lines::Lines;
 use crate::policy::POLICY;
 use crate::seen::Seen;
 
@@ -31,6 +32,8 @@ pub struct Speaker {
   pub(crate) sending: Sending,
   pub(crate) web: reqwest::Client,
   seen: Arc<Seen>,
+  // Whose numbering each line of a room numbered per account stands under, the bot account's sends among them.
+  pub(crate) lines: Arc<Lines>,
 }
 
 /// A send that went, as the message it went out as where there is one.
@@ -71,18 +74,30 @@ pub fn message_id(answered: &Answered) -> Option<i64> {
 const REPLY_TARGET_GONE: &str = "message to be replied not found";
 
 impl Speaker {
-  pub fn new(api: BotApi, sending: Sending, seen: Arc<Seen>) -> Self {
+  pub fn new(api: BotApi, sending: Sending, seen: Arc<Seen>, lines: Arc<Lines>) -> Self {
     Self {
       api,
       sending,
       web: kept_alive(),
       seen,
+      lines,
     }
+  }
+
+  // What Telegram answered a call with, the messages the bot account sent or edited kept in the ledger.
+  fn kept(&self, answered: Answered) -> Answered {
+    if let Some(result) = answered.result.as_ref().filter(|_| answered.ok) {
+      self.lines.answered(result);
+    }
+
+    answered
   }
 
   /// One method asked with its parameters; a call that reached nobody is the send's failure.
   pub(crate) async fn call(&self, method: &str, body: &Value) -> Result<Answered, ChatFailure> {
-    self.api.answered(method, body).await.map_err(|why| format!("{method}: {why}").into())
+    let answered = self.api.answered(method, body).await.map_err(|why| format!("{method}: {why}"))?;
+
+    Ok(self.kept(answered))
   }
 
   /// One method asked with a form, which is how a file goes up.
@@ -91,11 +106,9 @@ impl Speaker {
     method: &str,
     form: reqwest::multipart::Form,
   ) -> Result<Answered, ChatFailure> {
-    self
-      .api
-      .answered_form(method, form)
-      .await
-      .map_err(|why| format!("{method}: {why}").into())
+    let answered = self.api.answered_form(method, form).await.map_err(|why| format!("{method}: {why}"))?;
+
+    Ok(self.kept(answered))
   }
 
   /// A room sent into, kept in the record of rooms seen.

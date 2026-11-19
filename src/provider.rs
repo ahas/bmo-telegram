@@ -203,7 +203,7 @@ impl TelegramProvider {
     let reason = if reader.is_some() { "the reader has not been asked yet" } else { NO_READER };
 
     Self {
-      speaker: Speaker::new(telegram.api().clone(), sending, seen),
+      speaker: Speaker::new(telegram.api().clone(), sending, seen, telegram.lines().clone()),
       telegram,
       reader,
       reader_health: Mutex::new(ReaderHealth {

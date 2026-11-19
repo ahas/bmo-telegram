@@ -16,10 +16,11 @@ use serde_json::{Value, json};
 use crate::albums::AlbumNames;
 use crate::avatar::AvatarLines;
 use crate::bot_api::BotApi;
-use crate::echoes::Echoes;
+use crate::echoes::{Echoes, OwnerAct};
 use crate::file_ids::FileIds;
 use crate::gather::Gatherer;
 use crate::kinds::Message;
+use crate::lines::Lines;
 use crate::policy::POLICY;
 use crate::reader::ReaderClient;
 use crate::reading::{Reading, SAFE_INTEGER, read, read_edit};
@@ -38,6 +39,8 @@ pub struct Telegram {
   file_ids: Arc<FileIds>,
   // What the sends in the owner's voice went out as, so their echo is not handed over.
   echoes: Arc<Echoes>,
+  // Whose numbering each line of a room numbered per account stands under.
+  lines: Arc<Lines>,
   // The avatar's lines, so one read back from the owner's number is handed over as the agent's own.
   avatar: AvatarLines,
   // Why the bot account is not reading yet, or null once it is.
@@ -138,6 +141,7 @@ impl Telegram {
       albums: Mutex::default(),
       seen,
       echoes: Arc::default(),
+      lines: Arc::new(Lines::in_memory()),
       avatar: AvatarLines::new(owner_id, None),
       standing: Mutex::new(Some("the bot account has not been read yet".to_owned())),
       presence: Mutex::default(),
@@ -154,6 +158,18 @@ impl Telegram {
   /// The avatar's lines as the bot account reads them back.
   pub fn avatar(&self) -> &AvatarLines {
     &self.avatar
+  }
+
+  /// The bot account whose ledger of numberings is `lines`, rather than one kept in memory alone.
+  pub fn with_lines(mut self, lines: Arc<Lines>) -> Self {
+    self.lines = lines;
+    self
+  }
+
+  /// Whose numbering each line of a room numbered per account stands under (docs/telegram.md, 「The owner's
+  /// voice」).
+  pub fn lines(&self) -> &Arc<Lines> {
+    &self.lines
   }
 
   /// Null where the bot account can run, else why not.
@@ -385,6 +401,17 @@ impl Telegram {
     });
   }
 
+  // Whether a message the bot account read, showing `act`, is the owner's and the echo of a send in his voice.
+  async fn owners_echo(&self, act: OwnerAct, message: &Message) -> bool {
+    if !message.from.as_ref().is_some_and(|from| from.id == self.owner_id) {
+      return false;
+    }
+
+    let words = message.text.as_deref().or(message.caption.as_deref()).unwrap_or_default();
+
+    self.echoes.echo(act, message.chat.id, message.message_id, words).await
+  }
+
   /// One new message: handed over as it reads, its picture with it, its file and assets promised and gathered
   /// after; the echo of a send in the owner's voice is not handed over.
   pub async fn message(&self, receiver: Arc<dyn ChatReceiver>, raw: Value) -> Result<(), String> {
@@ -399,14 +426,15 @@ impl Telegram {
       self.seen.wrote_privately(chat_id);
     }
 
-    // The owner's own message, sent in the owner's voice: the sender holds it already.
-    if message.from.as_ref().is_some_and(|from| from.id == self.owner_id) {
-      let words = message.text.as_deref().or(message.caption.as_deref()).unwrap_or_default();
+    // The owner's own message, or the service message of his pin, made in the owner's voice: the sender holds
+    // it already.
+    let act = if message.pinned_message.is_some() { OwnerAct::Pinned } else { OwnerAct::Said };
 
-      if self.echoes.echo(chat_id, message_id, words).await {
-        return Ok(());
-      }
+    if self.owners_echo(act, &message).await {
+      return Ok(());
     }
+
+    self.lines.bots(&message);
 
     let listened = self.listened(chat_id);
     let assets = listened && Gatherer::has_assets(&raw);
@@ -485,7 +513,10 @@ impl Telegram {
 
     self.forget_presence(chat_id);
 
-    if !self.listened(chat_id) {
+    self.lines.edited(&message);
+
+    // The owner's own edit, made in the owner's voice: the sender holds it already.
+    if self.owners_echo(OwnerAct::Edited, &message).await || !self.listened(chat_id) {
       return Ok(());
     }
 

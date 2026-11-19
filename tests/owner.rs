@@ -18,9 +18,10 @@ use bmo_chat::{
   ChatModeStanding, ChatProvider, ChatSend, ChatSendRequest, ChatSendResult, ChatSent, ChatSticker,
   ChatVoice,
 };
-use bmo_telegram::compose::text_parts;
-use bmo_telegram::echoes::{Echoes, numbered_for_everyone};
+use bmo_telegram::compose::{caption, text_parts};
+use bmo_telegram::echoes::{Echoes, OwnerAct, numbered_for_everyone};
 use bmo_telegram::file_ids::FileIds;
+use bmo_telegram::lines::words_hash;
 use bmo_telegram::owner::{albums, caption_of, kind_of, megabytes, refusal};
 use bmo_telegram::policy::{POLICY, fill};
 use bmo_telegram::provider::{NO_READER, TelegramProvider};
@@ -30,7 +31,7 @@ use bmo_telegram::send::Sending;
 use bmo_telegram::telegram::Telegram;
 use bmo_telegram::wire::Wire;
 use serde_json::{Value, json};
-use support::speaking::{BotSends, bot_sends};
+use support::speaking::{BOT, BotSends, SENT_AT, bot_sends};
 use support::{KeptReceiver, OWNER, TOKEN, serve};
 
 // A supergroup, which numbers its messages for everyone, and a group, in which each account numbers its own.
@@ -47,6 +48,9 @@ fn fake_reader(connected: bool, asked: Asked) -> Router {
   let typing_asked = asked.clone();
   let delete_asked = asked.clone();
   let reaction_asked = asked.clone();
+  let pin_asked = asked.clone();
+  let edit_asked = asked.clone();
+  let line_asked = asked.clone();
 
   Router::new()
     .route(
@@ -113,6 +117,54 @@ fn fake_reader(connected: bool, asked: Asked) -> Router {
           Json(json!({}))
         } else {
           Json(json!({ "refused": "gone", "error": "no line under that number" }))
+        }
+      }),
+    )
+    // A pin of 900 is answered with the service message 77, an unpin with none.
+    .route(
+      "/owner/pin",
+      post(move |Json(body): Json<Value>| async move {
+        let held = body["messageId"] == 900;
+        let on = body["on"] == true;
+
+        pin_asked.lock().unwrap().push(("pin".to_owned(), body));
+
+        if held {
+          Json(json!({ "messageId": on.then_some(77) }))
+        } else {
+          Json(json!({ "refused": "gone", "error": "no line under that number" }))
+        }
+      }),
+    )
+    // 900 is the owner's own line, saying "same" already; 901 is someone else's.
+    .route(
+      "/owner/edit",
+      post(move |Json(body): Json<Value>| async move {
+        let id = body["messageId"].as_i64();
+        let text = body["text"].clone();
+
+        edit_asked.lock().unwrap().push(("edit".to_owned(), body));
+
+        match id {
+          Some(900) => Json(json!({ "messageId": 900, "text": text, "edited": text != "same" })),
+          Some(901) => Json(json!({ "refused": "not-own", "error": "not the account's own" })),
+          _ => Json(json!({ "refused": "gone", "error": "no line under that number" })),
+        }
+      }),
+    )
+    // The account holds one line of the bot's at any second, and one of a person's saying "hello there", both
+    // under 900.
+    .route(
+      "/owner/line",
+      post(move |Json(body): Json<Value>| async move {
+        let found = body["senderId"] == BOT || body["words"] == words_hash("hello there");
+
+        line_asked.lock().unwrap().push(("line".to_owned(), body));
+
+        if found {
+          Json(json!({ "messageId": 900 }))
+        } else {
+          Json(json!({ "refused": "gone", "error": "no such line" }))
         }
       }),
     )
@@ -203,6 +255,44 @@ fn standing_of(provider: &TelegramProvider, voice: ChatVoice) -> (ChatModeStandi
 fn from_owner(room: i64, message_id: i64, words: &str) -> Value {
   json!({ "message_id": message_id, "date": 1_700_000_000, "chat": { "id": room, "type": "group" },
     "from": { "id": OWNER, "is_bot": false, "first_name": "Owner" }, "text": words })
+}
+
+// The service message of a pin the bot account reads in a room, from the owner's number.
+fn pin_from_owner(room: i64, message_id: i64) -> Value {
+  json!({ "message_id": message_id, "date": 1_700_000_000, "chat": { "id": room, "type": "group" },
+    "from": { "id": OWNER, "is_bot": false, "first_name": "Owner" },
+    "pinned_message": { "message_id": 900, "date": 1_700_000_000, "chat": { "id": room, "type": "group" },
+      "text": "pinned words" } })
+}
+
+// One act in the owner's account on a message, in `voice`.
+fn act(room: i64, voice: ChatVoice, send: ChatSend) -> ChatSendRequest {
+  ChatSendRequest {
+    mode: Some(voice),
+    ..ChatSendRequest::new(room, send)
+  }
+}
+
+fn pin(message_id: i64, on: bool) -> ChatSend {
+  ChatSend::Pin {
+    message_id,
+    on,
+    silent: true,
+  }
+}
+
+fn edit(message_id: i64, text: &str) -> ChatSend {
+  ChatSend::Edit {
+    message_id,
+    text: text.to_owned(),
+  }
+}
+
+fn went(message_id: i64) -> ChatSendResult {
+  ChatSendResult::Sent(ChatSent {
+    message_id: Some(message_id),
+    missed: Vec::new(),
+  })
 }
 
 fn handed_ids(receiver: &KeptReceiver) -> Vec<i64> {
@@ -553,7 +643,7 @@ async fn the_owner_s_reaction_goes_on_in_his_account_and_the_avatar_s_is_refused
   );
   assert_eq!(
     up.provider.send(react(ChatVoice::HumanAvatar, 900, "👍")).await.unwrap(),
-    ChatSendResult::Refused(POLICY.avatar_reaction())
+    ChatSendResult::Refused(POLICY.avatar_unmarked("reaction"))
   );
   assert!(up.bot.asked().is_empty());
   assert_eq!(
@@ -564,6 +654,205 @@ async fn the_owner_s_reaction_goes_on_in_his_account_and_the_avatar_s_is_refused
       ("reaction".to_owned(), json!({ "chatId": GROUP, "messageId": 901, "emoji": "👍" })),
     ]
   );
+}
+
+/// The owner's pin goes on in his own account through the reader, never by the bot, quietly where the send asks,
+/// and comes off the same way; one of a number the account holds no line under is refused as gone, and the
+/// avatar's is refused, since nothing on a pin could mark it as the agent's.
+#[tokio::test]
+async fn the_owner_s_pin_goes_on_in_his_account_and_the_avatar_s_is_refused() {
+  let up = standing(Some(true)).await;
+
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanReader, pin(900, true))).await.unwrap(),
+    went(900)
+  );
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanReader, pin(900, false))).await.unwrap(),
+    went(900)
+  );
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanReader, pin(901, true))).await.unwrap(),
+    ChatSendResult::Refused(POLICY.message_gone("no line under that number"))
+  );
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanAvatar, pin(900, true))).await.unwrap(),
+    ChatSendResult::Refused(POLICY.avatar_unmarked("pin"))
+  );
+  assert!(up.bot.asked().is_empty());
+  assert_eq!(
+    up.asked.lock().unwrap().clone(),
+    [
+      (
+        "pin".to_owned(),
+        json!({ "chatId": GROUP, "messageId": 900, "on": true, "silent": true })
+      ),
+      (
+        "pin".to_owned(),
+        json!({ "chatId": GROUP, "messageId": 900, "on": false, "silent": true })
+      ),
+      (
+        "pin".to_owned(),
+        json!({ "chatId": GROUP, "messageId": 901, "on": true, "silent": true })
+      ),
+    ]
+  );
+}
+
+/// The owner's edit of his own line goes through the reader as one message in the dialect's markup, never by the
+/// bot; one of a line not his own is refused with the policy's reason, and the avatar's is refused.
+#[tokio::test]
+async fn the_owner_s_edit_goes_in_his_account_in_the_dialect_s_markup_and_the_avatar_s_is_refused() {
+  let up = standing(Some(true)).await;
+  let words = "**Bold** again";
+  let part = caption(words);
+
+  assert!(part.markup.is_some(), "the words carry marks");
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanReader, edit(900, words))).await.unwrap(),
+    went(900)
+  );
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanReader, edit(901, words))).await.unwrap(),
+    ChatSendResult::Refused(POLICY.not_own_line())
+  );
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanAvatar, edit(900, words))).await.unwrap(),
+    ChatSendResult::Refused(POLICY.avatar_edit())
+  );
+  assert!(up.bot.asked().is_empty());
+  assert_eq!(
+    up.asked.lock().unwrap().clone(),
+    [
+      (
+        "edit".to_owned(),
+        json!({ "chatId": GROUP, "messageId": 900, "text": part.plain, "markup": part.markup })
+      ),
+      (
+        "edit".to_owned(),
+        json!({ "chatId": GROUP, "messageId": 901, "text": part.plain, "markup": part.markup })
+      ),
+    ]
+  );
+}
+
+/// What the owner's edit and pin show the bot account is their echo, not handed over: an edit by its words where
+/// the room numbers messages per account, a pin's service message by its number where the room numbers them for
+/// everyone. An edit that changed nothing and an unpin are not noted, so the owner's own doing after them goes.
+#[tokio::test]
+async fn the_echo_of_the_owner_s_edit_and_pin_is_not_handed_over_again() {
+  let up = standing(Some(true)).await;
+  let (receiver, _heard) = KeptReceiver::new();
+  let edited = |id: i64, words: &str| {
+    let mut message = from_owner(GROUP, id, words);
+
+    message["edit_date"] = json!(1_700_000_100);
+    message
+  };
+
+  // A group: the bot knows the edited line by a number of its own, and the words find the note.
+  up.provider
+    .send(act(GROUP, ChatVoice::HumanReader, edit(900, "fixed words")))
+    .await
+    .unwrap();
+  up.telegram.edited(receiver.clone(), edited(7_100, "fixed words")).await.unwrap();
+  // An edit to the words the line already said is noted for nothing: the same words edited again go.
+  up.provider.send(act(GROUP, ChatVoice::HumanReader, edit(900, "same"))).await.unwrap();
+  up.telegram.edited(receiver.clone(), edited(7_101, "same")).await.unwrap();
+
+  // A supergroup: the pin's service message comes under the number the owner's account gave it.
+  up.provider.send(act(SUPERGROUP, ChatVoice::HumanReader, pin(900, true))).await.unwrap();
+  up.telegram.message(receiver.clone(), pin_from_owner(SUPERGROUP, 76)).await.unwrap();
+  up.telegram.message(receiver.clone(), pin_from_owner(SUPERGROUP, 77)).await.unwrap();
+  // An unpin writes no service message, so a pin the owner makes on his phone after it goes.
+  up.provider.send(act(GROUP, ChatVoice::HumanReader, pin(900, false))).await.unwrap();
+  up.telegram.message(receiver.clone(), pin_from_owner(GROUP, 7_102)).await.unwrap();
+
+  assert_eq!(handed_ids(&receiver), [7_101, 76, 7_102]);
+}
+
+// A message the bot account reads in a room, from a person's number.
+fn from_person(room: i64, message_id: i64, sender: i64, words: &str) -> Value {
+  json!({ "message_id": message_id, "date": 1_700_000_000, "chat": { "id": room, "type": "group" },
+    "from": { "id": sender, "is_bot": false, "first_name": "Someone" }, "text": words })
+}
+
+/// In a room each account numbers apart, a reply or an act on a line the bot account read or sent reaches the
+/// owner's account under that account's own number, found by the line's stamp; a number the provider cannot line
+/// up with a line there is refused as gone before the account is asked to act, and a reply to it is refused.
+#[tokio::test]
+async fn a_reply_or_an_act_on_a_line_the_bot_account_numbered_reaches_the_owner_s_account_by_its_stamp() {
+  let up = standing(Some(true)).await;
+  let (receiver, _heard) = KeptReceiver::new();
+  let reply = |reply_to: i64| ChatSendRequest {
+    reply_to_message_id: Some(reply_to),
+    ..as_owner(GROUP, "agreed")
+  };
+  let stamp = |sender: i64, sent_at: i64, words: &str| json!({ "chatId": GROUP, "senderId": sender, "sentAt": sent_at * 1000, "words": words_hash(words) });
+
+  up.telegram
+    .message(receiver.clone(), from_person(GROUP, 7_200, 55, "hello there"))
+    .await
+    .unwrap();
+  up.telegram
+    .message(receiver.clone(), from_person(GROUP, 7_201, 55, "the account never saw"))
+    .await
+    .unwrap();
+  // The bot's own answer, numbered as the bot account sent it.
+  let answer = up.provider.send(text(GROUP, Some(ChatVoice::BotAccount), "an answer")).await.unwrap();
+  let ChatSendResult::Sent(ChatSent {
+    message_id: Some(answered),
+    ..
+  }) = answer
+  else {
+    panic!("the bot's answer went: {answer:?}");
+  };
+
+  up.asked.lock().unwrap().clear();
+
+  let reaction = ChatSend::Reaction {
+    message_id: 7_200,
+    emoji: "👍".to_owned(),
+  };
+
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanReader, reaction)).await.unwrap(),
+    went(7_200)
+  );
+  assert_eq!(
+    up.provider.send(act(GROUP, ChatVoice::HumanReader, pin(answered, true))).await.unwrap(),
+    went(answered)
+  );
+  assert!(matches!(up.provider.send(reply(7_200)).await.unwrap(), ChatSendResult::Sent(_)));
+  assert_eq!(
+    up.provider
+      .send(act(GROUP, ChatVoice::HumanReader, ChatSend::Delete { message_id: 7_201 }))
+      .await
+      .unwrap(),
+    ChatSendResult::Refused(POLICY.message_gone("no such line"))
+  );
+  assert_eq!(
+    up.provider
+      .send(act(GROUP, ChatVoice::HumanReader, edit(7_999, "never read")))
+      .await
+      .unwrap(),
+    ChatSendResult::Refused(POLICY.message_gone(&POLICY.refusals.line_unknown))
+  );
+  assert_eq!(
+    up.provider.send(reply(7_999)).await.unwrap(),
+    ChatSendResult::Refused(POLICY.refused(&POLICY.refusals.line_unknown))
+  );
+
+  let asked = up.asked.lock().unwrap().clone();
+  let routes: Vec<&str> = asked.iter().map(|(route, _)| route.as_str()).collect();
+
+  assert_eq!(routes, ["line", "reaction", "line", "pin", "line", "say", "line"]);
+  assert_eq!(asked[0].1, stamp(55, 1_700_000_000, "hello there"));
+  assert_eq!(asked[1].1["messageId"], 900);
+  assert_eq!(asked[2].1, stamp(BOT, SENT_AT, "an answer"));
+  assert_eq!(asked[3].1["messageId"], 900);
+  assert_eq!(asked[5].1["replyToMessageId"], 900);
+  assert_eq!(asked[6].1, stamp(55, 1_700_000_000, "the account never saw"));
 }
 
 /// A person's typing goes only in their own voice: the owner's in his account whatever account the send names, and
@@ -645,18 +934,18 @@ async fn a_message_from_the_owner_waits_for_a_send_in_the_owner_s_voice_still_go
   let waiting = {
     let echoes = echoes.clone();
 
-    tokio::spawn(async move { echoes.echo(GROUP, 7_001, "see you").await })
+    tokio::spawn(async move { echoes.echo(OwnerAct::Said, GROUP, 7_001, "see you").await })
   };
 
   tokio::time::sleep(Duration::from_millis(50)).await;
   assert!(!waiting.is_finished(), "the echo waits for the send");
 
-  echoes.sent(GROUP, Some(31), "see you");
+  echoes.noted(OwnerAct::Said, GROUP, Some(31), "see you");
   drop(going);
 
   assert!(waiting.await.unwrap());
   // With no send going, a message from the owner nobody noted is the owner's own at once.
-  assert!(!echoes.echo(GROUP, 7_002, "see you").await);
+  assert!(!echoes.echo(OwnerAct::Said, GROUP, 7_002, "see you").await);
 }
 
 #[test]

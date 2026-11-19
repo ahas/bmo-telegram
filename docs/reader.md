@@ -24,11 +24,15 @@ reader」), and it reaches nothing but the service and Telegram.
   fetched after the fact for a turn that answers it, are fetched through the reader and answered as bytes.
 - **The owner's own words, and the avatar's.** A send in the owner's voice, or in the avatar's behind its prefix,
   goes out in the owner's account, never by the bot: the words and the files the bot's send would carry, its
-  markup sent as HTML, the words sent plain where the account refuses the markup. The typing mark is shown, and a
-  message the account holds deleted for everyone, the same way. A reply the send names is found on the account by
-  the message's number; one it has no line under is refused `unreachable`. Each send answers the numbers its
-  messages went out as and the words Telegram holds for each, by which the service knows the bot account's sight
-  of them as their echo.
+  markup sent as HTML, the words sent plain where the account refuses the markup. The typing mark is shown, a
+  message the account holds deleted for everyone, the owner's own reaction put on it, a message pinned or unpinned
+  for everyone and his own line edited, the same way. A reply the send names is found on the account by the
+  message's number; one it has no line under is refused `unreachable`. A line the service names by its stamp, the
+  sender, the second and the hash of its words, is looked for among the room's lines of that second, for the
+  account's own number for it where exactly one answers. Each send answers the numbers its messages
+  went out as and the words Telegram holds for each, an edit the words its line now holds and a pin the number of
+  the service message Telegram wrote for it, by which the service knows the bot account's sight of them as their
+  echo.
 - **The rooms of the account.** Every chat the owner's account is in is listed, for a person to choose a room
   among them; one the bot is not in is read-only until it is added (`docs/telegram.md`, 「The rooms」).
 - **Contacts and conversations started.** The account's contacts are listed, and a one-to-one or a group with

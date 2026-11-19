@@ -10,6 +10,7 @@ use clap::{Parser, Subcommand};
 use bmo_chat::{ChatProvider, ChatReceiver, ChatReceiverLink};
 use bmo_telegram::config::Config;
 use bmo_telegram::file_ids::FileIds;
+use bmo_telegram::lines::Lines;
 use bmo_telegram::provider::TelegramProvider;
 use bmo_telegram::reader::ReaderClient;
 use bmo_telegram::routes::{keep_reader_current, service};
@@ -87,10 +88,12 @@ async fn serve() -> Result<(), String> {
       Arc::new(FileIds::kept_in(config.data.join("file-ids.jsonl"))),
       config.data.join("spool"),
     )
-    .with_avatar_prefix(config.avatar_prefix),
+    .with_avatar_prefix(config.avatar_prefix)
+    .with_lines(Arc::new(Lines::kept_in(config.data.join("lines.jsonl")))),
   );
   let seam_presence = telegram.clone();
   let avatar = telegram.avatar().clone();
+  let lines = telegram.lines().clone();
   let sending = Sending {
     picture_root: config.picture_root,
     sticker_set: config.sticker_set,
@@ -115,6 +118,7 @@ async fn serve() -> Result<(), String> {
     standing,
     presence: seam_presence,
     avatar,
+    lines,
   });
 
   provider.start(receiver).await.map_err(|why| why.to_string())?;

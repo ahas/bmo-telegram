@@ -128,6 +128,9 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `POST /owner/typing` | `chatId`, `on` (boolean) | an empty object once the typing mark is shown or taken off; or `refused` (`unavailable`) with `error` |
 | `POST /owner/delete` | `chatId`, `messageId` | an empty object once the message is deleted for everyone; or `refused` (`unavailable`, or `gone` where the account holds no line under the number) with `error` |
 | `POST /owner/reaction` | `chatId`, `messageId`, `emoji` (an empty one takes the account's reaction off) | an empty object once the reaction stands as the account's, or is taken off; or `refused` (`unavailable`, or `gone` where the account holds no line under the number) with `error` |
+| `POST /owner/pin` | `chatId`, `messageId`, `on` (boolean), `silent` (boolean) | `messageId`, the number of the service message Telegram wrote for the pin, or null where it wrote none; or `refused` (`unavailable`, `gone` where the account holds no line under the number, or `turned-down` with Telegram's own words) with `error` |
+| `POST /owner/edit` | `chatId`, `messageId`, `text` (the plain words), `markup` (the dialect's HTML, or null) | `messageId`, the account's own number for the line, `text`, the words as Telegram now holds them, and `edited` (false where the line already said them); or `refused` (`unavailable`, `gone` where the account holds no line under the number, `not-own` where the line is not the account's own, or `turned-down` with Telegram's own words) with `error` |
+| `POST /owner/line` | `chatId`, `senderId`, `sentAt` (epoch milliseconds, whole seconds), `words` (the SHA-256 of the line's words, lowercase hex) | `messageId`, the account's own number for the one line of the room it holds from that sender at that second with those words; or `refused` (`unavailable`, or `gone` where it holds no such line or more than one) with `error` |
 
 The service answers `GET /rooms` from `/reader/dialogs` and the rooms the bot is in (`docs/telegram.md`, 「The
 rooms」): each room once, as a room of the provider's own, `owner` for the owner's one-to-one and `group` for any
@@ -146,11 +149,16 @@ send in the owner's account, one naming the voice `human-reader` or `human-avata
 `/owner/album` (whose files cross inline as base64, so a file the service holds on its own disk is read whole for
 that one call), divided by the service first into the parts, markup and albums the bot's send would take, the
 avatar's prefix already put before its words (`docs/telegram.md`, 「The owner's voice」, 「The avatar」); its typing
-mark goes by `/owner/typing`, a delete by `/owner/delete` and a reaction in the owner's own voice by `/owner/reaction`. The reader sends the markup as HTML where one is
-given, and `/owner/say` the plain words where the account refuses it. It finds a reply by the message's number on
-the owner's account, and refuses an `unreachable` one where that account has no line under it. The service notes
-each message the send went out as, under the number and the words the reader answered, so that the bot account's
-sight of it is not handed to the receiver a second time.
+mark goes by `/owner/typing` and a delete by `/owner/delete`; a reaction, a pin and an edit in the owner's own
+voice go by `/owner/reaction`, `/owner/pin` and `/owner/edit`. The reader sends the markup as HTML where one is
+given, and `/owner/say` and `/owner/edit` the plain words where the account refuses it. It finds a reply by the
+message's number on the owner's account, and refuses an `unreachable` one where that account has no line under it.
+Every number a reply or an act names reaches the reader as the owner's account's own: where the number is the bot
+account's, in a room each account numbers apart, the service first asks `/owner/line` for the account's number by
+the line's stamp out of its ledger (`docs/telegram.md`, 「The owner's voice」).
+The service notes each message the send went out as, each edit and each pin's service message, under the number
+and the words the reader answered, so that the bot account's sight of it is not handed to the receiver a second
+time.
 
 ### The service's routes, called by the reader
 
@@ -195,7 +203,7 @@ This provider's own:
 | `BMO_TELEGRAM_RECEIVER_URL` | service | the receiver's base address; required |
 | `BMO_TELEGRAM_RECEIVER_TOKEN` | service | the token the receiver's routes take; required |
 | `BMO_TELEGRAM_READER_PORT` | both | the loopback port the reader listens on; 3221 where unset |
-| `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen and the people who wrote to the bot privately, the id each picture and file the bot account handed over crossed with, the lock that keeps the owner's session to one process, and the `spool/` folder each file of a multipart send stands in as it arrives and each file gathered past the Bot API's ceiling stands in until the receiving side took it |
+| `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen and the people who wrote to the bot privately, the id each picture and file the bot account handed over crossed with, the ledger of whose numbering each line of a room numbered per account stands under (`docs/telegram.md`, 「The owner's voice」), the lock that keeps the owner's session to one process, and the `spool/` folder each file of a multipart send stands in as it arrives and each file gathered past the Bot API's ceiling stands in until the receiving side took it |
 | `BMO_TELEGRAM_PICTURE_ROOT` | service | the folder a picture or an album item named by a file path may be read from; where unset, only a web address or an inline file is sent |
 | `BMO_TELEGRAM_STICKER_SET` | service | the Telegram sticker set a `sticker` send picks from by its emoji; where unset, a sticker send naming an emoji is refused saying no set is configured |
 | `BMO_TELEGRAM_AVATAR_PREFIX` | service | the prefix the agent's words carry in the `human-avatar` voice where a send names none, and by which a line of the owner's account is read back as the agent's (`docs/telegram.md`, 「The avatar」); where unset or blank, the policy's own prefix |

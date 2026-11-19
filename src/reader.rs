@@ -7,6 +7,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::compose::Part;
+use crate::lines::Stamp;
 use crate::wire::Wire;
 
 /// The reader on the loopback, behind the seam's token.
@@ -92,6 +93,15 @@ pub enum AsOwner<T> {
 pub struct OwnerSent {
   pub message_id: Option<i64>,
   pub words: String,
+}
+
+/// The owner's own line as an edit in the owner's voice left it: the account's own number for it, where it named
+/// one, the words Telegram now holds for it, and whether the edit changed them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnerEdited {
+  pub message_id: Option<i64>,
+  pub words: String,
+  pub edited: bool,
 }
 
 /// Why the reader did not carry a send at all.
@@ -459,6 +469,50 @@ impl ReaderClient {
     let sent = self.as_owner("/owner/reaction", &body).await?;
 
     Ok(map_sent(sent, |_| ()))
+  }
+
+  /// The message the owner's account holds under the number pinned for everyone in the room, quietly where
+  /// `silent`, or unpinned: the number of the service message Telegram wrote for the pin, where it wrote one.
+  pub async fn owner_pin(
+    &self,
+    chat_id: i64,
+    message_id: i64,
+    on: bool,
+    silent: bool,
+  ) -> Result<AsOwner<Option<i64>>, NotCarried> {
+    let body = json!({ "chatId": chat_id, "messageId": message_id, "on": on, "silent": silent });
+    let sent = self.as_owner("/owner/pin", &body).await?;
+
+    Ok(map_sent(sent, |answer| answer.get("messageId").and_then(Value::as_i64)))
+  }
+
+  /// The owner's account's own number for the one line of the room it holds with the stamp a line of the bot
+  /// account's was kept with.
+  pub async fn owner_line(&self, chat_id: i64, stamp: &Stamp) -> Result<AsOwner<Option<i64>>, NotCarried> {
+    let body = json!({ "chatId": chat_id, "senderId": stamp.sender_id, "sentAt": stamp.sent_at,
+      "words": stamp.words });
+    let sent = self.as_owner("/owner/line", &body).await?;
+
+    Ok(map_sent(sent, |answer| answer.get("messageId").and_then(Value::as_i64)))
+  }
+
+  /// The owner's own line the account holds under the number given the part's words, in its markup where it has
+  /// one: the line as Telegram now holds it, and whether the edit changed it.
+  pub async fn owner_edit(
+    &self,
+    chat_id: i64,
+    message_id: i64,
+    part: &Part,
+  ) -> Result<AsOwner<OwnerEdited>, NotCarried> {
+    let body =
+      json!({ "chatId": chat_id, "messageId": message_id, "text": part.plain, "markup": part.markup });
+    let sent = self.as_owner("/owner/edit", &body).await?;
+
+    Ok(map_sent(sent, |answer| OwnerEdited {
+      message_id: answer.get("messageId").and_then(Value::as_i64),
+      words: answer.get("text").and_then(Value::as_str).unwrap_or_default().to_owned(),
+      edited: answer.get("edited").and_then(Value::as_bool).unwrap_or(true),
+    }))
   }
 }
 

@@ -49,7 +49,10 @@ pub struct Refusals {
   pub mode_down: String,
   pub mode_missing: String,
   pub owner_verb: String,
-  pub avatar_reaction: String,
+  pub avatar_unmarked: String,
+  pub avatar_edit: String,
+  pub not_own_line: String,
+  pub line_unknown: String,
   pub read_only: String,
   pub typing_account: String,
 }
@@ -191,9 +194,19 @@ impl Policy {
     self.platform(fill(&self.refusals.owner_verb, &[("verb", verb)]))
   }
 
-  /// A reaction in the avatar's voice, which nothing on it could mark as the agent's.
-  pub fn avatar_reaction(&self) -> ChatRefusal {
-    self.platform(self.refusals.avatar_reaction.clone())
+  /// A reaction or a pin, the `verb`, in the avatar's voice, which nothing on it could mark as the agent's.
+  pub fn avatar_unmarked(&self, verb: &str) -> ChatRefusal {
+    self.platform(fill(&self.refusals.avatar_unmarked, &[("verb", verb)]))
+  }
+
+  /// An edit in the avatar's voice, which could put the agent's words into a line the owner typed.
+  pub fn avatar_edit(&self) -> ChatRefusal {
+    self.platform(self.refusals.avatar_edit.clone())
+  }
+
+  /// An edit in the owner's voice of a line that is not his own.
+  pub fn not_own_line(&self) -> ChatRefusal {
+    self.platform(self.refusals.not_own_line.clone())
   }
 
   /// A send in any voice but the owner's own into a room the bot is not in.

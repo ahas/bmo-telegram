@@ -12,6 +12,7 @@ use axum::response::{IntoResponse, Json, Response};
 use bmo_chat::{ChatProvider, ChatSend, ChatSendResult, provider_router};
 use bmo_telegram::bot_api::BotApi;
 use bmo_telegram::file_ids::FileIds;
+use bmo_telegram::lines::Lines;
 use bmo_telegram::provider::TelegramProvider;
 use bmo_telegram::seen::Seen;
 use bmo_telegram::send::{Sending, Speaker};
@@ -271,7 +272,7 @@ pub async fn web(pages: BTreeMap<String, (Vec<u8>, String)>) -> String {
 pub async fn speaker(stand_in: Arc<BotSends>, sending: Sending) -> Speaker {
   let api = BotApi::new(bot_sends(stand_in).await, TOKEN);
 
-  Speaker::new(api, sending, Arc::new(Seen::in_memory()))
+  Speaker::new(api, sending, Arc::new(Seen::in_memory()), Arc::new(Lines::in_memory()))
 }
 
 /// The token the provider's routes take in a test.

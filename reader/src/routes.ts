@@ -1,7 +1,8 @@
 // The reader's routes, called by the service alone (docs/boundary-api.md, 「The reader's routes, called by the
 // service」): whether the owner's account is connected, the chats it is in, its contacts and a conversation
 // started with them, a picture or a file fetched through it, and a send through the owner's account, its typing
-// mark, a delete and a reaction. Every route takes the seam's token.
+// mark, a delete, a reaction, a pin, an edit and the account's own number for a line named by its stamp. Every
+// route takes the seam's token.
 
 import { fetchFile, fetchPicture } from "./media";
 import { ChatUnresolved, DEFAULT_MAX, LARGEST_MAX } from "./messages";
@@ -198,6 +199,45 @@ function routes(deps: RoutesDeps): Record<string, (body: Body) => Promise<Respon
         await deps.owner.react(chatId, messageId, emoji);
 
         return {};
+      });
+    },
+
+    "/owner/pin": async (body) => {
+      if (!isNumber(body.chatId) || !isNumber(body.messageId) || typeof body.on !== "boolean" || typeof body.silent !== "boolean") {
+        return failure("bad-request", "chatId and messageId (numbers) and on and silent (booleans) are required", 400);
+      }
+
+      const chatId = body.chatId;
+      const messageId = body.messageId;
+      const on = body.on;
+      const silent = body.silent;
+
+      return await asOwner(async () => ({ messageId: await deps.owner.pin(chatId, messageId, on, silent) }));
+    },
+
+    "/owner/line": async (body) => {
+      if (!isNumber(body.chatId) || !isNumber(body.senderId) || !isNumber(body.sentAt) || !isText(body.words)) {
+        return failure("bad-request", "chatId, senderId and sentAt (numbers) and words (string) are required", 400);
+      }
+
+      const stamp = { chatId: body.chatId, senderId: body.senderId, sentAt: body.sentAt, words: body.words };
+
+      return await asOwner(async () => ({ messageId: await deps.owner.line(stamp) }));
+    },
+
+    "/owner/edit": async (body) => {
+      const markup = markupOf(body.markup);
+
+      if (!isNumber(body.chatId) || !isNumber(body.messageId) || !isText(body.text) || markup === undefined) {
+        return failure("bad-request", "chatId and messageId (numbers), text and a markup or null are required", 400);
+      }
+
+      const edit = { chatId: body.chatId, messageId: body.messageId, text: body.text, markup };
+
+      return await asOwner(async () => {
+        const line = await deps.owner.edit(edit);
+
+        return { messageId: line.id, text: line.text, edited: line.edited };
       });
     },
   };
