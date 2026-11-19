@@ -3,17 +3,16 @@ import { describe, expect, test } from "bun:test";
 import {
   FillUnnumbered,
   fillNamedRoom,
-  historyMessageId,
   historyMessageText,
   historyRooms,
   historyStanding,
   HistoryUnreadable,
-  isHistoryAligned,
   PeerUnresolved,
   walkAll,
   walkNamedRoom,
   walkRoom,
 } from "../src/history";
+import { providerMessageId } from "../src/numbering";
 import { mtproto } from "../src/mtproto";
 import { ReaderStore } from "../src/store";
 import { BOT_ID, keptService, OWNER_ID } from "./support";
@@ -21,20 +20,6 @@ import { BOT_ID, keptService, OWNER_ID } from "./support";
 import type { TelegramClient } from "telegram";
 
 const peers = { ownerId: OWNER_ID, botId: BOT_ID };
-
-describe("isHistoryAligned", () => {
-  test("only a supergroup or channel numbers its messages for everyone", () => {
-    expect(isHistoryAligned(-1000000000003)).toBe(true);
-    expect(isHistoryAligned(-5000000002)).toBe(false);
-    expect(isHistoryAligned(10000001)).toBe(false);
-  });
-
-  test("a supergroup keeps its ids; another chat's history goes below every bot id, older first", () => {
-    expect(historyMessageId(-1000000000003, 6871)).toBe(6871);
-    expect(historyMessageId(-5000000002, 500)).toBeLessThan(0);
-    expect(historyMessageId(-5000000002, 100)).toBeLessThan(historyMessageId(-5000000002, 500));
-  });
-});
 
 describe("a room's walk", () => {
   test("hands each line over as history under the number it is kept by, below the receiver's first message", async () => {
@@ -69,8 +54,8 @@ describe("a room's walk", () => {
           : null,
       ),
     ).toEqual([
-      [historyMessageId(-5000000002, 12), "older words", "human-reader", 1_700_000_010_000],
-      [historyMessageId(-5000000002, 11), "[Photo]", "human-reader", 1_700_000_005_000],
+      [providerMessageId(-5000000002, 12), "older words", "human-reader", 1_700_000_010_000],
+      [providerMessageId(-5000000002, 11), "[Photo]", "human-reader", 1_700_000_005_000],
     ]);
     expect(store.historyProgress(-5000000002)?.doneAt).not.toBeNull();
   });
@@ -196,11 +181,13 @@ describe("a room's recent past", () => {
     const outcome = await fillNamedRoom({ client: linesClient(asked), peers, service, store }, chatId, since);
 
     expect(outcome).toEqual({ handed: 2, kept: 2, reachedTop: false });
+    // A room the account numbers apart is filled under the provider numbering, the same numbers its live
+    // hand-overs carry, so the receiver leaves the lines it holds.
     expect(
       service.handed.map((one) => (one.kind === "message" ? [one.messageId, one.message.senderId, one.message.origin] : null)),
     ).toEqual([
-      [30, null, "history"],
-      [29, OWNER_ID, "history"],
+      [providerMessageId(chatId, 30), null, "history"],
+      [providerMessageId(chatId, 29), OWNER_ID, "history"],
     ]);
     expect(store.historyProgress(chatId)).toBeNull();
   });

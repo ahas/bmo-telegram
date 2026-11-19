@@ -3,6 +3,7 @@
 // was sent in (the service asks with epoch milliseconds, Telegram keeps seconds); and the name a file with
 // none of its own is given.
 
+import { accountMessageId } from "./numbering";
 import { mtproto } from "./mtproto";
 import { POLICY } from "./policy";
 
@@ -83,7 +84,8 @@ function messageChatId(message: Api.Message): number | null {
   return id === undefined || id === null ? null : Number(id.toString());
 }
 
-// The message the account holds for one the bot saw, found by its number and, where the numbers are not
+// The message the account holds for one named by the number the receiving side holds it under (「Numbers」 in
+// docs/reader.md says when that is turned back first), found by its number and, where the numbers are not
 // shared, by the second it was sent in. `carries` says whether a message is the one wanted: the message
 // under the number carrying nothing of the kind is "none", and a message not found at all is null.
 export async function readerMessageFor(
@@ -95,7 +97,7 @@ export async function readerMessageFor(
   carries: (message: Api.Message) => boolean,
 ): Promise<Api.Message | "none" | null> {
   const entity = peerOf(chatId, peers);
-  const [byId] = await client.getMessages(entity, { ids: [messageId] });
+  const [byId] = await client.getMessages(entity, { ids: [accountMessageId(chatId, messageId)] });
 
   if (byId instanceof mtproto().Api.Message && messageChatId(byId) === entity && (sentAt === null || byId.date === sentAt)) {
     return carries(byId) ? byId : "none";
@@ -162,7 +164,7 @@ export async function fetchPicture(
 
     const bytes = await downloaded(client, message);
 
-    return { outcome: "fetched", id: fileIdOf(message), name: `${asked.messageId}.jpg`, mime: "image/jpeg", bytes: Buffer.from(bytes).toString("base64"), kind: "photo" };
+    return { outcome: "fetched", id: fileIdOf(message), name: `${message.id}.jpg`, mime: "image/jpeg", bytes: Buffer.from(bytes).toString("base64"), kind: "photo" };
   } catch (error) {
     return { outcome: "unavailable", reason: error instanceof Error ? error.message : String(error) };
   }

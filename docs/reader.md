@@ -27,12 +27,12 @@ reader」), and it reaches nothing but the service and Telegram.
   markup sent as HTML, the words sent plain where the account refuses the markup. The typing mark is shown, a
   message the account holds deleted for everyone, the owner's own reaction put on it, a message pinned or unpinned
   for everyone and his own line edited, the same way. A reply the send names is found on the account by the
-  message's number; one it has no line under is refused `unreachable`. A line the service names by its stamp, the
-  sender, the second and the hash of its words, is looked for among the room's lines of that second, for the
-  account's own number for it where exactly one answers. Each send answers the numbers its messages
-  went out as and the words Telegram holds for each, an edit the words its line now holds and a pin the number of
-  the service message Telegram wrote for it, by which the service knows the bot account's sight of them as their
-  echo.
+  message's number; one it has no line that the number names is refused `unreachable`. A line the service names
+  by its stamp, the sender, the second and the hash of its words, is looked for among the room's lines of that
+  second, for the account's own number for it where exactly one answers. Each send answers the numbers its
+  messages went out as under the provider's numbering (「Numbers」) and the words Telegram holds for each, an edit
+  the words its line now holds and a pin the number of the service message Telegram wrote for it, by which the
+  service knows the bot account's sight of them as their echo.
 - **The rooms of the account.** Every chat the owner's account is in is listed, for a person to choose a room
   among them; one the bot is not in is read-only until it is added (`docs/telegram.md`, 「The rooms」).
 - **Contacts and conversations started.** The account's contacts are listed, and a one-to-one or a group with
@@ -71,6 +71,25 @@ reader」), and it reaches nothing but the service and Telegram.
   photo's number, or `document-` and the document's, so the same file crosses under the same id each time.
 - **A file with no name of its own** is named for what it is: a sticker by its document, a video, a round note
   or a GIF by which it was, a sound by whether it was a spoken note, each with the extension its type implies.
+
+## Numbers
+
+- **A supergroup or a channel numbers its messages once for everyone,** so a number of such a room crosses the
+  seam as it stands in every direction: a hand-over carries it, a send answers it, a reply or an act names it,
+  and a fetch looks the line up by it.
+- **Every other room numbers messages per account,** and the bot account's numbers already stand on the
+  receiving side for the lines it read and sent there, so a raw number of the owner's account could meet a
+  different line under it. Every number the owner's account gave of such a room therefore crosses as the
+  provider's own for the line: its account number offset far below every number the Bot API hands out, rising
+  with it so older lines still sort first, negative where the account's own is positive. The live reading's
+  hand-overs and their gathering patches, the history walk, a room's recent past filled by hand, and the numbers
+  the owner's sends answer all go this way; a reaction or a deletion of such a room is named by its stamp, as
+  ever, and by nothing the reader never saw.
+- **Such a number is turned back wherever it comes home:** before a reply's or an act's number names a line to
+  the account, and before a fetch looks one up. The account's own numbers for such a room cross nowhere else.
+- **Numbers the receiving side took before this numbering stood** still resolve, as the ledger says each one's:
+  one recorded with the bot account's stamp is looked for by that stamp, one recorded as the owner's account's
+  stands as it is, and one it cannot tell names no line (docs/telegram.md, 「The owner's voice」).
 
 ## Connecting
 
@@ -135,10 +154,10 @@ reader」), and it reaches nothing but the service and Telegram.
   nothing over rather than every chat's history.
 - **It starts a minute after the account connects,** one room at a time, each to its top before the next; a
   room whose walk reached its top is not walked again.
-- **Numbers.** Only a supergroup or a channel numbers its messages for everyone, so its messages keep their
-  numbers, and its walk starts below the oldest message the receiver holds. Another room's history is numbered
-  below every number the bot account can see, older first, and only what was said before the receiver's first
-  message is handed over, so a message read back never takes a number a live message has.
+- **Numbers.** A room that numbers its messages for everyone keeps them, and its walk starts below the oldest
+  message the receiver holds. Another room's lines cross under the provider's numbering (「Numbers」), older
+  first, and only what was said before the receiver's first message is handed over, so a message read back never
+  takes a number a live message has.
 - **Progress is kept per room** in the reader's own store, `reader.db` in the provider's data folder: the
   lowest number reached and whether the top of the room's history was reached. A walk resumes where it left off,
   and pauses between pages of a hundred.
@@ -191,9 +210,11 @@ reader hears them.
 - **A route on the live account:** `GET /reader/messages?chat=<id>&max=<n>&since=<epoch ms>` answers one
   dialog's recent messages, newest first, from the connection the reader already holds; no second MTProto
   connection is opened.
-- **Each line** carries the message's number, the sender's number and the name the account shows, the moment in
-  epoch milliseconds, and the words. A message that is not words alone carries the placeholder its kind stands
-  under in `policy/telegram.toml`: a picture, a file, a sound, a voice note or any other non-text.
+- **Each line** carries the number the account gives the message, as this route reads the account's own view and
+  not the receiving side's record (「Numbers」 says what crosses), the sender's number and the name the account
+  shows, the moment in epoch milliseconds, and the words. A message that is not words alone carries the
+  placeholder its kind stands under in `policy/telegram.toml`: a picture, a file, a sound, a voice note or any
+  other non-text.
 - **`max`** is how many lines at most, fifty where none is named and two hundred the most; **`since`** is the
   earliest moment in epoch milliseconds, and no line older than it is answered.
 - **A chat number the account cannot resolve is refused** `not-found` with the reason, rather than read as a

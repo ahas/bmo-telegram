@@ -3,6 +3,7 @@
 // where it lacks them and wakes nobody for; and a room's recent past filled the same way, under the numbers
 // the live reading gives its messages.
 
+import { numbersForEveryone, providerMessageId } from "./numbering";
 import { peerOf } from "./media";
 import { mtproto } from "./mtproto";
 import { fill, POLICY } from "./policy";
@@ -57,9 +58,6 @@ export interface HistoryOutcome {
 const pageSize = 100;
 const pauseBetweenPagesMs = 1_500;
 const startDelayMs = 60_000;
-// Where the owner's account's own numbering is stored: far below any number the Bot API hands out, so
-// nothing collides, and rising with the account's numbers, so older still sorts first.
-const foreignIdBase = -1_000_000_000;
 
 // What a line out of the history says it is. A picture out of the history has no file behind it — the
 // file is not fetched on the walk — so the line itself says it was one.
@@ -69,24 +67,6 @@ export function historyMessageText(hasPhoto: boolean, text: string): string {
   }
 
   return fill(POLICY.kinds.photo, { caption: text === "" ? "" : ` ${text}` });
-}
-
-// Only a supergroup or a channel numbers its messages once for everyone. A basic group and a private
-// chat number them per account, so what the owner's account sees there cannot be lined up with what the
-// bot read: such a chat's history is taken only from before the receiver's first message, and handed over
-// under the account's own numbering, offset below every bot number.
-export function isHistoryAligned(chatId: number): boolean {
-  return String(chatId).startsWith("-100");
-}
-
-export function historyMessageId(chatId: number, ownId: number): number {
-  return isHistoryAligned(chatId) ? ownId : foreignIdBase + ownId;
-}
-
-// The account's own number for a message the provider holds, where the room numbers messages per account and
-// the message was read back from the room's past. Every other number crosses as it stands.
-export function accountMessageId(chatId: number, messageId: number): number {
-  return !isHistoryAligned(chatId) && messageId <= foreignIdBase ? messageId - foreignIdBase : messageId;
 }
 
 // A peer the account has not met in this session cannot be resolved from its number alone; loading the
@@ -206,7 +186,7 @@ export async function walkRoom(
 ): Promise<HistoryOutcome> {
   const { client, peers, store } = deps;
   const { chatId } = room;
-  const aligned = isHistoryAligned(chatId);
+  const aligned = numbersForEveryone(chatId);
   const progress = store.historyProgress(chatId);
   const oldestKnown = aligned ? room.oldestMessageId : null;
   const candidates = [progress?.reachedId, oldestKnown].filter((id): id is number => id !== undefined && id !== null && id !== 0);
@@ -244,7 +224,7 @@ export async function walkRoom(
       continue;
     }
 
-    const numbered = (ownId: number) => historyMessageId(chatId, ownId);
+    const numbered = (ownId: number) => providerMessageId(chatId, ownId);
 
     handed += 1;
     kept += (await handLine(deps, chatId, message, numbered(message.id), numbered, names)) ? 1 : 0;
@@ -293,14 +273,14 @@ export async function walkNamedRoom(deps: HistoryDeps, chatId: number, options: 
 export async function fillNamedRoom(deps: HistoryDeps, chatId: number, sinceMs: number): Promise<HistoryOutcome> {
   await namedRoom(deps, chatId);
 
-  if (!isHistoryAligned(chatId) && !(await deps.service.listened(chatId)).people) {
+  if (!numbersForEveryone(chatId) && !(await deps.service.listened(chatId)).people) {
     throw new FillUnnumbered(chatId);
   }
 
   const entity = await resolveEntity(deps.client, peerOf(chatId, deps.peers));
   const names = new Map<number, string>();
   const since = Math.floor(sinceMs / 1000);
-  const numbered = (ownId: number) => ownId;
+  const numbered = (ownId: number) => providerMessageId(chatId, ownId);
   let handed = 0;
   let kept = 0;
 
@@ -316,7 +296,7 @@ export async function fillNamedRoom(deps: HistoryDeps, chatId: number, sinceMs: 
     }
 
     handed += 1;
-    kept += (await handLine(deps, chatId, message, message.id, numbered, names)) ? 1 : 0;
+    kept += (await handLine(deps, chatId, message, numbered(message.id), numbered, names)) ? 1 : 0;
   }
 
   console.log(`history: room ${chatId} filled, ${kept} of ${handed} kept`);

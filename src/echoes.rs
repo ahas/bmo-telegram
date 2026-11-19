@@ -35,6 +35,8 @@ pub enum OwnerAct {
 struct Note {
   act: OwnerAct,
   room: i64,
+  // The number the send answered it under: the account's own where the room numbers for everyone, the
+  // provider's own elsewhere — where it is kept for telling, never for matching.
   id: Option<i64>,
   words: String,
   at: Instant,
@@ -42,7 +44,8 @@ struct Note {
 
 impl Note {
   // Whether what the bot account read is this one: the same act in the same room, by its number where the room
-  // numbers messages for everyone, by its words where each account numbers its own.
+  // numbers messages for everyone, by its words where each account numbers its own and the bot account knows
+  // the line by a number the send did not answer.
   fn answers(&self, act: OwnerAct, room: i64, id: i64, words: &str) -> bool {
     if self.act != act || self.room != room {
       return false;

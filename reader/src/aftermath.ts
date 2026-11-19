@@ -4,6 +4,8 @@
 // the bot account, so a message is named by its stamp — who sent it and when — from what the reader saw of it
 // while it ran.
 
+import { numbersForEveryone } from "./numbering";
+
 import type { Api } from "telegram";
 
 /** Who sent a message and when, as the hand-over carried them. */
@@ -60,11 +62,6 @@ export function chatIdOfPeer(peer: { className: string; channelId?: unknown; cha
     default:
       return null;
   }
-}
-
-/** Whether a room numbers its messages for everyone: a supergroup or a channel. */
-export function numbersForEveryone(chatId: number): boolean {
-  return String(chatId).startsWith("-100");
 }
 
 /** A deletion, grouped by room: each room with its messages by number or by stamp. */

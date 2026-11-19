@@ -250,21 +250,17 @@ struct Served {
   port: u16,
   receiver: Arc<KeptReceiver>,
   standing: Arc<Standing>,
-  lines: Arc<Lines>,
 }
 
 async fn seam_over(receiver: Arc<KeptReceiver>) -> Served {
-  let seen = Arc::new(Seen::in_memory());
   let standing = Arc::new(Standing::default());
-  let lines = Arc::new(Lines::in_memory());
   let seam = Seam {
     token: TOKEN.to_owned(),
     receiver: receiver.clone(),
-    seen,
+    seen: Arc::new(Seen::in_memory()),
     standing: standing.clone(),
     presence: Arc::new(InBotRoom),
     avatar: AvatarLines::new(OWNER, None),
-    lines: lines.clone(),
   };
   let port = serve(seam_router(Arc::new(seam))).await;
 
@@ -272,7 +268,6 @@ async fn seam_over(receiver: Arc<KeptReceiver>) -> Served {
     port,
     receiver,
     standing,
-    lines,
   }
 }
 
@@ -293,26 +288,45 @@ fn message(origin: &str, room_id: i64, message_id: i64, sender: i64) -> Value {
   })
 }
 
-/// A line the reader hands over in a room each account numbers apart stands in the ledger under the owner's
-/// account's number, so an act on it reaches that account as it stands (docs/telegram.md, 「The owner's voice」).
+/// A line the reader hands over in a room each account numbers apart crosses under the provider's own numbering,
+/// below every bot number, which no ledger record is needed to act on (docs/reader.md, 「Numbers」): the seam
+/// hands it on and writes nothing, and an unrecorded positive number of the room stays one the ledger cannot
+/// tell.
 #[tokio::test]
-async fn a_line_the_reader_hands_over_stands_under_the_owner_s_account_s_numbering() {
+async fn a_line_the_reader_hands_over_crosses_under_the_provider_s_numbering_and_needs_no_ledger_record() {
   let (receiver, _heard) = KeptReceiver::new();
-  let served = seam_over(receiver).await;
-  let seam = Wire::loopback(served.port, TOKEN);
+  let lines = Lines::in_memory();
   let group = -4_242;
   // The bot account read a line of the room, so the room is one it reads.
   let read = json!({ "message_id": 7, "date": 1_700_000_000, "chat": { "id": group, "type": "group" },
     "from": { "id": 55, "is_bot": false, "first_name": "Someone" }, "text": "hello" });
 
-  served.lines.bots(&serde_json::from_value(read).unwrap());
+  lines.bots(&serde_json::from_value(read).unwrap());
+  assert_eq!(lines.line(group, 900), Line::Unknown);
 
-  assert_eq!(served.lines.line(group, 900), Line::Unknown);
+  let served = seam_over(receiver).await;
+  let seam = Wire::loopback(served.port, TOKEN);
+  // The reader's number for its account's 900th line of the room: offset below every bot number.
+  let provider_number = -1_000_000_000_i64 + 900;
+
   assert_eq!(
-    seam.post("/reader/inbound", &message("live", group, 900, 56)).await.unwrap().status,
+    seam
+      .post("/reader/inbound", &message("live", group, provider_number, 56))
+      .await
+      .unwrap()
+      .status,
     200
   );
-  assert_eq!(served.lines.line(group, 900), Line::Owners);
+
+  // The hand-over went on under the number it crossed with, and the ledger stands as it was: the provider's
+  // numbering turns back by its own arithmetic, and an unrecorded positive number names no line.
+  let handed = served.receiver.handed.lock().unwrap().clone();
+
+  assert!(
+    matches!(&handed[0], (route, body) if route == "message" && body["messageId"] == provider_number)
+  );
+  assert_eq!(lines.line(group, provider_number), Line::Owners);
+  assert_eq!(lines.line(group, 900), Line::Unknown);
 }
 
 /// A video the reader gathered crosses whole: a hand-over far past a web server's usual two megabytes, as a

@@ -20,7 +20,6 @@ use serde_json::{Value, json};
 
 use crate::VIA;
 use crate::avatar::AvatarLines;
-use crate::lines::Lines;
 use crate::policy::POLICY;
 use crate::seen::{Seen, Sighted};
 
@@ -84,9 +83,6 @@ pub struct Seam {
   pub presence: Arc<dyn Presence>,
   /// The avatar's lines, so one read back through the owner's account goes on as the agent's own.
   pub avatar: AvatarLines,
-  /// Whose numbering each line of a room numbered per account stands under: a line the reader hands over is
-  /// under the owner's account's.
-  pub lines: Arc<Lines>,
 }
 
 /// Whether the receiving side asked for a room to be read through the owner's account: its `read`. Being
@@ -173,9 +169,10 @@ async fn inbound(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Resp
         }
       }
 
-      // A line the avatar sent goes on as the agent's own (docs/telegram.md, 「The avatar」).
+      // A line the avatar sent goes on as the agent's own (docs/telegram.md, 「The avatar」). What the reader
+      // hands over carries the provider's own number for the line, which the ledger needs no record of
+      // (docs/reader.md, 「Numbers」).
       seam.avatar.take_as_agent_s(&mut message);
-      seam.lines.owners(room_id, message_id);
 
       if message.origin == MessageOrigin::Live {
         seam.seen.message(room_id, message.sender_id);

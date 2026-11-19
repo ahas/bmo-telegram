@@ -1,10 +1,12 @@
 //! The ledger of whose numbering each line of a room numbered per account stands under (docs/telegram.md, 「The
-//! owner's voice」): in a room where each account numbers its own messages the receiving side holds each line
-//! under the number of the account that read or sent it, and an act in the owner's account needs that account's
-//! own number. A number the owner's account gave stands as it is; a number the bot account gave is kept with the
-//! line's stamp, by which the owner's account finds the line again. Kept in the provider's data folder, one record
-//! to a line added as each is learned, so a restart forgets none; a later record of a line stands over an earlier
-//! one.
+//! owner's voice」): in a room where each account numbers its own messages the bot account's numbers stand on the
+//! receiving side for the lines it read or sent, and an act in the owner's account needs that account's own
+//! number, which a bot account's number finds by the line's stamp kept beside it. The ledger keeps those: one
+//! record to a line added as each is learned in the provider's data folder, so a restart forgets none, a later
+//! record of a line standing over an earlier one, and records an earlier ledger left of the owner's account's
+//! own numbers read back as they stand — a number of the owner's account crosses no more, the provider numbering
+//! every such line under the bot numbers instead, and the reader turns those back by their own arithmetic
+//! (`docs/reader.md`, 「Numbers」).
 
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
@@ -36,7 +38,8 @@ pub fn words_hash(words: &str) -> String {
 /// What the ledger says a number of a room names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Line {
-  /// The owner's account's own number, or one it turns into its own: it stands as it is.
+  /// A number that stands for the owner's account as it is given: its own, or one the reader turns back into
+  /// its own — a provider number of a room that numbers per account.
   Owners,
   /// The bot account's number for a line, found on the owner's account by its stamp.
   Bots(Stamp),
@@ -45,7 +48,8 @@ pub enum Line {
   Unknown,
 }
 
-// Whose numbering one record holds a line under.
+// Whose numbering one record holds a line under. Records of the owner's account's own numbering are read back
+// from ledgers written while owner numbers still crossed; none is added now (docs/reader.md, 「Numbers」).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "by", rename_all = "kebab-case")]
 enum Numbering {
@@ -105,8 +109,9 @@ pub struct Lines {
   kept: Mutex<Kept>,
 }
 
-// Whether a number of a room is one the ledger keeps: a room numbered for everyone needs none, and a number at
-// or below zero is the history walk's, which the reader turns back into the account's own.
+// Whether a number of a room is one the ledger keeps: a room numbered for everyone needs none, and a number
+// below zero is one the provider gave the line, which the reader turns back into the account's own by its
+// arithmetic and needs no record.
 fn ledgered(chat_id: i64, message_id: i64) -> bool {
   !numbered_for_everyone(chat_id) && message_id > 0
 }
@@ -152,18 +157,6 @@ impl Lines {
         "telegram: the numbering of chat {} message {} could not be kept: {why}",
         record.chat_id, record.message_id
       );
-    }
-  }
-
-  /// A number the owner's account gave a line: one a send in it answered, or one the reader handed a line over
-  /// under.
-  pub fn owners(&self, chat_id: i64, message_id: i64) {
-    if ledgered(chat_id, message_id) {
-      self.keep(Record {
-        chat_id,
-        message_id,
-        numbering: Numbering::Owner,
-      });
     }
   }
 

@@ -93,7 +93,6 @@ async fn serve() -> Result<(), String> {
   );
   let seam_presence = telegram.clone();
   let avatar = telegram.avatar().clone();
-  let lines = telegram.lines().clone();
   let sending = Sending {
     picture_root: config.picture_root,
     sticker_set: config.sticker_set,
@@ -118,7 +117,6 @@ async fn serve() -> Result<(), String> {
     standing,
     presence: seam_presence,
     avatar,
-    lines,
   });
 
   provider.start(receiver).await.map_err(|why| why.to_string())?;

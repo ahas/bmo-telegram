@@ -121,15 +121,15 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `GET /reader/contacts` | | `contacts`, each `id`, `name`, `bot` (boolean) and `chatId` (number or null, the one-to-one the account has with it): the account's contact list; 503 `not-ready` with the reason while the account is not connected |
 | `POST /reader/start` | `contactId`, or `title` and `contactIds` | `outcome`: `started` with `chatId` and `title`; `no-contact` with `contactId`; `refused` with `reason`, Telegram's own words; 503 `not-ready` with the reason while the account is not connected |
 | `GET /reader/messages` | query `chat` (a number), `max` (1 to 200, 50 where absent), `since` (epoch milliseconds, or absent) | `messages`, each `messageId`, `senderId` (number or null), `senderName`, `sentAt` (epoch milliseconds) and `text`, newest first, a non-text line carrying its kind's placeholder; 404 `not-found` with the reason where the account cannot resolve the chat; 503 `not-ready` with the reason while the account is not connected |
-| `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null) | `outcome`: `fetched` with `id`, `name`, `mime`, `bytes`, a message file under the owner's account's id; `unavailable` with `reason`; `no-reader` with `reason` |
+| `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null): the message by the number the receiving side holds it under, which the reader turns back into the account's own where the room numbers per account | `outcome`: `fetched` with `id`, `name`, `mime`, `bytes`, a message file under the owner's account's id; `unavailable` with `reason`; `no-reader` with `reason` |
 | `POST /reader/file` | `chatId`, `messageId`, `sentAt` | the same outcomes |
-| `POST /owner/say` | `chatId`, `text` (the plain words), `markup` (the dialect's HTML, or null), `silent` (boolean), `replyToMessageId` (number or null) | `messageId` and `text`, the words as Telegram holds them; or `refused` (`unavailable` or `unreachable`) with `error` |
-| `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption` (the plain words), `captionMarkup` (the dialect's HTML, or null), `replyToMessageId` | `ids`, the message numbers in the order the files went, and `texts`, the words each holds as Telegram holds them; or `refused` with `error` |
+| `POST /owner/say` | `chatId`, `text` (the plain words), `markup` (the dialect's HTML, or null), `silent` (boolean), `replyToMessageId` (number or null) | `messageId`, the number the receiving side will hold the line under (`docs/reader.md`, 「Numbers」), and `text`, the words as Telegram holds them; or `refused` (`unavailable` or `unreachable`) with `error` |
+| `POST /owner/album` | `chatId`, `files` (each `name`, `mime`, `bytes`), `caption` (the plain words), `captionMarkup` (the dialect's HTML, or null), `replyToMessageId` | `ids`, the numbers the receiving side will hold the files' messages under, in the order the files went, and `texts`, the words each holds as Telegram holds them; or `refused` with `error` |
 | `POST /owner/typing` | `chatId`, `on` (boolean) | an empty object once the typing mark is shown or taken off; or `refused` (`unavailable`) with `error` |
-| `POST /owner/delete` | `chatId`, `messageId` | an empty object once the message is deleted for everyone; or `refused` (`unavailable`, or `gone` where the account holds no line under the number) with `error` |
-| `POST /owner/reaction` | `chatId`, `messageId`, `emoji` (an empty one takes the account's reaction off) | an empty object once the reaction stands as the account's, or is taken off; or `refused` (`unavailable`, or `gone` where the account holds no line under the number) with `error` |
-| `POST /owner/pin` | `chatId`, `messageId`, `on` (boolean), `silent` (boolean) | `messageId`, the number of the service message Telegram wrote for the pin, or null where it wrote none; or `refused` (`unavailable`, `gone` where the account holds no line under the number, or `turned-down` with Telegram's own words) with `error` |
-| `POST /owner/edit` | `chatId`, `messageId`, `text` (the plain words), `markup` (the dialect's HTML, or null) | `messageId`, the account's own number for the line, `text`, the words as Telegram now holds them, and `edited` (false where the line already said them); or `refused` (`unavailable`, `gone` where the account holds no line under the number, `not-own` where the line is not the account's own, or `turned-down` with Telegram's own words) with `error` |
+| `POST /owner/delete` | `chatId`, `messageId` | an empty object once the message is deleted for everyone; or `refused` (`unavailable`, or `gone` where the account holds no line for the number named, once it is turned back where the room numbers per account) with `error` |
+| `POST /owner/reaction` | `chatId`, `messageId`, `emoji` (an empty one takes the account's reaction off) | an empty object once the reaction stands as the account's, or is taken off; or `refused` (`unavailable`, or `gone` where the account holds no line for the number named) with `error` |
+| `POST /owner/pin` | `chatId`, `messageId`, `on` (boolean), `silent` (boolean) | `messageId`, the account's own number of the service message Telegram wrote for the pin, or null where it wrote none; or `refused` (`unavailable`, `gone` where the account holds no line for the number named, or `turned-down` with Telegram's own words) with `error` |
+| `POST /owner/edit` | `chatId`, `messageId`, `text` (the plain words), `markup` (the dialect's HTML, or null) | `messageId`, the account's own number for the line, `text`, the words as Telegram now holds them, and `edited` (false where the line already said them); or `refused` (`unavailable`, `gone` where the account holds no line for the number named, `not-own` where the line is not the account's own, or `turned-down` with Telegram's own words) with `error` |
 | `POST /owner/line` | `chatId`, `senderId`, `sentAt` (epoch milliseconds, whole seconds), `words` (the SHA-256 of the line's words, lowercase hex) | `messageId`, the account's own number for the one line of the room it holds from that sender at that second with those words; or `refused` (`unavailable`, or `gone` where it holds no such line or more than one) with `error` |
 
 The service answers `GET /rooms` from `/reader/dialogs` and the rooms the bot is in (`docs/telegram.md`, 「The
@@ -151,11 +151,13 @@ that one call), divided by the service first into the parts, markup and albums t
 avatar's prefix already put before its words (`docs/telegram.md`, 「The owner's voice」, 「The avatar」); its typing
 mark goes by `/owner/typing` and a delete by `/owner/delete`; a reaction, a pin and an edit in the owner's own
 voice go by `/owner/reaction`, `/owner/pin` and `/owner/edit`. The reader sends the markup as HTML where one is
-given, and `/owner/say` and `/owner/edit` the plain words where the account refuses it. It finds a reply by the
-message's number on the owner's account, and refuses an `unreachable` one where that account has no line under it.
-Every number a reply or an act names reaches the reader as the owner's account's own: where the number is the bot
-account's, in a room each account numbers apart, the service first asks `/owner/line` for the account's number by
-the line's stamp out of its ledger (`docs/telegram.md`, 「The owner's voice」).
+given, and `/owner/say` and `/owner/edit` the plain words where the account refuses it. Every number a reply or
+an act names reaches the reader as the receiving side holds it; the reader points at the account's own line for
+it once the number is the account's own: a provider number of a room that numbers per account it turns back by
+its own arithmetic (`docs/reader.md`, 「Numbers」). A number of the bot account's never comes this way raw: where
+the receiving side names one, the service first asks `/owner/line` for the account's number by the line's stamp
+out of its ledger (`docs/telegram.md`, 「The owner's voice」), and a reply whose line cannot be pointed to is
+refused `unreachable` rather than sent without the reference the caller asked for.
 The service notes each message the send went out as, each edit and each pin's service message, under the number
 and the words the reader answered, so that the bot account's sight of it is not handed to the receiver a second
 time.
@@ -164,7 +166,7 @@ time.
 
 | Route | Body | Answer |
 |---|---|---|
-| `POST /reader/inbound` | `kind` `message` with `roomId`, `messageId` and a handed message as the protocol states it, or `kind` `gathered` with `roomId`, `messageId` and `patch` (`files`, or `gatherFailure`) | `{}` once the service has handed it on, and for a message whose origin is `history` `kept`; the receiver's failure in the error shape. A body up to 48 MiB is taken, so a gathered file of up to the receiver's 25 MiB cap crosses whole as base64 |
+| `POST /reader/inbound` | `kind` `message` with `roomId`, `messageId` (the line's number as the provider numbers it, `docs/reader.md` 「Numbers」) and a handed message as the protocol states it, or `kind` `gathered` with the same `roomId` and `messageId` and a `patch` (`files`, or `gatherFailure`) | `{}` once the service has handed it on, and for a message whose origin is `history` `kept`; the receiver's failure in the error shape. A body up to 48 MiB is taken, so a gathered file of up to the receiver's 25 MiB cap crosses whole as base64 |
 | `POST /reader/listened` | `chatId` | `listened` (boolean), the receiver's answer or its fallback; `people` (boolean), whether a person's words in the room are the reader's to hand over: the bot is not in the room and the receiver asked for it to be read (`docs/telegram.md`, 「The rooms」); `tells` (boolean), whether its people's typing and presence are the reader's to tell: the room is listened to and either the bot is in it or the receiver asked for it to be read (「Typing and presence」) |
 | `GET /reader/rooms` | | `rooms`, each `chatId`, `oldestMessageId` and `oldestSentAt`, as the receiver answers them; 503 `not-ready` with the reason while the receiver does not say |
 | `POST /reader/reactions` | `roomId`, `messageId` or `stamp` (`senderId`, `sentAt`), `reactions` (each `personId` and `emojis`) and `whole` | `{}` once the service has handed it on as a reaction change; the receiver's failure in the error shape |
@@ -217,6 +219,6 @@ This provider's own:
   on a route it does not serve.
 
 A reply in the owner's own voice is named by the message's number, as the protocol carries it. The owner's
-account finds the line under that number; in a room the bot and the owner number differently, a number only the
-bot saw names no line on the owner's account, and the send is refused `unreachable` rather than sent without the
-reference the caller asked for.
+account must be able to point at one line under that number, once it is turned back where the room numbers per
+account or looked for by its stamp where it is the bot account's own; where it cannot, the send is refused
+`unreachable` rather than sent without the reference the caller asked for.

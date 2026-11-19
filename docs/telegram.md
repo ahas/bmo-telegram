@@ -349,43 +349,48 @@ reads it as the owner's, never as the bot's. A send that names no voice, or `bot
     others, is refused with Telegram's own words.
   - Any other verb is refused with the policy's `owner_verb`.
 - **A reply** is named by the send's `replyToMessageId`, the message's number as the protocol carries it. The
-  reader finds that number's line on the owner's account and answers it; where the account has no line under
-  that number, the send is refused `unreachable` rather than sent without the reference the caller asked for.
+  reader finds that number's line on the owner's account and answers it; where the account has no line that the
+  number names, the send is refused `unreachable` rather than sent without the reference the caller asked for.
+- **One numbering of the provider's own.** Each account numbers the messages of a private chat or a basic group
+  its own way, and the bot account's numbers stand on the receiving side for every line it read or sent there; a
+  number of the owner's account crossing as it stands could meet one of those lines' under another line. So in
+  every room but one that numbers its messages for everyone, the receiving side holds the owner account's lines
+  under the provider's own number for them: the account's number offset far below every number the Bot API
+  hands out, rising with it so older lines still sort first, negative where the account's own is positive. What
+  a send in the owner's voice answers, what the reader's hand-overs and their gathering patches carry and what
+  the history walk gave are all this numbering (`docs/reader.md`, 「Numbers」); the reader turns such a number
+  back into the account's own wherever a reply, an act or a fetch names it, and no ledger record is needed to
+  understand it.
 - **Which line a number names.** The number a reply, a `delete`, a `reaction`, a `pin` or an `edit` names is the
-  one the receiving side holds the line under, and the owner's account is asked for its own number for that
-  line:
-  - In a supergroup or a channel the number is everyone's, and stands as it is. So does a number the history
-    walk gave, which the reader turns back into the account's own.
-  - In any other room the bot account reads, each account numbers its own messages, and the receiving side holds
-    each line under the number of the account that read or sent it. The provider keeps a ledger of whose number
-    each line of such a room stands under, in its data folder (`docs/boundary-api.md`, 「Configuration」), so a
-    restart forgets none: a number a send in the owner's account answered, and a number the reader handed a line
-    over under, are the owner's account's; a number the bot account read a line under or sent one as is the bot
-    account's, kept with the line's stamp (its sender, the second it was sent in and the SHA-256 of its words),
-    the words as an edit last left them.
-  - A number of the owner's account's stands as it is. A number of the bot account's is looked for on the owner's
-    account by its stamp, among the room's lines of that second, and names the one line from that sender with
-    those words.
-  - A number the ledger holds as both accounts', a number it does not hold in a room it holds a line of the bot
-    account's for, and a stamp the owner's account holds no line or more than one line for, name no line: an act
-    on it is refused marked `gone`, with the policy's `message_gone` and the policy's `line_unknown` or the
-    reader's words, and a reply to it is refused `unreachable`. In a room the ledger holds no line of the bot
-    account's for, as one the bot account does not read, every number is the owner's account's, and stands as it
-    is.
+  one the receiving side holds the line under:
+  - In a supergroup or a channel the number is everyone's and stands as it is, and so does a number below zero
+    of any room, which is the provider's numbering and turns back by its own arithmetic.
+  - A positive number of a room the bot account reads is its own for the line the receiving side names, and the
+    line was kept in a ledger in the provider's data folder (`docs/boundary-api.md`, 「Configuration」) with its
+    stamp (its sender, the second it was sent in and the SHA-256 of its words, the words as an edit last left
+    them) so a restart forgets none; such a number is looked for on the owner's account by that stamp, among the
+    room's lines of that second, and names the one line from that sender with those words.
+  - A number the ledger holds as both accounts' (as lines taken before the numbering above stood can stand), a
+    number it does not hold in a room it holds a line of the bot account's for, and a stamp
+    the owner's account holds no line or more than one line for, name no line: an act on it is refused marked
+    `gone`, with the policy's `message_gone` and the policy's `line_unknown` or the reader's words, and a reply
+    to it is refused `unreachable`. In a room the ledger holds no line of the bot account's for, as one the bot
+    account does not read, every number names a line of the owner's account and resolves as it reads: by itself
+    where it is positive, by turning back where it is not.
 - **While the reader does not have the account connected**, or no reader stands behind the service, the send
   is refused `platform` with the policy's `mode_down`, naming the voice the send asked for, and the reader's
   reason. It is never sent by the bot instead.
-- **The number a send answers** is the one the owner's account gave the first message it went out as. In a
-  supergroup or a channel that is the number everyone knows the message by; in any other room each account
-  numbers its own messages, and the bot account knows the message by another. An act answers the number it was
-  asked about.
+- **The number a send answers** is the provider's number for the first message it went out as: the number
+  everyone knows the line by where the room numbers for everyone, the owner account's number under the provider's
+  numbering elsewhere, so the copy the sender keeps stands under a number that cannot meet a line the bot account
+  read. An act answers the number it was asked about.
 - **Its echo is not handed over.** The bot account sees in its rooms what the owner's account does there, all of
   it from the owner's number, `BMO_OWNER_ID`: a message it sends as a new message, an edit as an edited message,
   and a pin as the service message Telegram writes for it. Each of these a send in the owner's account made is
   noted, in memory and for five minutes, by what it is (a message, an edit or a pin), its room, the number the
-  owner's account knows it by and the words Telegram holds for it, a pin's service message holding none. What the
-  bot account reads from the owner's number that answers a note of its own kind is that send's echo: the note is
-  let go and nothing is handed over, since the sender holds it already. In a supergroup or a channel the number
+  send answered it under and the words Telegram holds for it, a pin's service message holding none. What the bot
+  account reads from the owner's number that answers a note of its own kind is that send's echo: the note is let
+  go and nothing is handed over, since the sender holds it already. In a supergroup or a channel the number
   answers the note; in any other room the words do, the oldest note first, since there the bot account knows the
   line by a number of its own, which the receiving side does not hold for it. An unpin, a pin Telegram wrote no
   service message for (the message was pinned already) and an edit to the words the line already said show the bot

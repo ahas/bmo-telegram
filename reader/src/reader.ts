@@ -2,10 +2,12 @@
 // one bot's messages to another bot, so the bot account alone cannot see what other bots say in a shared
 // room. This reads every new message another bot writes in a room the receiver listens to, and a person's in
 // a room the bot is not in where the service says it is the reader's, the owner's own there among them, and
-// hands it to the service, which hands it to the receiver as read in the `human-reader` mode.
+// hands it to the service, which hands it to the receiver as read in the `human-reader` mode. Every number an
+// owner-account line crosses under is the provider's own (「Numbers」).
 
 import { fileIdOf, messageFileKind, messageHasPhoto, pictureOf, readerFileOf, seconds } from "./media";
 import { deletionsOf, reactionsOf, SeenMessages } from "./aftermath";
+import { providerMessageId } from "./numbering";
 import { mtproto, mtprotoEvents, mtprotoSessions } from "./mtproto";
 import { fill, POLICY } from "./policy";
 import { startHearing } from "./presence";
@@ -98,10 +100,12 @@ function metadataOf(message: Api.Message, text: string): unknown {
   };
 }
 
-// The file a message from another bot carries, gathered and handed over once it is had, or why not.
+// The file a message from another bot carries, gathered and handed over once it is had, or why not, under the
+// same number the message itself crossed with.
 async function gather(deps: ReaderDeps, client: Client, message: Api.Message, chatId: number): Promise<void> {
   const document = message.document!;
   const file = readerFileOf(document);
+  const messageId = providerMessageId(chatId, message.id);
 
   try {
     const data = await client.downloadMedia(message);
@@ -113,7 +117,7 @@ async function gather(deps: ReaderDeps, client: Client, message: Api.Message, ch
     await deps.service.inbound({
       kind: "gathered",
       roomId: chatId,
-      messageId: message.id,
+      messageId,
       patch: {
         files: [{
           id: fileIdOf(message),
@@ -129,7 +133,7 @@ async function gather(deps: ReaderDeps, client: Client, message: Api.Message, ch
     await deps.service.inbound({
       kind: "gathered",
       roomId: chatId,
-      messageId: message.id,
+      messageId,
       patch: { files: [], gatherFailure: POLICY.gathering.file_not_kept },
     });
   }
@@ -203,6 +207,7 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
   }
 
   const replyHeader = message.replyTo;
+  const messageId = providerMessageId(chatId, message.id);
   const context: HandedContext = {
     ...(roomTitle === undefined ? {} : { roomTitle }),
     ...(text === "" ? {} : { spokenText: text }),
@@ -210,13 +215,16 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
   };
   const handed = handedMessage({
     chatId,
-    messageId: message.id,
+    messageId,
     origin: "live",
     senderId,
     senderName: sender.firstName ?? sender.username ?? String(senderId),
     sentAt: message.date,
     text: text === "" ? readerMark(message, carriesPhoto) : text,
-    replyToMessageId: replyHeader instanceof Api.MessageReplyHeader ? (replyHeader.replyToMsgId ?? null) : null,
+    replyToMessageId:
+      replyHeader instanceof Api.MessageReplyHeader && replyHeader.replyToMsgId !== null && replyHeader.replyToMsgId !== undefined
+        ? providerMessageId(chatId, replyHeader.replyToMsgId)
+        : null,
     context,
     room: roomFacts(chatId, deps.peers.ownerId, deps.peers.botId),
   });
@@ -231,13 +239,13 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
       handed.files = [picture];
     }
 
-    await deps.service.inbound({ kind: "message", roomId: chatId, messageId: message.id, message: handed });
+    await deps.service.inbound({ kind: "message", roomId: chatId, messageId, message: handed });
 
     return;
   }
 
   if (file === null) {
-    await deps.service.inbound({ kind: "message", roomId: chatId, messageId: message.id, message: handed });
+    await deps.service.inbound({ kind: "message", roomId: chatId, messageId, message: handed });
 
     return;
   }
@@ -247,7 +255,7 @@ export async function ingest(deps: ReaderDeps, client: Client, event: NewMessage
   handed.context = { ...context, carriesFile: true };
   handed.gathering = true;
 
-  await deps.service.inbound({ kind: "message", roomId: chatId, messageId: message.id, message: handed });
+  await deps.service.inbound({ kind: "message", roomId: chatId, messageId, message: handed });
   await gather(deps, client, message, chatId);
 }
 

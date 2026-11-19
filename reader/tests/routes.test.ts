@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
 import { lockOnceFree } from "../src/lock";
+import { providerMessageId } from "../src/numbering";
 import { readerHandler } from "../src/routes";
 import { BOT_ID, OWNER_ID } from "./support";
 
@@ -106,10 +107,15 @@ describe("the reader's door", () => {
     expect((await call("/elsewhere", {}))[0]).toBe(404);
     expect((await call("/owner/say", { text: "no room" }))[0]).toBe(400);
     expect((await call("/owner/say", { chatId: 5, text: "words", markup: 7, replyToMessageId: null }))[0]).toBe(400);
-    expect(await call("/owner/say", { chatId: 5, text: "words", replyToMessageId: null })).toEqual([200, { messageId: 900, text: "words" }]);
+    // A room that numbers per account is answered the provider's number for the line; a channel its own.
+    expect(await call("/owner/say", { chatId: 5, text: "words", replyToMessageId: null })).toEqual([200, { messageId: providerMessageId(5, 900), text: "words" }]);
     expect(await call("/owner/say", { chatId: 5, text: "bold", markup: "<b>bold</b>", silent: true, replyToMessageId: 3 })).toEqual([
       200,
-      { messageId: 900, text: "bold" },
+      { messageId: providerMessageId(5, 900), text: "bold" },
+    ]);
+    expect(await call("/owner/say", { chatId: -1_000_000_000_003, text: "words", replyToMessageId: null })).toEqual([
+      200,
+      { messageId: 900, text: "words" },
     ]);
     expect(
       await call("/owner/album", {
@@ -122,10 +128,11 @@ describe("the reader's door", () => {
         captionMarkup: "<i>seen</i>",
         replyToMessageId: null,
       }),
-    ).toEqual([200, { ids: [901, null], texts: ["seen", ""] }]);
+    ).toEqual([200, { ids: [providerMessageId(5, 901), null], texts: ["seen", ""] }]);
     expect(ownerAsked).toEqual([
       { chatId: 5, text: "words", markup: null, silent: false, replyToMessageId: null },
       { chatId: 5, text: "bold", markup: "<b>bold</b>", silent: true, replyToMessageId: 3 },
+      { chatId: -1_000_000_000_003, text: "words", markup: null, silent: false, replyToMessageId: null },
       { chatId: 5, files: ["a.jpg", "b.jpg"], caption: "seen", captionMarkup: "<i>seen</i>", replyToMessageId: null },
     ]);
 

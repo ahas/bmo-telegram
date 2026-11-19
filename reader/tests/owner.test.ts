@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { albumSendOptions, attachmentKind, attachmentName, attachmentSendOptions, heldOwnerAccount, LineUnmatched, MessageGone, NotOwnLine, pinServiceMessageId, turnedDown, TurnedDown, wordsHash } from "../src/owner";
+import { providerMessageId } from "../src/numbering";
 import { OwnSends } from "../src/sends";
 import { BOT_ID, OWNER_ID, ROOM_ID } from "./support";
 
@@ -129,6 +130,21 @@ describe("the owner's own line edited", () => {
     await expect(account.edit(edit(901, null))).rejects.toBeInstanceOf(NotOwnLine);
     await expect(account.edit(edit(902, null))).rejects.toBeInstanceOf(MessageGone);
     expect(edits).toEqual([]);
+  });
+
+  test("by a provider number of a room that numbers per account, turned back to the account's own line", async () => {
+    const group = -5_000_000_002;
+    const provider = (own: number) => providerMessageId(group, own);
+    const { account, edits } = accountHolding({ 900: { out: true, message: "old" } }, () => null);
+    const held = await account.edit({ chatId: group, messageId: provider(900), text: "new words", markup: null });
+
+    expect(held).toEqual({ id: 900, text: "new words", edited: true });
+    expect(edits.map((one) => one.message)).toEqual([900]);
+
+    const { account: empty, edits: none } = accountHolding({}, () => null);
+
+    await expect(empty.edit({ chatId: group, messageId: provider(903), text: "new words", markup: null })).rejects.toBeInstanceOf(MessageGone);
+    expect(none).toEqual([]);
   });
 });
 

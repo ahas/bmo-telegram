@@ -352,14 +352,12 @@ impl OwnerVoice<'_> {
       let pinned = if first.is_none() { reply_to } else { None };
 
       match self.reader.owner_say(chat_id, &part, silent, pinned).await? {
+        // The number the reader answered is the provider's own for the line where the room numbers per
+        // account (docs/reader.md, 「Numbers」): the copy the sender keeps stands under it, and the echo note
+        // matches such a room's lines by their words.
         AsOwner::Sent(went) => {
           self.echoes.noted(OwnerAct::Said, chat_id, went.message_id, &went.words);
           self.speaker.spoke_in(chat_id);
-
-          if let Some(id) = went.message_id {
-            self.speaker.lines.owners(chat_id, id);
-          }
-
           first.get_or_insert(went.message_id);
         }
         AsOwner::Refused { name, error } => return Ok(refused(self.refusal(&name, &error))),
@@ -421,10 +419,6 @@ impl OwnerVoice<'_> {
 
           for one in &went {
             self.echoes.noted(OwnerAct::Said, chat_id, one.message_id, &one.words);
-
-            if let Some(id) = one.message_id {
-              self.speaker.lines.owners(chat_id, id);
-            }
           }
 
           first = first.or(went.into_iter().find_map(|one| one.message_id));

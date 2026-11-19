@@ -8,7 +8,8 @@
 
 import { createHash } from "node:crypto";
 
-import { accountMessageId, resolveEntity } from "./history";
+import { accountMessageId } from "./numbering";
+import { resolveEntity } from "./history";
 import { peerOf } from "./media";
 import { mtproto, mtprotoUploads } from "./mtproto";
 

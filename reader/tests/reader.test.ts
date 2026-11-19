@@ -1,12 +1,14 @@
 // Which messages the live reading hands over (docs/reader.md, 「What it is for」): another bot's wherever the
 // room is listened to, never the provider's own bot's, a person's only where the service says the room's
 // people are the reader's, and the owner's own there too, but for the messages the reader's own sends went out
-// as.
+// as — each under the provider's own number for it, below every bot number, unless the room numbers for
+// everyone (「Numbers」).
 
 import { describe, expect, test } from "bun:test";
 import bigInt from "big-integer";
 
 import { mtproto } from "../src/mtproto";
+import { providerMessageId } from "../src/numbering";
 import { handsOver, ingest } from "../src/reader";
 import { OwnSends } from "../src/sends";
 import { keptService, OWNER_ID } from "./support";
@@ -69,7 +71,7 @@ describe("ingest", () => {
     return { service, sends, deps: { account, peers: { ownerId: OWNER_ID, botId }, service, sends } };
   };
 
-  test("an outgoing message in a room whose people are the reader's goes as the owner's words", async () => {
+  test("an outgoing message in a room whose people are the reader's goes as the owner's words, under the provider's number", async () => {
     const { service, deps } = readerOf({ listened: true, people: true, tells: false });
 
     await ingest(deps, client, eventOf(301, true));
@@ -78,8 +80,38 @@ describe("ingest", () => {
     expect(
       service.handed.map((one) => (one.kind === "message" ? [one.messageId, one.message.senderId, one.message.origin, one.message.mode] : null)),
     ).toEqual([
-      [301, OWNER_ID, "live", "human-reader"],
-      [302, 55, "live", "human-reader"],
+      [providerMessageId(roomId, 301), OWNER_ID, "live", "human-reader"],
+      [providerMessageId(roomId, 302), 55, "live", "human-reader"],
+    ]);
+  });
+
+  test("a reply reference crosses under the provider's numbering too, and a channel's line keeps its own number", async () => {
+    const { Api } = mtproto();
+    const { service, deps } = readerOf({ listened: true, people: true, tells: false });
+    const channel = -1_000_000_000_003;
+    const withReply = (id: number, replyTo: number, chatId: number): NewMessageEvent => {
+      const message = new Api.Message({
+        id,
+        out: false,
+        message: `words ${id}`,
+        date: 1_700_000_000,
+        replyTo: new Api.MessageReplyHeader({ replyToMsgId: replyTo } as never),
+      } as never);
+      const sender = new Api.User({ id: bigInt(9), firstName: "Other", bot: true } as never);
+
+      Object.assign(message, { getSender: async () => sender, getChat: async () => sender });
+
+      return { message, chatId: bigInt(chatId) } as unknown as NewMessageEvent;
+    };
+
+    await ingest(deps, client, withReply(310, 305, roomId));
+    await ingest(deps, client, withReply(12, 9, channel));
+
+    expect(
+      service.handed.map((one) => (one.kind === "message" ? [one.messageId, one.message.replyToMessageId] : null)),
+    ).toEqual([
+      [providerMessageId(roomId, 310), providerMessageId(roomId, 305)],
+      [12, 9],
     ]);
   });
 
@@ -91,7 +123,7 @@ describe("ingest", () => {
     await ingest(deps, client, eventOf(401, true));
     await ingest(deps, client, eventOf(402, true));
 
-    expect(service.handed.map((one) => one.messageId)).toEqual([402]);
+    expect(service.handed.map((one) => one.messageId)).toEqual([providerMessageId(roomId, 402)]);
   });
 
   test("an outgoing message read while the reader's own send into the room is still going waits for it", async () => {

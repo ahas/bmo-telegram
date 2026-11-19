@@ -6,6 +6,7 @@
 
 import { fetchFile, fetchPicture } from "./media";
 import { ChatUnresolved, DEFAULT_MAX, LARGEST_MAX } from "./messages";
+import { providerMessageId } from "./numbering";
 import { ownerRefusalName } from "./owner";
 
 import type { TelegramClient } from "telegram";
@@ -131,7 +132,7 @@ function routes(deps: RoutesDeps): Record<string, (body: Body) => Promise<Respon
       return await asOwner(async () => {
         const sent = await deps.owner.say(words);
 
-        return { messageId: sent.id, text: sent.text };
+        return { messageId: sent.id === null ? null : providerMessageId(words.chatId, sent.id), text: sent.text };
       });
     },
 
@@ -156,7 +157,10 @@ function routes(deps: RoutesDeps): Record<string, (body: Body) => Promise<Respon
       return await asOwner(async () => {
         const sent = await deps.owner.album(album);
 
-        return { ids: sent.map((one) => one.id), texts: sent.map((one) => one.text) };
+        return {
+          ids: sent.map((one) => (one.id === null ? null : providerMessageId(album.chatId, one.id))),
+          texts: sent.map((one) => one.text),
+        };
       });
     },
 

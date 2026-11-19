@@ -1,7 +1,10 @@
 //! The ledger of whose numbering each line of a room numbered per account stands under (docs/telegram.md, 「The
-//! owner's voice」): a number of the bot account's kept with its line's stamp, one of the owner's account's as it
-//! stands, both read back after a restart; a number under both, or unlearned in a room the bot account reads,
-//! naming no line.
+//! owner's voice」): a number of the bot account's kept with its line's stamp and read back after a restart;
+//! records an earlier ledger left of the owner account's own numbers read back as they stand; a number under
+//! both, or unlearned in a room the bot account reads, naming no line; and a provider number, which turns back
+//! by its own arithmetic and needs no record at all (docs/reader.md, 「Numbers」).
+
+use std::io::Write;
 
 use bmo_telegram::kinds::Message;
 use bmo_telegram::lines::{Line, Lines, Stamp, words_hash};
@@ -23,15 +26,30 @@ fn read(room: i64, id: i64, sender: i64, words: &str) -> Message {
   serde_json::from_value(message(room, id, sender, words)).expect("a message")
 }
 
+// A line as an earlier ledger wrote it, when the owner account's own numbers still crossed.
+fn owner_record(file: &std::path::Path, room: i64, id: i64) {
+  let mut line =
+    serde_json::to_vec(&json!({ "chatId": room, "messageId": id, "by": "owner" })).expect("a record");
+  line.push(b'\n');
+
+  std::fs::OpenOptions::new()
+    .create(true)
+    .append(true)
+    .open(file)
+    .expect("the ledger")
+    .write_all(&line)
+    .expect("written");
+}
+
 #[test]
-fn a_number_of_the_bot_account_s_is_kept_with_its_stamp_and_one_of_the_owner_s_as_it_stands_across_a_restart()
+fn a_number_of_the_bot_account_s_is_kept_with_its_stamp_and_an_older_one_of_the_owner_s_reads_back_across_a_restart()
  {
   let folder = tempdir().expect("a temporary folder");
   let file = folder.path().join("lines.jsonl");
   let kept = Lines::kept_in(file.clone());
 
   kept.bots(&read(GROUP, 7, 55, "héllo there"));
-  kept.owners(GROUP, 900);
+  owner_record(&file, GROUP, 900);
   drop(kept);
 
   let again = Lines::kept_in(file);
@@ -54,17 +72,40 @@ fn a_number_of_the_bot_account_s_is_kept_with_its_stamp_and_one_of_the_owner_s_a
 
 #[test]
 fn a_number_under_both_numberings_or_unlearned_in_a_room_the_bot_account_reads_names_no_line() {
-  let lines = Lines::in_memory();
+  let folder = tempdir().expect("a temporary folder");
+  let file = folder.path().join("lines.jsonl");
 
-  lines.bots(&read(GROUP, 7, 55, "hello"));
-  lines.owners(GROUP, 7);
+  {
+    let kept = Lines::kept_in(file.clone());
 
+    kept.bots(&read(GROUP, 7, 55, "hello"));
+    owner_record(&file, GROUP, 7);
+  }
+
+  let lines = Lines::kept_in(file);
+
+  // The line of 7 stands under both numberings since an older ledger met them: no act can tell which one the
+  // receiving side means.
   assert_eq!(lines.line(GROUP, 7), Line::Unknown);
   assert_eq!(lines.line(GROUP, 8), Line::Unknown);
-  // A room the bot account never read, a room numbered for everyone and a number the history walk gave stand.
+  // A room the bot account never read, a room numbered for everyone and a provider number stand.
   assert_eq!(lines.line(OTHER_GROUP, 8), Line::Owners);
   assert_eq!(lines.line(SUPERGROUP, 8), Line::Owners);
   assert_eq!(lines.line(GROUP, -999_999_000), Line::Owners);
+}
+
+#[test]
+fn a_provider_number_of_a_room_needs_no_record_and_an_older_owner_number_stands_where_the_bot_reads_no_line_there()
+ {
+  let lines = Lines::in_memory();
+
+  lines.bots(&read(GROUP, 7, 55, "hello"));
+
+  // What the reader gave the line from below every bot number turns back by its own arithmetic.
+  assert_eq!(lines.line(GROUP, -999_999_100), Line::Owners);
+  // In a room the bot account never read, every number is the owner's account's.
+  assert_eq!(lines.line(OTHER_GROUP, -999_999_100), Line::Owners);
+  assert_eq!(lines.line(OTHER_GROUP, 10), Line::Owners);
 }
 
 #[test]
