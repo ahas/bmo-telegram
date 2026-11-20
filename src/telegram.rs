@@ -258,6 +258,11 @@ impl Telegram {
     self.presence.lock().unwrap_or_else(PoisonError::into_inner).remove(&chat_id);
   }
 
+  /// People seen speaking in a room, kept as the room's senders, whom the bot account checks as its members.
+  pub fn spoke(&self, chat_id: i64, senders: impl IntoIterator<Item = i64>) {
+    self.seen.spoke(chat_id, senders);
+  }
+
   /// A room's members as the bot account tells them (docs/telegram.md, 「The members of a room」): a one-to-one's
   /// person and the bot, and a group's or a channel's administrators and the senders seen in it still there.
   pub async fn bot_members(&self, chat_id: i64) -> Result<Vec<ChatMember>, String> {

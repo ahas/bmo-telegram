@@ -115,8 +115,11 @@ sender number their messages carry, since the provider numbers people as Telegra
 - **The bot account tells who it can in a room it is in.** The Bot API lists no group's members, so the bot gives
   the room's administrators and every sender the provider has seen in the room, each asked of Telegram one by one
   and kept only where Telegram says they are still a member: a person who left, was removed or is no longer known
-  to the room is left out. The provider keeps each room's senders as it hands their live messages over, in the
-  record of what it has seen. A one-to-one of the bot's is its person and the bot.
+  to the room is left out. The provider keeps each room's senders in the record of what it has seen: the sender
+  of every live message and every line of history it hands over, and, each time the members are asked where the
+  owner's account is in the room, the senders of the room's last two hundred lines as the account reads them. So a
+  member Telegram leaves out of the account's list is still found once they have spoken. A one-to-one of the bot's
+  is its person and the bot.
 - **The account's list comes first, in Telegram's order, then whoever the bot told that it did not.** A person
   is named by their first and last name, else their handle, else their number; no status line is given.
 - **A room neither account is in, or whose members neither could read,** is answered `not-found` with the reason

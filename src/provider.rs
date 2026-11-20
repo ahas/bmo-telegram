@@ -40,6 +40,9 @@ pub const NO_READER: &str = "no reader stands behind the service";
 // How many rooms or people Telegram is asked about at once.
 const ASKED_AT_ONCE: usize = 8;
 
+// How many of a room's recent lines the owner's account reads for who spoke there when its members are asked.
+const RECENT_LINES: usize = 200;
+
 /// What a chat read came to: its recent messages, the chats and contacts a name leaves to pick among, or the
 /// reader's refusal with the status it answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,14 +274,20 @@ impl TelegramProvider {
     answer
   }
 
-  // Everyone the owner's account lists in a room among its chats; none where no reader stands, the account's chats
-  // are not read, or the room is not among them.
+  // Everyone the owner's account lists in a room among its chats, the senders of its recent lines kept first as the
+  // room's; none where no reader stands, the account's chats are not read, or the room is not among them.
   async fn account_members(&self, chat_id: i64) -> Option<Result<Vec<ChatMember>, String>> {
     let reader = self.reader.as_ref()?;
     let rooms = self.dialogs().await.ok()?;
 
     if !rooms.iter().any(|room| room.chat_id == chat_id) {
       return None;
+    }
+
+    // Telegram may leave a member out of the account's list, so whoever spoke in the room's recent lines is kept as
+    // one of its senders, for the bot account to check.
+    if let Ok(ReaderRead::Messages(lines)) = reader.messages(chat_id, RECENT_LINES, None).await {
+      self.telegram.spoke(chat_id, lines.iter().filter_map(|line| line.sender_id));
     }
 
     Some(reader.members(chat_id).await)

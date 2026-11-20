@@ -82,6 +82,16 @@ impl Seen {
     });
   }
 
+  /// People seen speaking in a room, kept as the room's senders alone.
+  pub fn spoke(&self, room_id: i64, senders: impl IntoIterator<Item = i64>) {
+    self.changed(|sighted| {
+      let speakers = sighted.senders.entry(room_id).or_default();
+
+      // Every sender is kept, so none is passed over once one is found new.
+      senders.into_iter().filter(|&sender| speakers.insert(sender)).count() > 0
+    });
+  }
+
   /// A room sent into.
   pub fn room(&self, chat_id: i64) {
     self.changed(|sighted| sighted.rooms.insert(chat_id));

@@ -199,6 +199,10 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
               Json(json!({ "code": "not-found", "error": format!("the owner's account cannot resolve chat {chat}") })),
             )
               .into_response(),
+            Some(ROOM) => Json(json!({ "messages": [
+              { "messageId": 5, "senderId": LATE, "senderName": "Late", "sentAt": SENT_AT, "text": "hello" }
+            ] }))
+            .into_response(),
             Some(_) => Json(json!({ "messages": [
               { "messageId": 3, "senderId": PERSON, "senderName": "Someone", "sentAt": SENT_AT + 2_000, "text": "the newest" },
               { "messageId": 2, "senderId": PERSON, "senderName": "Someone", "sentAt": SENT_AT + 1_000, "text": "[Photo]" },
@@ -698,15 +702,16 @@ async fn a_one_to_one_is_the_bot_s_only_once_its_person_wrote_to_the_bot() {
 
 /// A room's members (docs/telegram.md, 「The members of a room」): everyone the owner's account lists, then whoever
 /// the bot account tells that it did not, a group's administrators and the senders seen in it that Telegram says are
-/// still there, so a sender who left stands nowhere. A room the account does not list is the bot's to tell alone,
-/// and a room neither account is in is not held.
+/// still there, a sender of the room's recent lines among them, so a sender who left stands nowhere. A room the
+/// account does not list is the bot's to tell alone, and a room neither account is in is not held.
 #[tokio::test]
 async fn a_room_s_members_are_both_accounts_lists_made_one() {
   let served = stood(true).await;
   served.provider.refresh_reader().await;
   let member = |person: i64, name: &str| json!({ "person": person, "name": name, "statusMessage": null });
 
-  for sender in [PERSON, CONTACT, LATE] {
+  // `LATE` is never handed over: they stand only in the room's recent lines as the owner's account reads them.
+  for sender in [PERSON, CONTACT] {
     served.seen.message(ROOM, Some(sender));
   }
 
@@ -721,6 +726,7 @@ async fn a_room_s_members_are_both_accounts_lists_made_one() {
     room["members"],
     json!([member(OWNER, "Owner"), member(PERSON, "Someone"), member(LATE, "Late")])
   );
+  assert!(served.seen.senders_of(ROOM).contains(&LATE));
 
   let (status, bot_room) = asked_get(&served.base, &format!("/rooms/{BOT_ROOM}/members")).await;
 

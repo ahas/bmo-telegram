@@ -145,7 +145,9 @@ of the route. Whether the bot is in a group or a channel is asked of the Bot API
 the bot's own number; a one-to-one is the bot's where its person has written to the bot privately, by the
 service's own record, and no Bot API call answers it.
 
-The service answers `GET /rooms/{roomId}/members` from `/reader/members` where the owner's account lists the room among its dialogs, and from the Bot API where the bot is in it: `getChatAdministrators` for a group or a channel, and `getChatMember` for each sender the service's record holds of the room, eight at a time; a one-to-one of the bot's is its person, named by `getChat`, and the bot, named by `getMe` (`docs/telegram.md`, 「The members of a room」).
+The service answers `GET /rooms/{roomId}/members` from `/reader/members` where the owner's account lists the room among its dialogs, and from the Bot API where the bot is in it: `getChatAdministrators` for a group or a channel, and `getChatMember` for each sender the service's record holds of the room, eight at a time, the senders of the
+room's last two hundred lines as `/reader/messages` answers them added to that record first where the account is
+in the room; a one-to-one of the bot's is its person, named by `getChat`, and the bot, named by `getMe` (`docs/telegram.md`, 「The members of a room」).
 
 A picture or a file past the Bot API's ceiling for a bot is fetched by `/reader/picture` or `/reader/file`. A
 send in the owner's account, one naming the voice `human-reader` or `human-avatar`, goes by `/owner/say` and
@@ -180,7 +182,8 @@ time.
 | `POST /reader/avatars` | `rooms`, `people` | `{}` once word of the changed pictures has gone to the receiver, or stood down |
 
 A live message carries the room and the sender, and the sender as one of that room's, into the record of what the
-provider has seen; an edit adds neither, and a line out of a room's history adds nothing to it. A message the reader hands on from the owner's
+provider has seen; an edit adds neither, and a line out of a room's history adds its sender as one of the room's
+alone. A message the reader hands on from the owner's
 number, in a room the bot is in, whose words begin with the avatar prefix goes on as the agent's own
 (`docs/telegram.md`, 「The avatar」). The reader opens the owner's account only once
 the service answers, so nothing it reads is handed to a service that is not up.

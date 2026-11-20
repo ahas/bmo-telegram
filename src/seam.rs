@@ -174,8 +174,11 @@ async fn inbound(State(seam): State<Arc<Seam>>, body: axum::body::Bytes) -> Resp
       // (docs/reader.md, 「Numbers」).
       seam.avatar.take_as_agent_s(&mut message);
 
+      // A live line is the room's and its sender's sighting; a line of history only tells who spoke in the room.
       if message.origin == MessageOrigin::Live {
         seam.seen.message(room_id, message.sender_id);
+      } else {
+        seam.seen.spoke(room_id, message.sender_id);
       }
 
       match seam.receiver.hand_over(room_id, message_id, *message).await {
