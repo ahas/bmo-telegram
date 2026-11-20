@@ -1,10 +1,11 @@
-// What the reader's tests share: neutral numbers, a scratch folder taken down after each test, and a
-// service that keeps what it is handed.
+// What the reader's tests share: neutral numbers, a scratch folder taken down after each test, a service
+// that keeps what it is handed, and a clock that stands still until moved.
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { Clock } from "../src/presence";
 import type { HistoryRoom, Inbound, Rooms, Service } from "../src/service";
 
 export const OWNER_ID = 42;
@@ -60,5 +61,31 @@ export function keptService(options: { rooms?: HistoryRoom[] | string; seen?: { 
     deleted: async () => {},
     typing: async () => {},
     presence: async () => {},
+  };
+}
+
+/** A clock that stands still until moved, running what was set to run once its moment has come. */
+export function standingClock(start: number): Clock & { move(ms: number): void } {
+  let now = start;
+  let waiting: { at: number; run: () => void }[] = [];
+
+  return {
+    now: () => now,
+    after: (ms, run) => {
+      const one = { at: now + ms, run };
+
+      waiting.push(one);
+
+      return () => {
+        waiting = waiting.filter((other) => other !== one);
+      };
+    },
+    move: (ms) => {
+      now += ms;
+      const due = waiting.filter((one) => one.at <= now);
+
+      waiting = waiting.filter((one) => one.at > now);
+      due.forEach((one) => one.run());
+    },
   };
 }

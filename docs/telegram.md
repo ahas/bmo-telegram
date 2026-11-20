@@ -230,7 +230,9 @@ Who is writing in a room now and who is reachable now, told to the receiving sid
 
 - **The owner's account hears both; the bot account hears neither.** The Bot API hands a bot no person's typing
   and no person's status, so `peopleTyping` and `presence` are declared exactly while the reader mode is active,
-  and the reader is what hears them (`docs/reader.md`, 「Typing and presence」).
+  and the reader is what hears them (`docs/reader.md`, 「Typing and presence」). Telegram tells them only to a
+  session that stands online, so the reader keeps the owner's account online while it holds it, unless the
+  deployment switches that off.
 - **Only rooms the receiving side listens to are told of.** In a room the bot is not in, which stands read-only
   until the receiving side reads it (「The rooms」), they are told only where the receiving side asked for the
   room to be read (`read`).

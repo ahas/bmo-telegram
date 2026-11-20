@@ -184,6 +184,15 @@ reader」), and it reaches nothing but the service and Telegram.
 What the service tells the receiving side of them is `docs/telegram.md`, 「Typing and presence」; this is how the
 reader hears them.
 
+- **The account stands online while the reader holds it.** Telegram pushes a person's typing and a change of
+  status only to a session that stands online, and a session's online status lapses unless it is renewed. So
+  once the account connects the reader says it online, and again as often as Telegram's configuration asks a
+  client to renew its status (its online update period, a minute where the configuration cannot be read); a
+  renewal that fails is logged and the next one comes on time. Stopping, it says the account offline, waiting
+  for Telegram five seconds at most. Meanwhile the owner's account shows online to everyone his privacy
+  settings let see his status. `BMO_TELEGRAM_READER_ONLINE` set to `false` leaves the account's status to the
+  owner's own devices, and the reader then hears typing and status changes only while one of them keeps the
+  account online (`docs/boundary-api.md`, 「Configuration」).
 - **Which rooms tell.** The service says of each room whether its people's typing and presence are the reader's
   to tell (`tells` on `POST /reader/listened`): a room the receiver listens to, and, where the bot is not in it,
   only one the receiver asked to be read. The reader keeps each answer for thirty seconds, so a person typing on

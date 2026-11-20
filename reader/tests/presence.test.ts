@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { gatherPeople, PresenceTeller, presenceOf, RoomTells, tellsKeptMs, typingOf } from "../src/presence";
-import { BOT_ID, keptService, OWNER_ID } from "./support";
+import { BOT_ID, keptService, OWNER_ID, standingClock } from "./support";
 
-import type { Clock, PeopleSources, PresenceHeard } from "../src/presence";
+import type { PeopleSources, PresenceHeard } from "../src/presence";
 
 // Who is writing and who is reachable, as the owner's account hears them (docs/reader.md, 「Typing and presence」).
 
@@ -11,32 +11,6 @@ const peers = { ownerId: OWNER_ID, botId: BOT_ID };
 const PERSON = 55;
 const GROUP = -5_000_000_001;
 const NOW = 1_700_000_000_000;
-
-/** A clock that stands still until moved, running what was set to run once its moment has come. */
-function standingClock(): Clock & { move(ms: number): void } {
-  let now = NOW;
-  let waiting: { at: number; run: () => void }[] = [];
-
-  return {
-    now: () => now,
-    after: (ms, run) => {
-      const one = { at: now + ms, run };
-
-      waiting.push(one);
-
-      return () => {
-        waiting = waiting.filter((other) => other !== one);
-      };
-    },
-    move: (ms) => {
-      now += ms;
-      const due = waiting.filter((one) => one.at <= now);
-
-      waiting = waiting.filter((one) => one.at > now);
-      due.forEach((one) => one.run());
-    },
-  };
-}
 
 const action = (className: string) => ({ className });
 const fromUser = (userId: number) => ({ className: "PeerUser", userId });
@@ -94,7 +68,7 @@ describe("a status", () => {
 describe("the presence told", () => {
   const teller = () => {
     const told: PresenceHeard[] = [];
-    const clock = standingClock();
+    const clock = standingClock(NOW);
 
     return { told, clock, teller: new PresenceTeller(async (heard) => void told.push(heard), clock) };
   };
@@ -130,7 +104,7 @@ describe("the presence told", () => {
 });
 
 test("the service's word on whether a room tells is kept for a while, then asked again", async () => {
-  const clock = standingClock();
+  const clock = standingClock(NOW);
   let asked = 0;
   const tells = new RoomTells(async () => {
     asked += 1;

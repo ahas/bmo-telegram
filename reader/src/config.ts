@@ -26,12 +26,16 @@ export interface ReaderSettings {
   port: number;
   // The provider's own data folder.
   dataDir: string;
+  // Whether the reader keeps the owner's account online while it holds it (docs/reader.md, 「Typing and presence」).
+  online: boolean;
 }
 
 export const accountMissing = "BMO_TG_API_ID, BMO_TG_API_HASH, BMO_TG_SESSION not all set";
 
 const defaultServicePort = 3220;
 const defaultReaderPort = 3221;
+// Whether the owner's account is kept online where `BMO_TELEGRAM_READER_ONLINE` is unset.
+const onlineByDefault = true;
 
 type Environment = Record<string, string | undefined>;
 
@@ -67,6 +71,20 @@ function port(env: Environment, name: string, otherwise: number): number {
   return value === null ? otherwise : integer(name, value);
 }
 
+function switched(env: Environment, name: string, otherwise: boolean): boolean {
+  const value = given(env, name);
+
+  if (value === null) {
+    return otherwise;
+  }
+
+  if (value !== "true" && value !== "false") {
+    throw new Error(`${name} must be true or false`);
+  }
+
+  return value === "true";
+}
+
 /** The owner's account, or null where any of its three values is missing. */
 export function accountConfig(env: Environment = process.env): AccountConfig | null {
   const apiId = given(env, "BMO_TG_API_ID");
@@ -97,6 +115,7 @@ export function readerSettings(env: Environment = process.env): ReaderSettings {
     servicePort: port(env, "BMO_TELEGRAM_PORT", defaultServicePort),
     port: port(env, "BMO_TELEGRAM_READER_PORT", defaultReaderPort),
     dataDir: required(env, "BMO_TELEGRAM_DATA"),
+    online: switched(env, "BMO_TELEGRAM_READER_ONLINE", onlineByDefault),
   };
 }
 

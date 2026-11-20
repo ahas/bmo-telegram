@@ -11,7 +11,9 @@ import { startHistory } from "./history";
 import { lockOnceFree, takeLock } from "./lock";
 import { chatMembers } from "./members";
 import { recentMessages } from "./messages";
+import { accountStatus, renewalOf, standOnline } from "./online";
 import { heldOwnerAccount } from "./owner";
+import { systemClock } from "./presence";
 import { startReader } from "./reader";
 import { readerHandler } from "./routes";
 import { OwnSends } from "./sends";
@@ -20,6 +22,7 @@ import { ReaderStore } from "./store";
 
 import type { TelegramClient } from "telegram";
 import type { HeldLock } from "./lock";
+import type { Online } from "./online";
 
 // How often the reader asks again whether it may open the account.
 const askEveryMs = 2_000;
@@ -35,6 +38,7 @@ let client: TelegramClient | null = null;
 let store: ReaderStore | null = null;
 let missing: string | null = settings.account === null ? accountMissing : null;
 let lock: HeldLock | null = null;
+let online: Online | null = null;
 let stopping = false;
 
 const server = Bun.serve({
@@ -86,6 +90,12 @@ async function open(): Promise<void> {
     console.log("reader: the owner's account is connected and reading other bots' messages");
     startHistory({ client, peers, service, store });
     startAvatarSweeper({ client, store, service, avatarDir: where.avatars, ownerId: settings.ownerId, botId: settings.botId });
+
+    // Telegram pushes typing and a change of status only to a session that stands online (docs/reader.md,
+    // 「Typing and presence」).
+    if (settings.online) {
+      online = standOnline(accountStatus(client), await renewalOf(client), systemClock);
+    }
   } catch (error) {
     missing = `the owner's account did not connect: ${error instanceof Error ? error.message : String(error)}`;
     console.error(`reader: ${missing}`);
@@ -99,6 +109,7 @@ async function stop(): Promise<void> {
   if (stopping) return;
 
   stopping = true;
+  await online?.stop();
   await client?.disconnect().catch(() => undefined);
   await lock?.release();
   await server.stop(true);
