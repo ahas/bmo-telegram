@@ -9,8 +9,8 @@
 label = "Telegram"
 # What the provider can do. Fetching a picture on demand, avatars, history, the list of rooms, the contacts,
 # starting a conversation, and hearing who is typing and who is online are the owner's account's, and stop
-# being true where that mode is not active.
-can = ["text", "photo", "album", "document", "audio", "voice", "sticker", "reaction", "pin", "typing", "edit", "delete", "replyTo", "fetchMedia", "avatars", "history", "roomList", "contactList", "startChat", "startGroup", "peopleTyping", "presence"]
+# being true where that mode is not active; a room's members the bot account tells on its own.
+can = ["text", "photo", "album", "document", "audio", "voice", "sticker", "reaction", "pin", "typing", "edit", "delete", "replyTo", "fetchMedia", "avatars", "history", "roomList", "contactList", "memberList", "startChat", "startGroup", "peopleTyping", "presence"]
 # The modes an answer cannot be pinned to a message of: what the owner's account read, the bot did not see.
 # How Telegram describes a message not there to act on — deleted, never sent, or past the time it could be
 # changed — read without regard to case. Asking again would get the same answer.

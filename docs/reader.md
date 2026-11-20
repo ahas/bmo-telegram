@@ -42,6 +42,8 @@ reader」), and it reaches nothing but the service and Telegram.
   bot, are heard on the account and handed to the service (「Typing and presence」).
 - **One chat's recent messages.** A dialog is read by its number for the supervisor's road, newest first,
   without a room standing for it and without touching the history walk or the record.
+- **A room's members.** Everyone the account lists in a chat, which the Bot API never lists a bot
+  (「A room's members」).
 - **Profile pictures.** The pictures of every room and every sender the provider has seen are kept current.
 
 ## What it hands over
@@ -222,6 +224,20 @@ reader hears them.
 - **While the account is not connected** the route answers 503 `not-ready` with the reason the health gives.
 - **No room is made and nothing is sent.** The route reads and answers; the dialog list, the history walk and
   the record of what was seen are left as they stand.
+
+## A room's members
+
+- **A route on the live account:** `GET /reader/members?chat=<id>` answers everyone the account lists in one
+  chat, from the connection the reader already holds, each with their number and the name the account shows for
+  them: first and last name, else the handle, else the number.
+- **What Telegram shows the account is what is answered:** every member of a group; every member of a supergroup
+  or a channel, page after page, where the account may see them, and its administrators alone where it hides
+  its members from the account. A one-to-one is its person, and the owner's one-to-one with the bot is the bot.
+- **The account itself stands under the owner's number,** as its words do, and is added to a one-to-one, which
+  Telegram answers with its person alone. A deleted account is left out.
+- **A chat number the account cannot resolve is refused** `not-found` with the reason, and **while the account is
+  not connected** the route answers 503 `not-ready` with the reason the health gives.
+- **Nothing is kept or sent.** The route reads and answers, each time it is asked.
 
 ## Profile pictures
 

@@ -128,6 +128,7 @@ describe("the reader's route for one chat", () => {
           { messageId: 1, senderId: 55, senderName: "Bong", sentAt: 1_000, text: "older" },
         ];
       },
+      members: async () => [],
       missing: () => null,
     }),
   });

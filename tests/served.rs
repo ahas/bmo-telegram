@@ -53,6 +53,8 @@ const BOT_ROOM: i64 = -400;
 // A room the provider has seen that the bot is no longer in and the owner's account does not list.
 const LEFT_ROOM: i64 = -500;
 const OWNER: i64 = 42;
+// A person who spoke in `ROOM` and is still in it, whom the owner's account does not list.
+const LATE: i64 = 88;
 // People the owner's account has a one-to-one with and the bot has no chat with, more than one page of rooms
 // and more than one round of asking Telegram.
 const STRANGERS: std::ops::Range<i64> = 1_000..1_020;
@@ -91,6 +93,19 @@ async fn bot_api() -> String {
         "getChat" => json!({ "ok": true, "result": { "title": "Board room" } }),
         "getChatMember" if asked["user_id"] == json!(BOT) && matches!(chat, Some(ROOM | BOT_ROOM)) => {
           json!({ "ok": true, "result": { "status": "member", "user": { "id": BOT } } })
+        }
+        "getChatAdministrators" if chat == Some(ROOM) => {
+          json!({ "ok": true, "result": [{ "status": "creator", "user": { "id": OWNER, "first_name": "Owner" } }] })
+        }
+        "getChatAdministrators" if chat == Some(BOT_ROOM) => json!({ "ok": true, "result": [] }),
+        "getChatMember" if asked["user_id"] == json!(PERSON) && matches!(chat, Some(ROOM | BOT_ROOM)) => {
+          json!({ "ok": true, "result": { "status": "member", "user": { "id": PERSON, "first_name": "Someone" } } })
+        }
+        "getChatMember" if asked["user_id"] == json!(LATE) && chat == Some(ROOM) => {
+          json!({ "ok": true, "result": { "status": "member", "user": { "id": LATE, "first_name": "Late" } } })
+        }
+        "getChatMember" if asked["user_id"] == json!(CONTACT) && chat == Some(ROOM) => {
+          json!({ "ok": true, "result": { "status": "left", "user": { "id": CONTACT, "first_name": "Gone" } } })
         }
         "getChatMember" if chat == Some(LEFT_ROOM) => {
           json!({ "ok": true, "result": { "status": "left", "user": { "id": BOT } } })
@@ -196,6 +211,23 @@ fn fake_reader(asked: Arc<Mutex<Vec<Value>>>) -> Router {
             )
               .into_response(),
           }
+        },
+      ),
+    )
+    .route(
+      "/reader/members",
+      get(
+        |axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>| async move {
+          let members = match query.get("chat").and_then(|chat| chat.parse::<i64>().ok()) {
+            Some(ROOM) => json!([{ "id": OWNER, "name": "Owner" }, { "id": PERSON, "name": "Someone" }]),
+            Some(OWNER) => json!([{ "id": BOT, "name": "Helper" }, { "id": OWNER, "name": "Owner" }]),
+            _ => {
+              return (StatusCode::NOT_FOUND, Json(json!({ "code": "not-found", "error": "no such chat" })))
+                .into_response();
+            }
+          };
+
+          Json(json!({ "members": members })).into_response()
         },
       ),
     )
@@ -401,6 +433,7 @@ async fn the_declaration_names_the_provider_its_modes_and_its_dialect() {
       "history",
       "roomList",
       "contactList",
+      "memberList",
       "startChat",
       "startGroup",
       "peopleTyping",
@@ -484,8 +517,20 @@ async fn the_service_is_ready_with_and_without_the_reader_behind_it() {
   assert_eq!(
     without_declaration["can"],
     json!([
-      "text", "photo", "album", "document", "audio", "voice", "sticker", "reaction", "pin", "typing",
-      "edit", "delete", "replyTo",
+      "text",
+      "photo",
+      "album",
+      "document",
+      "audio",
+      "voice",
+      "sticker",
+      "reaction",
+      "pin",
+      "typing",
+      "edit",
+      "delete",
+      "replyTo",
+      "memberList",
     ])
   );
 }
@@ -649,6 +694,48 @@ async fn a_one_to_one_is_the_bot_s_only_once_its_person_wrote_to_the_bot() {
 
   assert_eq!(listed["items"][0]["identity"], json!(BOT));
   assert_eq!(listed["items"][1]["identity"], Value::Null);
+}
+
+/// A room's members (docs/telegram.md, 「The members of a room」): everyone the owner's account lists, then whoever
+/// the bot account tells that it did not, a group's administrators and the senders seen in it that Telegram says are
+/// still there, so a sender who left stands nowhere. A room the account does not list is the bot's to tell alone,
+/// and a room neither account is in is not held.
+#[tokio::test]
+async fn a_room_s_members_are_both_accounts_lists_made_one() {
+  let served = stood(true).await;
+  served.provider.refresh_reader().await;
+  let member = |person: i64, name: &str| json!({ "person": person, "name": name, "statusMessage": null });
+
+  for sender in [PERSON, CONTACT, LATE] {
+    served.seen.message(ROOM, Some(sender));
+  }
+
+  for sender in [PERSON, CONTACT] {
+    served.seen.message(BOT_ROOM, Some(sender));
+  }
+
+  let (status, room) = asked_get(&served.base, &format!("/rooms/{ROOM}/members")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(
+    room["members"],
+    json!([member(OWNER, "Owner"), member(PERSON, "Someone"), member(LATE, "Late")])
+  );
+
+  let (status, bot_room) = asked_get(&served.base, &format!("/rooms/{BOT_ROOM}/members")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(bot_room["members"], json!([member(PERSON, "Someone")]));
+
+  let (status, own) = asked_get(&served.base, &format!("/rooms/{OWNER}/members")).await;
+
+  assert_eq!(status, 200);
+  assert_eq!(own["members"], json!([member(BOT, "Helper"), member(OWNER, "Owner")]));
+
+  let (status, unheld) = asked_get(&served.base, &format!("/rooms/{LEFT_ROOM}/members")).await;
+
+  assert_eq!(status, 404);
+  assert_eq!(unheld["code"], "not-found");
 }
 
 /// The owner's account's contacts, listed through the reader seam and paged by bmo-chat's provider server in

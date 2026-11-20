@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use bmo_chat::{ChatReceiver, ChatVoice, GatheredPatch, MessageFile, ProviderRoom, RoomKind};
+use bmo_chat::{ChatMember, ChatReceiver, ChatVoice, GatheredPatch, MessageFile, ProviderRoom, RoomKind};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -21,6 +21,7 @@ use crate::file_ids::FileIds;
 use crate::gather::Gatherer;
 use crate::kinds::Message;
 use crate::lines::Lines;
+use crate::members::{group_members, private_members, still_member};
 use crate::policy::POLICY;
 use crate::reader::ReaderClient;
 use crate::reading::{Reading, SAFE_INTEGER, read, read_edit};
@@ -105,15 +106,6 @@ type KeptTitle = (Option<String>, bool, Instant);
 pub const TITLE_FRESH: Duration = Duration::from_secs(600);
 /// How long it stands that Telegram did not answer, so a Telegram out of reach is not asked for every room.
 pub const UNANSWERED_FRESH: Duration = Duration::from_secs(30);
-
-// Whether Telegram's answer for a member of a group says the member is in it.
-fn member(answer: &Value) -> bool {
-  match answer.get("status").and_then(Value::as_str) {
-    Some("creator" | "administrator" | "member") => true,
-    Some("restricted") => answer.get("is_member").and_then(Value::as_bool) == Some(true),
-    _ => false,
-  }
-}
 
 impl Telegram {
   /// The bot account with its token, asking the Bot API at `api`, the owner's number, the reader where one
@@ -254,7 +246,7 @@ impl Telegram {
       .ok()?;
 
     match (answer.ok, answer.error_code) {
-      (true, _) => Some(answer.result.as_ref().is_some_and(member)),
+      (true, _) => Some(answer.result.as_ref().is_some_and(still_member)),
       // The chat is not one the bot has, or the bot is not or no longer a member.
       (false, Some(400 | 403)) => Some(false),
       _ => None,
@@ -264,6 +256,15 @@ impl Telegram {
   // A message the bot account read in a room lets go of what Telegram last said of the bot there.
   fn forget_presence(&self, chat_id: i64) {
     self.presence.lock().unwrap_or_else(PoisonError::into_inner).remove(&chat_id);
+  }
+
+  /// A room's members as the bot account tells them (docs/telegram.md, 「The members of a room」): a one-to-one's
+  /// person and the bot, and a group's or a channel's administrators and the senders seen in it still there.
+  pub async fn bot_members(&self, chat_id: i64) -> Result<Vec<ChatMember>, String> {
+    match self.private_room_of(chat_id) {
+      Some(person) => Ok(private_members(&self.api, person, self.me()).await),
+      None => group_members(&self.api, chat_id, &self.seen.senders_of(chat_id)).await,
+    }
   }
 
   /// What Telegram calls a room, or null where it cannot or will not say.

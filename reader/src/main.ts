@@ -9,6 +9,7 @@ import { contactLister, makeGroup, startChat } from "./contacts";
 import { roomLister } from "./dialogs";
 import { startHistory } from "./history";
 import { lockOnceFree, takeLock } from "./lock";
+import { chatMembers } from "./members";
 import { recentMessages } from "./messages";
 import { heldOwnerAccount } from "./owner";
 import { startReader } from "./reader";
@@ -51,6 +52,7 @@ const server = Bun.serve({
       startChat(asked, { contacts: () => contacts(account), makeGroup: (title, ids) => makeGroup(account, title, ids), forgetRooms: rooms.forget }, peers),
     avatars: () => store?.keptAvatars() ?? [],
     messages: (account, asked) => recentMessages(account, peers, asked),
+    members: (account, chatId) => chatMembers(account, peers, chatId),
     missing: () => missing,
   }),
 });

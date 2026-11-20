@@ -42,9 +42,10 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 ### Capabilities
 
 All twelve send verbs, and `replyTo`, `fetchMedia`, `avatars`, `history`, `roomList`, `contactList`,
-`startChat`, `startGroup`, `peopleTyping` and `presence`; not `memberList`. All but the send verbs and `replyTo`
-are the owner's account's: each is declared only while the reader mode is active, and `history` and `avatars`
-only while their part stands (`GET /status`). The rooms `roomList` lists are the bot's and the owner's
+`memberList`, `startChat`, `startGroup`, `peopleTyping` and `presence`. All but the send verbs, `replyTo` and
+`memberList` are the owner's account's: each is declared only while the reader mode is active, and `history` and
+`avatars` only while their part stands (`GET /status`). `memberList` is declared always, since the bot account
+tells a room's members on its own (「The members of a room」). The rooms `roomList` lists are the bot's and the owner's
 account's (「The rooms」); the contacts and the conversations started are the owner's account's alone
 (「Contacts and starting a conversation」); who is writing and who is reachable are heard by the owner's
 account alone (「Typing and presence」).
@@ -100,6 +101,26 @@ account alone (「Typing and presence」).
   person or a bot, carries that one's number as `privateTo`, and every other chat, group, supergroup or channel,
   is `group` with no `privateTo`. Whether the bot is in each room is asked of Telegram eight rooms at a time,
   each answer kept as above, so walking the pages of a long list asks Telegram about each room once.
+
+### The members of a room
+
+A room's members are everyone either account can tell is in it, each once, named by their Telegram number, the
+sender number their messages carry, since the provider numbers people as Telegram does.
+
+- **The owner's account lists everyone in a room it is in:** every member of a group, and every member of a
+  supergroup or channel as Telegram shows them to the account, which for one that hides its members from all but
+  its administrators is its administrators alone. A one-to-one is its person and the owner. The account itself
+  stands under the owner's number, `BMO_OWNER_ID`. It is asked where the reader is connected and the room is among
+  the account's chats (`docs/reader.md`, 「A room's members」).
+- **The bot account tells who it can in a room it is in.** The Bot API lists no group's members, so the bot gives
+  the room's administrators and every sender the provider has seen in the room, each asked of Telegram one by one
+  and kept only where Telegram says they are still a member: a person who left, was removed or is no longer known
+  to the room is left out. The provider keeps each room's senders as it hands their live messages over, in the
+  record of what it has seen. A one-to-one of the bot's is its person and the bot.
+- **The account's list comes first, in Telegram's order, then whoever the bot told that it did not.** A person
+  is named by their first and last name, else their handle, else their number; no status line is given.
+- **A room neither account is in, or whose members neither could read,** is answered `not-found` with the reason
+  of each account that tried, so the receiving side says the provider holds none of them.
 
 ### Contacts and starting a conversation
 

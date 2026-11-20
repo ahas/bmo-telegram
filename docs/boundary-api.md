@@ -121,6 +121,7 @@ signed 64-bit integers; bytes are base64. A failure is answered with the protoco
 | `GET /reader/contacts` | | `contacts`, each `id`, `name`, `bot` (boolean) and `chatId` (number or null, the one-to-one the account has with it): the account's contact list; 503 `not-ready` with the reason while the account is not connected |
 | `POST /reader/start` | `contactId`, or `title` and `contactIds` | `outcome`: `started` with `chatId` and `title`; `no-contact` with `contactId`; `refused` with `reason`, Telegram's own words; 503 `not-ready` with the reason while the account is not connected |
 | `GET /reader/messages` | query `chat` (a number), `max` (1 to 200, 50 where absent), `since` (epoch milliseconds, or absent) | `messages`, each `messageId`, `senderId` (number or null), `senderName`, `sentAt` (epoch milliseconds) and `text`, newest first, a non-text line carrying its kind's placeholder; 404 `not-found` with the reason where the account cannot resolve the chat; 503 `not-ready` with the reason while the account is not connected |
+| `GET /reader/members` | query `chat` (a number) | `members`, each `id` (the person's number, the sender number their messages carry) and `name`: everyone the owner's account lists in the chat, the account itself under the owner's number; 404 `not-found` with the reason where the account cannot resolve the chat; 503 `not-ready` with the reason while the account is not connected |
 | `POST /reader/picture` | `chatId`, `messageId`, `sentAt` (number or null): the message by the number the receiving side holds it under, which the reader turns back into the account's own where the room numbers per account | `outcome`: `fetched` with `id`, `name`, `mime`, `bytes`, a message file under the owner's account's id; `unavailable` with `reason`; `no-reader` with `reason` |
 | `POST /reader/file` | `chatId`, `messageId`, `sentAt` | the same outcomes |
 | `POST /owner/say` | `chatId`, `text` (the plain words), `markup` (the dialect's HTML, or null), `silent` (boolean), `replyToMessageId` (number or null) | `messageId`, the number the receiving side will hold the line under (`docs/reader.md`, 「Numbers」), and `text`, the words as Telegram holds them; or `refused` (`unavailable` or `unreachable`) with `error` |
@@ -143,6 +144,8 @@ receiver's. bmo-chat's provider server orders and pages the list; a reader that 
 of the route. Whether the bot is in a group or a channel is asked of the Bot API, `getChatMember` with
 the bot's own number; a one-to-one is the bot's where its person has written to the bot privately, by the
 service's own record, and no Bot API call answers it.
+
+The service answers `GET /rooms/{roomId}/members` from `/reader/members` where the owner's account lists the room among its dialogs, and from the Bot API where the bot is in it: `getChatAdministrators` for a group or a channel, and `getChatMember` for each sender the service's record holds of the room, eight at a time; a one-to-one of the bot's is its person, named by `getChat`, and the bot, named by `getMe` (`docs/telegram.md`, 「The members of a room」).
 
 A picture or a file past the Bot API's ceiling for a bot is fetched by `/reader/picture` or `/reader/file`. A
 send in the owner's account, one naming the voice `human-reader` or `human-avatar`, goes by `/owner/say` and
@@ -176,8 +179,8 @@ time.
 | `GET /reader/seen` | | `rooms` and `people`: every room and sender the provider has handed a message of over or sent into |
 | `POST /reader/avatars` | `rooms`, `people` | `{}` once word of the changed pictures has gone to the receiver, or stood down |
 
-A live message carries the room and the sender into the record of what the provider has seen; an edit adds
-neither, and a line out of a room's history adds nothing to it. A message the reader hands on from the owner's
+A live message carries the room and the sender, and the sender as one of that room's, into the record of what the
+provider has seen; an edit adds neither, and a line out of a room's history adds nothing to it. A message the reader hands on from the owner's
 number, in a room the bot is in, whose words begin with the avatar prefix goes on as the agent's own
 (`docs/telegram.md`, 「The avatar」). The reader opens the owner's account only once
 the service answers, so nothing it reads is handed to a service that is not up.
@@ -205,7 +208,7 @@ This provider's own:
 | `BMO_TELEGRAM_RECEIVER_URL` | service | the receiver's base address; required |
 | `BMO_TELEGRAM_RECEIVER_TOKEN` | service | the token the receiver's routes take; required |
 | `BMO_TELEGRAM_READER_PORT` | both | the loopback port the reader listens on; 3221 where unset |
-| `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen and the people who wrote to the bot privately, the id each picture and file the bot account handed over crossed with, the ledger of whose numbering each line of a room numbered per account stands under (`docs/telegram.md`, 「The owner's voice」), the lock that keeps the owner's session to one process, and the `spool/` folder each file of a multipart send stands in as it arrives and each file gathered past the Bot API's ceiling stands in until the receiving side took it |
+| `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen, each room's own senders, and the people who wrote to the bot privately, the id each picture and file the bot account handed over crossed with, the ledger of whose numbering each line of a room numbered per account stands under (`docs/telegram.md`, 「The owner's voice」), the lock that keeps the owner's session to one process, and the `spool/` folder each file of a multipart send stands in as it arrives and each file gathered past the Bot API's ceiling stands in until the receiving side took it |
 | `BMO_TELEGRAM_PICTURE_ROOT` | service | the folder a picture or an album item named by a file path may be read from; where unset, only a web address or an inline file is sent |
 | `BMO_TELEGRAM_STICKER_SET` | service | the Telegram sticker set a `sticker` send picks from by its emoji; where unset, a sticker send naming an emoji is refused saying no set is configured |
 | `BMO_TELEGRAM_AVATAR_PREFIX` | service | the prefix the agent's words carry in the `human-avatar` voice where a send names none, and by which a line of the owner's account is read back as the agent's (`docs/telegram.md`, 「The avatar」); where unset or blank, the policy's own prefix |

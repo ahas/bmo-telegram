@@ -46,8 +46,8 @@ function roomOf(id: number, peers: Peers): number {
   return id === peers.botId ? peers.ownerId : id;
 }
 
-// The name the account shows for a contact: its first and last name, else its handle, else its number.
-function nameOf(entry: ContactEntry): string {
+/** The name the account shows for a user: their first and last name, else their handle, else their number. */
+export function nameOf(entry: Pick<ContactEntry, "id" | "firstName" | "lastName" | "username">): string {
   const name = [entry.firstName, entry.lastName].filter((part) => part !== null && part !== "").join(" ");
 
   if (name !== "") return name;

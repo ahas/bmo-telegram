@@ -168,14 +168,10 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
 
   assert!(lines.iter().all(|line| !line.trim().is_empty()), "a line of the policy is empty");
   assert_eq!(label, "Telegram");
-  // Every capability but the members of a room, which the provider does not list.
+  // Every capability bmo-chat names.
   assert_eq!(
     can.iter().copied().collect::<std::collections::BTreeSet<_>>(),
-    ChatCapability::VARIANTS
-      .iter()
-      .copied()
-      .filter(|one| *one != ChatCapability::MemberList)
-      .collect(),
+    ChatCapability::VARIANTS.iter().copied().collect(),
   );
   assert_eq!(*lasts_ms, 6_000);
   assert_eq!(gone_descriptions.len(), 3);

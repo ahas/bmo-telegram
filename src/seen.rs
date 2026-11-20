@@ -1,16 +1,18 @@
 //! The rooms and the senders the provider has handed a message of over or sent into (docs/boundary-api.md,
 //! 「The service's routes, called by the reader」): whose profile pictures the reader keeps, and which rooms
-//! are the provider's own when the receiver asks. With them, the people who wrote to the bot in their private
-//! chat with it, whose one-to-one is the bot's (docs/telegram.md, 「The rooms」). Kept in the provider's data
-//! folder, so a restart forgets none of them.
+//! are the provider's own when the receiver asks; each room's own senders, whom the bot account checks as the
+//! room's members (docs/telegram.md, 「The members of a room」). With them, the people who wrote to the bot in
+//! their private chat with it, whose one-to-one is the bot's (docs/telegram.md, 「The rooms」). Kept in the
+//! provider's data folder, so a restart forgets none of them.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::{Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
-/// What has been seen: every room and every sender, each once, and everyone who wrote to the bot privately.
+/// What has been seen: every room and every sender, each once, each room's senders, and everyone who wrote to the
+/// bot privately.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sighted {
@@ -18,6 +20,8 @@ pub struct Sighted {
   pub people: BTreeSet<i64>,
   #[serde(default)]
   pub wrote_privately: BTreeSet<i64>,
+  #[serde(default)]
+  pub senders: BTreeMap<i64, BTreeSet<i64>>,
 }
 
 /// The record, kept in a file where one is named.
@@ -66,13 +70,15 @@ impl Seen {
     }
   }
 
-  /// A message handed over: its room and its sender seen.
+  /// A message handed over: its room and its sender seen, the sender as one of the room's.
   pub fn message(&self, room_id: i64, sender_id: Option<i64>) {
     self.changed(|sighted| {
       let room = sighted.rooms.insert(room_id);
       let person = sender_id.is_some_and(|sender| sighted.people.insert(sender));
+      let speaker =
+        sender_id.is_some_and(|sender| sighted.senders.entry(room_id).or_default().insert(sender));
 
-      room || person
+      room || person || speaker
     });
   }
 
@@ -99,6 +105,13 @@ impl Seen {
   /// Whether the room has been seen.
   pub fn has_room(&self, chat_id: i64) -> bool {
     self.sighted.lock().unwrap_or_else(PoisonError::into_inner).rooms.contains(&chat_id)
+  }
+
+  /// Everyone seen speaking in a room.
+  pub fn senders_of(&self, room_id: i64) -> BTreeSet<i64> {
+    let sighted = self.sighted.lock().unwrap_or_else(PoisonError::into_inner);
+
+    sighted.senders.get(&room_id).cloned().unwrap_or_default()
   }
 
   /// Everything seen so far.

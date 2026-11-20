@@ -1,7 +1,8 @@
 //! The Telegram provider as bmo-chat's contract states one (docs/telegram.md, 「The declaration」): what it
 //! declares, the room questions and the rooms of the owner's account, its contacts and a conversation started
-//! with them, a send in the voice it asks for, a message's picture or file fetched again through the owner's
-//! account, and the profile pictures it keeps. The bot account reads and speaks; the reader stands behind it.
+//! with them, a room's members, a send in the voice it asks for, a message's picture or file fetched again
+//! through the owner's account, and the profile pictures it keeps. The bot account reads and speaks; the reader
+//! stands behind it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
@@ -12,15 +13,16 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use bmo_chat::{
   ChatAvatar, ChatAvatarKind, ChatCapability, ChatContact, ChatContactKind, ChatDialect, ChatFailure,
-  ChatHealth, ChatMediaRequest, ChatMediaResult, ChatModeStanding, ChatNumberRanges, ChatNumberSpace,
-  ChatNumbering, ChatPicture, ChatProvider, ChatReach, ChatReadMode, ChatReceiver, ChatRefusal, ChatSend,
-  ChatSendRequest, ChatSendResult, ChatStartRequest, ChatStartResult, ChatVoice, MessageFile, ProviderRoom,
-  RoomQuery,
+  ChatHealth, ChatMediaRequest, ChatMediaResult, ChatMember, ChatMembersResult, ChatModeStanding,
+  ChatNumberRanges, ChatNumberSpace, ChatNumbering, ChatPicture, ChatProvider, ChatReach, ChatReadMode,
+  ChatReceiver, ChatRefusal, ChatSend, ChatSendRequest, ChatSendResult, ChatStartRequest, ChatStartResult,
+  ChatVoice, MessageFile, ProviderRoom, RoomQuery,
 };
 use serde::Serialize;
 use telegram_dialect::TelegramHtml;
 use tokio::task::{JoinHandle, JoinSet};
 
+use crate::members::merged;
 use crate::owner::OwnerVoice;
 use crate::policy::POLICY;
 use crate::reader::{
@@ -35,7 +37,7 @@ use crate::telegram::{Telegram, UNANSWERED_FRESH};
 /// Why the owner's account is not read by where no reader stands behind the service.
 pub const NO_READER: &str = "no reader stands behind the service";
 
-// How many rooms Telegram is asked about at once when the rooms are listed.
+// How many rooms or people Telegram is asked about at once.
 const ASKED_AT_ONCE: usize = 8;
 
 /// What a chat read came to: its recent messages, the chats and contacts a name leaves to pick among, or the
@@ -145,26 +147,28 @@ async fn read_of(receiver: &dyn ChatReceiver, chat_id: i64) -> bool {
   matches!(receiver.room(chat_id, query).await, Ok(Some(held)) if read_asked(&held))
 }
 
-// Each of `chat_ids` asked by `ask`, `ASKED_AT_ONCE` at a time; one whose asking came to no answer counts false.
-async fn asked_each<F, Asking>(chat_ids: &[i64], ask: F) -> BTreeMap<i64, bool>
+/// Each of `ids` asked by `ask`, `ASKED_AT_ONCE` at a time, its answer under its id; one whose asking came to no
+/// answer stands with none.
+pub(crate) async fn asked_each<T, F, Asking>(ids: &[i64], ask: F) -> BTreeMap<i64, T>
 where
+  T: Send + 'static,
   F: Fn(i64) -> Asking,
-  Asking: Future<Output = bool> + Send + 'static,
+  Asking: Future<Output = T> + Send + 'static,
 {
   let mut answers = BTreeMap::new();
 
-  for some in chat_ids.chunks(ASKED_AT_ONCE) {
+  for some in ids.chunks(ASKED_AT_ONCE) {
     let mut asking = JoinSet::new();
 
-    for &chat_id in some {
-      let answer = ask(chat_id);
+    for &id in some {
+      let answer = ask(id);
 
-      asking.spawn(async move { (chat_id, answer.await) });
+      asking.spawn(async move { (id, answer.await) });
     }
 
     while let Some(answer) = asking.join_next().await {
-      if let Ok((chat_id, yes)) = answer {
-        answers.insert(chat_id, yes);
+      if let Ok((id, answered)) = answer {
+        answers.insert(id, answered);
       }
     }
   }
@@ -265,6 +269,19 @@ impl TelegramProvider {
     *listed = Some((Instant::now(), answer.clone()));
 
     answer
+  }
+
+  // Everyone the owner's account lists in a room among its chats; none where no reader stands, the account's chats
+  // are not read, or the room is not among them.
+  async fn account_members(&self, chat_id: i64) -> Option<Result<Vec<ChatMember>, String>> {
+    let reader = self.reader.as_ref()?;
+    let rooms = self.dialogs().await.ok()?;
+
+    if !rooms.iter().any(|room| room.chat_id == chat_id) {
+      return None;
+    }
+
+    Some(reader.members(chat_id).await)
   }
 
   // Every contact of the owner's account, as the reader lists them.
@@ -628,6 +645,39 @@ impl ChatProvider for TelegramProvider {
         })
         .collect(),
     )
+  }
+
+  // A room's members (docs/telegram.md, 「The members of a room」): everyone the owner's account lists where it is
+  // in the room, then whoever the bot account can tell is still there. Where neither gave any, the room's members
+  // are not held, for the reason of each account that tried.
+  async fn members(&self, room_id: i64) -> Result<ChatMembersResult, ChatFailure> {
+    let mut lists = Vec::new();
+    let mut unread = Vec::new();
+
+    match self.account_members(room_id).await {
+      Some(Ok(listed)) => lists.push(listed),
+      Some(Err(why)) => unread.push(format!("the owner's account read none: {why}")),
+      None => {}
+    }
+
+    if self.telegram.bot_in(room_id).await {
+      match self.telegram.bot_members(room_id).await {
+        Ok(listed) => lists.push(listed),
+        Err(why) => unread.push(format!("the bot account read none: {why}")),
+      }
+    }
+
+    if lists.is_empty() {
+      let reason = if unread.is_empty() {
+        format!("neither the bot nor the owner's account is in room {room_id}")
+      } else {
+        unread.join("; ")
+      };
+
+      return Ok(ChatMembersResult::Unheld { reason });
+    }
+
+    Ok(ChatMembersResult::Listed(merged(lists)))
   }
 
   // A conversation started by the owner's account, never by the bot, which cannot start a one-to-one

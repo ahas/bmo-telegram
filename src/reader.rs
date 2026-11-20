@@ -1,14 +1,28 @@
 //! The reader as the service reaches it over the seam (docs/boundary-api.md, 「The reader's routes, called by
 //! the service」): whether the owner's account is connected, the chats it is in, its contacts and a conversation
-//! started with them, a picture or a file the Bot API will not hand the bot, and a send in the owner's own voice.
+//! started with them, a chat's members, a picture or a file the Bot API will not hand the bot, and a send in the
+//! owner's own voice.
 
-use bmo_chat::{ChatAvatar, ChatAvatarKind, ChatStart, FileItem, MessageFile};
-use serde::Serialize;
+use bmo_chat::{ChatAvatar, ChatAvatarKind, ChatMember, ChatStart, FileItem, MessageFile};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::compose::Part;
 use crate::lines::Stamp;
 use crate::wire::Wire;
+
+// The members of a chat as the reader lists them.
+#[derive(Deserialize)]
+struct AccountMembers {
+  members: Vec<AccountMember>,
+}
+
+// One member as the reader lists them: their Telegram number and the name the account shows for them.
+#[derive(Deserialize)]
+struct AccountMember {
+  id: i64,
+  name: String,
+}
 
 /// The reader on the loopback, behind the seam's token.
 #[derive(Debug, Clone)]
@@ -313,6 +327,31 @@ impl ReaderClient {
       })
       .collect::<Result<Vec<_>, String>>()
       .map(ReaderRead::Messages)
+  }
+
+  /// Everyone the owner's account lists in a chat, under their Telegram numbers (docs/reader.md, 「A room's
+  /// members」); a reader that does not answer, or refuses, is the reason.
+  pub async fn members(&self, chat_id: i64) -> Result<Vec<ChatMember>, String> {
+    let answer = self.wire.get(&format!("/reader/members?chat={chat_id}")).await?;
+
+    if !answer.ok() {
+      return Err(answer.reason());
+    }
+
+    let listed: AccountMembers = serde_json::from_value(answer.body)
+      .map_err(|why| format!("the reader's /reader/members answered no list of members: {why}"))?;
+
+    Ok(
+      listed
+        .members
+        .into_iter()
+        .map(|member| ChatMember {
+          person: Some(member.id),
+          name: member.name,
+          status_message: None,
+        })
+        .collect(),
+    )
   }
 
   /// A conversation started on the owner's account; a reader that does not answer, or answers no outcome, is

@@ -167,6 +167,7 @@ function served(connected: boolean, asked: StartAsked[]): ReturnType<typeof Bun.
       },
       avatars: () => [],
       messages: async () => [],
+      members: async () => [],
       missing: () => "the account's values are not set",
     }),
   });

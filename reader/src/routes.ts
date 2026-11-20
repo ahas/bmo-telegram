@@ -1,6 +1,6 @@
 // The reader's routes, called by the service alone (docs/boundary-api.md, 「The reader's routes, called by the
 // service」): whether the owner's account is connected, the chats it is in, its contacts and a conversation
-// started with them, a picture or a file fetched through it, and a send through the owner's account, its typing
+// started with them, a chat's members, a picture or a file fetched through it, and a send through the owner's account, its typing
 // mark, a delete, a reaction, a pin, an edit and the account's own number for a line named by its stamp. Every
 // route takes the seam's token.
 
@@ -12,6 +12,7 @@ import { ownerRefusalName } from "./owner";
 import type { TelegramClient } from "telegram";
 import type { AccountContact, StartAsked, StartOutcome } from "./contacts";
 import type { AccountRoom } from "./dialogs";
+import type { AccountMember } from "./members";
 import type { Peers } from "./media";
 import type { MessagesAsked, RecentMessage } from "./messages";
 import type { AvatarKind } from "./store";
@@ -39,6 +40,8 @@ export interface RoutesDeps {
   avatars: () => KeptAvatar[];
   // One chat's recent messages, newest first, without a room standing for it.
   messages: (client: TelegramClient, asked: MessagesAsked) => Promise<RecentMessage[]>;
+  // Everyone the connected account lists in one chat.
+  members: (client: TelegramClient, chatId: number) => Promise<AccountMember[]>;
   // Why the account is not connected, where it is not.
   missing: () => string | null;
 }
@@ -313,6 +316,25 @@ export function readerHandler(deps: RoutesDeps): (request: Request) => Promise<R
 
       try {
         return json({ messages: await deps.messages(client, { chatId, max, since }) });
+      } catch (error) {
+        if (error instanceof ChatUnresolved) return failure("not-found", error.message, 404);
+
+        return failure("failed", error instanceof Error ? error.message : String(error), 500);
+      }
+    }
+
+    if (request.method === "GET" && pathname === "/reader/members") {
+      const rawChat = new URL(request.url).searchParams.get("chat");
+      const chatId = rawChat === null || rawChat.trim() === "" ? Number.NaN : Number(rawChat);
+
+      if (!Number.isSafeInteger(chatId)) return failure("bad-request", "chat (a whole number) is required", 400);
+
+      const client = deps.client();
+
+      if (client === null) return failure("not-ready", notConnected(), 503);
+
+      try {
+        return json({ members: await deps.members(client, chatId) });
       } catch (error) {
         if (error instanceof ChatUnresolved) return failure("not-found", error.message, 404);
 
