@@ -94,7 +94,10 @@ async function open(): Promise<void> {
     // Telegram pushes typing and a change of status only to a session that stands online (docs/reader.md,
     // 「Typing and presence」).
     if (settings.online) {
-      online = standOnline(accountStatus(client), await renewalOf(client), systemClock);
+      const renewalMs = await renewalOf(client);
+
+      online = standOnline(accountStatus(client), renewalMs, systemClock);
+      console.log(`reader: the owner's account stands online, renewed every ${renewalMs / 1000} s`);
     }
   } catch (error) {
     missing = `the owner's account did not connect: ${error instanceof Error ? error.message : String(error)}`;
