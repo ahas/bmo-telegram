@@ -22,7 +22,7 @@ Telegram 聊天提供方 `bmo-telegram`。它通过基础库 `bmo-chat` 的聊�
 | `docs/` | 描述提供方行为的权威文档 |
 
 根目录下有同时作为服务包的 Cargo 工作区清单、`VERSION` 中的版本、`testbed.toml`(测试平台关于如何测试、检查、
-构建和部署本仓库的声明)、`rustfmt.toml` 和 `CLAUDE.md`。
+构建和部署本仓库的声明)、`install.toml`(在新机器上安装所需内容的声明，由 `bmo install` 读取)、`rustfmt.toml` 和 `CLAUDE.md`。
 
 ## 文档
 

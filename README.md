@@ -24,7 +24,8 @@ words, held by a separate process, the reader.
 
 At the root stand the Cargo workspace manifest, which is also the service's package, the version in
 `VERSION`, `testbed.toml` (the testbed's declaration of how this repository is tested, checked, built and
-deployed), `rustfmt.toml` and `CLAUDE.md`.
+deployed), `install.toml` (what installing it on a fresh machine needs, which `bmo install` reads), `rustfmt.toml` and
+`CLAUDE.md`.
 
 ## Documents
 

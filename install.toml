@@ -1,0 +1,81 @@
+# What installing the Telegram provider on a fresh machine needs, read by the testbed's install verb
+# (bmo-testbed's docs/install.md, 「The install declaration」).
+
+install = 1
+
+# The reader first, so the session lock is let go before the service starts reading again.
+restart = "systemctl --user restart bmo-telegram-reader.service bmo-telegram.service"
+
+[[needs]]
+check = 'test -x "$HOME/.bun/bin/bun"'
+what = "Bun at ~/.bun/bin/bun, which runs the reader and installs its packages: `curl -fsSL https://bun.sh/install | bash`."
+
+[[needs]]
+program = "curl"
+what = "curl, which the verification asks the service's status with: the `curl` package."
+
+[[needs]]
+program = "jq"
+what = "jq, which the verification reads the service's status with: the `jq` package."
+
+[[port]]
+name = "telegram.server"
+number = 3222
+
+[[port]]
+name = "telegram.reader"
+number = 3223
+
+# The bearer every route of the service and of the reader takes, the receiver's road among its callers.
+[[token]]
+name = "telegram.route"
+file = "env/telegram-route.token"
+
+[[input]]
+name = "telegram.bot"
+what = "The Telegram bot's token, which @BotFather gives when the bot is made with /newbot (or with /token for one that stands)."
+file = "env/telegram-bot.token"
+secret = true
+
+[[input]]
+name = "telegram.owner-id"
+what = "The owner's numeric Telegram user id, which a bot such as @userinfobot tells the owner when written to; it is also the number of the owner's one-to-one with the bot."
+file = "install/inputs/telegram.owner-id"
+
+# The environment both processes read (docs/boundary-api.md, 「Configuration」), which each release links. The
+# reader's own account (BMO_TG_API_ID, BMO_TG_API_HASH, BMO_TG_SESSION) is left out: its session is written by
+# the reader's login script, which asks the owner for a code on his phone, so the reader stands inactive until
+# the owner adds the three.
+[[settings]]
+file = "env/telegram.env"
+text = '''
+BMO_BOT_TOKEN={{input.telegram.bot}}
+BMO_OWNER_ID={{input.telegram.owner-id}}
+BMO_TELEGRAM_PORT={{port.telegram.server}}
+BMO_TELEGRAM_READER_PORT={{port.telegram.reader}}
+BMO_TELEGRAM_TOKEN={{token.telegram.route}}
+BMO_TELEGRAM_RECEIVER_URL=http://127.0.0.1:{{port.receiver.server}}/chat
+BMO_TELEGRAM_RECEIVER_TOKEN={{token.receiver.service}}
+BMO_TELEGRAM_DATA={{data_root}}/telegram
+BMO_TELEGRAM_PICTURE_ROOT={{data_root}}
+'''
+
+# The receiver's road to this provider: one entry of its configuration's `[roads]` table, which stands last in
+# that file, so the line added at its end falls into it.
+[[line]]
+file = "env/receiver.toml"
+key = "telegram"
+value = '{ base = "http://127.0.0.1:{{port.telegram.server}}", token = "{{token.telegram.route}}" }'
+
+[[verify]]
+id = "bot-status"
+what = "the provider's bot account is connected to the Telegram Bot API on the given token"
+run = '''
+set -eu
+env="${BMO_DATA_DIR:-$HOME/.local/share/bmo/data}/env/telegram.env"
+header="$(mktemp)"
+trap 'rm -f "$header"' EXIT
+sed -n 's/^BMO_TELEGRAM_TOKEN=/Authorization: Bearer /p' "$env" > "$header"
+port="$(sed -n 's/^BMO_TELEGRAM_PORT=//p' "$env")"
+curl -sf -H @"$header" "http://127.0.0.1:$port/status" | jq -e '.bot.standing == "active"' > /dev/null
+'''

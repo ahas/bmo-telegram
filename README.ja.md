@@ -24,7 +24,7 @@ Telegram のチャットプロバイダー `bmo-telegram` です。ベースラ�
 
 ルートには、サービスのパッケージを兼ねる Cargo ワークスペースのマニフェスト、`VERSION` に記されたバージョン、
 `testbed.toml`(このリポジトリをどうテスト・チェック・ビルド・デプロイするかを記したテストベッドの宣言)、
-`rustfmt.toml`、`CLAUDE.md` があります。
+`install.toml`(新しいマシンへのインストールに必要なものの宣言で、`bmo install` が読みます)、`rustfmt.toml`、`CLAUDE.md` があります。
 
 ## ドキュメント
 
