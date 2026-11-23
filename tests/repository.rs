@@ -240,10 +240,17 @@ fn no_directory_is_named_after_its_parent() {
 /// The fixed API, whose marker names the version it is fixed at.
 const FIXED_API: &str = "docs/api.md";
 
+/// Whether `path` is one of the README's languages at the root, `README.md` or `README.<language>.md`, each
+/// opening with the line that names every language in its own script.
+fn is_readme(path: &str) -> bool {
+  path == "README.md" || (path.starts_with("README.") && path.ends_with(".md") && !path.contains('/'))
+}
+
 #[test]
 fn no_hangul_in_tracked_files() {
   let found: Vec<String> = tracked_texts()
     .into_iter()
+    .filter(|(path, _)| !is_readme(path))
     .filter(|(_, text)| text.chars().any(is_hangul))
     .map(|(path, _)| path)
     .collect();

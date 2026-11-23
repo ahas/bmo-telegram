@@ -16,7 +16,8 @@ personal-data check is the testbed's, enabled in the declaration, and runs with 
 - **Layout.** No tracked path holds a directory named after the directory it stands in.
 - **The version.** `VERSION` holds the workspace's version, and the reader's `package.json` carries it.
 - **Hangul.** No tracked file holds a Hangul character: every word this provider writes or matches on is
-  English.
+  English. The README is the exception: it stands at the root in English, Korean, Japanese and Chinese
+  (`README.md` and `README.<language>.md`), each opening with a line naming every language in its own script.
 - **The fixed marker.** `docs/api.md` opens its body with the fixed marker, `Fixed at` and the version `VERSION`
   holds, in bold and ending in a full stop, so the fixed API names the version it is fixed at.
 - **Personal data.** No tracked file holds a mail address outside the reserved example domains, a home path
