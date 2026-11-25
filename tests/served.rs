@@ -505,7 +505,7 @@ async fn the_service_is_ready_with_and_without_the_reader_behind_it() {
     assert_eq!(status, 200);
     assert_eq!(answer["ready"], json!(true));
     assert_eq!(answer["reason"], Value::Null);
-    assert_eq!(answer["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(answer["version"], bmo_telegram::VERSION);
   }
 
   with.provider.refresh_reader().await;

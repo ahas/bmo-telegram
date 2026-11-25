@@ -21,7 +21,7 @@ Telegram 聊天提供方 `bmo-telegram`。它通过基础库 `bmo-chat` 的聊�
 | `deploy/` | 部署时链接的两个服务单元:Rust 提供方和 bun 读取器 |
 | `docs/` | 描述提供方行为的权威文档 |
 
-根目录下有同时作为服务包的 Cargo 工作区清单、`VERSION` 中的版本、`testbed.toml`(测试平台关于如何测试、检查、
+根目录下有同时作为服务包的 Cargo 工作区清单、`testbed.toml`(测试平台关于如何测试、检查、
 构建和部署本仓库的声明)、`install.toml`(在新机器上安装所需内容的声明，由 `bmo install` 读取)、`rustfmt.toml` 和 `CLAUDE.md`。
 
 ## 文档
@@ -38,8 +38,8 @@ Telegram 聊天提供方 `bmo-telegram`。它通过基础库 `bmo-chat` 的聊�
 
 ## 版本
 
-- **整个仓库只有一个版本，** 即工作区的版本。`VERSION` 保存该版本，工作区的版本与之相同，读取器的
-  `package.json` 也使用同一版本。
+- **版本是整个套件的版本，** 在构建时从 git 标签读取：测试平台以 `BMO_VERSION` 把它交给构建，健康检查答出它。
+  工作区清单和读取器的 `package.json` 中的版本字段是从不变动的占位值。
 - **版本只在所有者宣布发布时变动，** 规则见 bmo-chat 的 `docs/conventions.md`「Versions」。提交、部署、修复或
   契约变更都不会改变版本，部署通过提交来区分。
 

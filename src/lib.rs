@@ -30,3 +30,10 @@ pub mod wire;
 
 /// The provider's key, as every hand-over carries it.
 pub const VIA: &str = "telegram";
+
+/// The version this build answers with on its health: the set's, which the testbed hands the build as `BMO_VERSION`, else
+/// the manifest's placeholder (bmo-chat's `docs/conventions.md`, 「Versions」).
+pub const VERSION: &str = match option_env!("BMO_VERSION") {
+  Some(version) => version,
+  None => env!("CARGO_PKG_VERSION"),
+};

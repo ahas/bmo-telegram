@@ -167,12 +167,6 @@ fn no_package_takes_an_old_shared_crate_name() {
 }
 
 #[test]
-fn the_version_file_holds_the_workspaces_version() {
-  let version = text_of("VERSION").expect("VERSION is at the root");
-  assert_eq!(version.trim(), env!("CARGO_PKG_VERSION"));
-}
-
-#[test]
 fn only_cargo_manifests_at_the_root() {
   let found: Vec<String> = fs::read_dir(ROOT)
     .expect("the repository root is readable")
@@ -217,15 +211,6 @@ fn the_reader_depends_on_no_bmo_package_and_no_other_checkout() {
 }
 
 #[test]
-fn the_reader_carries_the_repositorys_version() {
-  let Some(manifest) = text_of(&format!("{READER}/package.json")) else {
-    return;
-  };
-  let manifest: Value = serde_json::from_str(&manifest).expect("the reader's package.json is JSON");
-  assert_eq!(manifest["version"].as_str(), Some(env!("CARGO_PKG_VERSION")));
-}
-
-#[test]
 fn no_directory_is_named_after_its_parent() {
   let twins: Vec<String> = tracked_files()
     .into_iter()
@@ -236,9 +221,6 @@ fn no_directory_is_named_after_its_parent() {
     .collect();
   assert!(twins.is_empty(), "these paths repeat a directory inside itself: {twins:?}");
 }
-
-/// The fixed API, whose marker names the version it is fixed at.
-const FIXED_API: &str = "docs/api.md";
 
 /// Whether `path` is one of the README's languages at the root, `README.md` or `README.<language>.md`, each
 /// opening with the line that names every language in its own script.
@@ -255,16 +237,6 @@ fn no_hangul_in_tracked_files() {
     .map(|(path, _)| path)
     .collect();
   assert!(found.is_empty(), "tracked files holding Hangul: {found:?}");
-}
-
-#[test]
-fn the_fixed_api_document_carries_the_fixed_marker_of_its_version() {
-  let text = text_of(FIXED_API).expect("docs/api.md is tracked");
-  let version = fs::read_to_string(Path::new(ROOT).join("VERSION")).expect("VERSION is readable");
-  let marker = format!("**Fixed at {}.**", version.trim());
-  let first = text.lines().skip(1).find(|line| !line.trim().is_empty());
-
-  assert_eq!(first, Some(marker.as_str()), "the first line under the title is the fixed marker");
 }
 
 /// The names list, as `BMO_NAMES_LIST` names it: `words` matched as whole words ignoring case,

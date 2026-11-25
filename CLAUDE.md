@@ -52,6 +52,7 @@ Cargo runs through the testbed's Cargo verb, `bmo-testbed cargo <cargo arguments
 shared build directory; no checkout keeps a `target/` of its own. Where the installed testbed predates that
 verb and runs `cargo` as a plain command, `bmo cargo <cargo arguments…>` carries the same verb.
 
-The version is the workspace's, and `VERSION` holds it. It moves only at a release the owner declares, as
-bmo-chat's `docs/conventions.md` 「Versions」 states; a commit, a deploy, a fix or a contract change moves none,
-and a deployment is told apart by its commit. The reader's `package.json` carries the same version.
+The version is the set's, read off the git tags when a build is made: the testbed hands it to the build as
+`BMO_VERSION`, as bmo-chat's `docs/conventions.md` 「Versions」 states. A release only tags a commit, so a commit,
+a deploy, a fix or a contract change moves none, and a deployment is told apart by its commit. The version fields
+of the Cargo manifest and the reader's `package.json` are placeholders that never move.

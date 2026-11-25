@@ -22,8 +22,7 @@ words, held by a separate process, the reader.
 | `deploy/` | the two service units a deployment links: the Rust provider and the bun reader |
 | `docs/` | the canonical statements of what the provider does |
 
-At the root stand the Cargo workspace manifest, which is also the service's package, the version in
-`VERSION`, `testbed.toml` (the testbed's declaration of how this repository is tested, checked, built and
+At the root stand the Cargo workspace manifest, which is also the service's package, `testbed.toml` (the testbed's declaration of how this repository is tested, checked, built and
 deployed), `install.toml` (what installing it on a fresh machine needs, which `bmo install` reads), `rustfmt.toml` and
 `CLAUDE.md`.
 
@@ -41,9 +40,11 @@ deployed), `install.toml` (what installing it on a fresh machine needs, which `b
 
 ## Version
 
-- **One version for the whole repository,** the workspace's. `VERSION` holds it, the workspace's version
-  equals it, and the reader's `package.json` carries it.
-- **It moves only at a release the owner declares,** as bmo-chat's `docs/conventions.md` 「Versions」 states.
+- **The version is the set's,** read off the git tags when a build is made: the testbed hands it to the build
+  as `BMO_VERSION`, and the health answers it. The version fields of the workspace's manifest and the reader's
+  `package.json` are placeholders that never move.
+- **It moves only at a release the owner declares,** which tags the commit and makes none, as bmo-chat's
+  `docs/conventions.md` 「Versions」 states.
   A commit, a deploy, a fix or a contract change moves none, and a deployment is told apart by its commit.
 
 ## Build and test
