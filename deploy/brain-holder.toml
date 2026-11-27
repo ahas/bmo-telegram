@@ -7,3 +7,21 @@ key = "telegram.when"
 type = "tip"
 recall_condition = "the owner asks what a Telegram chat said"
 text = "Read it with bmo/telegram_messages, and only on the owner's own turn."
+
+[[memory]]
+key = "telegram.accounts"
+type = "tip"
+recall_condition = "setting up Telegram, the Telegram room list is empty, or group messages are not read"
+text = "Telegram needs two accounts in its service's settings: the bot token, which speaks the answers under the bot's name, and a reading user account (API id and hash from my.telegram.org, and a session from the service's sign-in), which reads and lists the rooms; without the reading account the room list stays empty."
+
+[[memory]]
+key = "telegram.privacy"
+type = "tip"
+recall_condition = "a Telegram bot in a group sees only commands, mentions and replies"
+text = "Turn the bot's privacy mode off in BotFather (/setprivacy, then Disable), and remove and invite the bot to the group again so it takes effect."
+
+[[memory]]
+key = "telegram.group"
+type = "tip"
+recall_condition = "a Telegram bot does not answer in a group room, or someone asks how to make it answer there"
+text = "No new room mode is needed: name the group's supervisors on the room (the console's room settings, or the receiver's PUT /rooms/{roomId}/supervisors), or let the owner's allow command put it on the listen list; avatar mode answers as the owner's own account, not the bot, and in a group a message wakes the supervisor only by its name, a reply to its message, or the open window."
