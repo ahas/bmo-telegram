@@ -68,6 +68,44 @@ async fn a_supervisors_bot_turned_down_gives_way_to_the_services_bot() {
   assert_eq!(sends, ["bot222:own-bot".to_owned(), format!("bot{TOKEN}")]);
 }
 
+// "An act in the supervisor's own name ... is that bot's alone: its refusal is the answer"
+#[tokio::test]
+async fn a_supervisors_typing_or_edit_its_bot_turns_down_is_not_done_by_the_services_bot() {
+  let bot = BotSends::new();
+  bot.answering(|asked| {
+    (asked.bot == "bot222:own-bot").then(|| refusal(400, "Bad Request: message can't be edited"))
+  });
+  let (base, _) = provider_served_with_bots(bot.clone(), Default::default(), &bots()).await;
+
+  post_send(
+    &base,
+    json!({ "roomId": ROOM, "kind": "typing", "fields": { "on": true }, "speaker": "kakia-chat" }),
+  )
+  .await;
+  post_send(
+    &base,
+    json!({ "roomId": ROOM, "kind": "edit", "fields": { "messageId": 7, "text": "new" }, "speaker": "kakia-chat" }),
+  )
+  .await;
+
+  let by_service: Vec<String> = bot
+    .asked()
+    .into_iter()
+    .filter(|asked| asked.bot != "bot222:own-bot")
+    .map(|asked| asked.method)
+    .filter(|method| method == "sendChatAction" || method == "editMessageText")
+    .collect();
+  let by_own: Vec<String> = bot
+    .asked()
+    .into_iter()
+    .filter(|asked| asked.bot == "bot222:own-bot")
+    .map(|asked| asked.method)
+    .collect();
+
+  assert_eq!(by_own, ["sendChatAction", "editMessageText"]);
+  assert!(by_service.is_empty(), "{by_service:?}");
+}
+
 #[tokio::test]
 async fn a_speaker_naming_no_supervisor_is_refused() {
   let bot = BotSends::new();

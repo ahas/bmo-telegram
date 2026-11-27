@@ -265,8 +265,11 @@ Who is writing in a room now and who is reachable now, told to the receiving sid
   supervisor a send speaks as.
 - **A send naming a supervisor goes out through that supervisor's bot** in the bot's voice, and its message is kept
   in the ledger as the service's own bot's are, so its echo is known. Where that bot cannot send in the room — it is
-  not in it, or Telegram turns it down — the send goes out through the service's own bot instead. A supervisor with
-  no bot of its own speaks through the service's own bot.
+  not in it, or Telegram turns it down — the words go out through the service's own bot instead. An act in the
+  supervisor's own name, a typing mark, a reaction, a pin, an edit or a delete, is that bot's alone: its refusal is
+  the answer, and the service's bot never does it in its place, since a typing mark or a reaction there would show
+  the service's bot, and Telegram lets only the bot that sent a message edit or delete it. A supervisor with no bot
+  of its own speaks through the service's own bot.
 - **A speaker that names no supervisor is refused** `speaker-not-allowed`, as another account's words are, so the
   receiver sends them in the service's own voice with the speaker's name before them. A send in the owner's account
   names no speaker.

@@ -191,7 +191,18 @@ pub fn wire_name(value: &impl Serialize) -> String {
 
 /// Whether a send is a typing mark in the bot's voice, or naming none, for an account: that account's own typing,
 /// not the answerer's.
-pub fn typing_for_an_account(request: &ChatSendRequest) -> bool {
+pub fn its_own_act(send: &ChatSend) -> bool {
+  matches!(
+    send,
+    ChatSend::Typing { .. }
+      | ChatSend::Reaction { .. }
+      | ChatSend::Pin { .. }
+      | ChatSend::Edit { .. }
+      | ChatSend::Delete { .. }
+  )
+}
+
+fn typing_for_an_account(request: &ChatSendRequest) -> bool {
   matches!(request.send, ChatSend::Typing { .. })
     && matches!(request.mode, None | Some(ChatVoice::BotAccount))
     && request.account_id.is_some()
@@ -764,12 +775,16 @@ impl ChatProvider for TelegramProvider {
       }
     };
 
-    // A supervisor's bot not in the room, or turned down, gives way to the service's own bot.
-    if let Some(bot) = own_bot
-      && let Ok(ChatSendResult::Sent(sent)) =
-        bot.send(request.room_id, request.reply_to_message_id, &request.send).await
-    {
-      return Ok(ChatSendResult::Sent(sent));
+    // A supervisor's bot not in the room, or turned down, gives way to the service's own bot for what it says; an act
+    // in the supervisor's own name — a typing mark, a reaction, a pin, an edit or a delete — is its bot's alone, so
+    // its refusal stands rather than the service's bot doing it as another (docs/telegram.md, 「A bot for each
+    // supervisor」).
+    if let Some(bot) = own_bot {
+      let said = bot.send(request.room_id, request.reply_to_message_id, &request.send).await;
+
+      if matches!(said, Ok(ChatSendResult::Sent(_))) || its_own_act(&request.send) {
+        return said;
+      }
     }
 
     // A person's typing goes only in their own voice: one in the bot's voice for an account is that account's,
