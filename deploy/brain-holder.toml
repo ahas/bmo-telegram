@@ -3,7 +3,7 @@
 held_by = "telegram"
 
 [[memory]]
-key = "when"
+key = "telegram.when"
 type = "tip"
 recall_condition = "the owner asks what a Telegram chat said"
 text = "Read it with bmo/telegram_messages, and only on the owner's own turn."
