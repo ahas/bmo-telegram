@@ -97,14 +97,17 @@ async fn serve() -> Result<(), String> {
     picture_root: config.picture_root,
     sticker_set: config.sticker_set,
   };
-  let provider = Arc::new(TelegramProvider::new(
-    telegram,
-    sending,
-    Some(reader),
-    seen.clone(),
-    standing.clone(),
-    config.data.join("avatars"),
-  ));
+  let provider = Arc::new(
+    TelegramProvider::new(
+      telegram,
+      sending,
+      Some(reader),
+      seen.clone(),
+      standing.clone(),
+      config.data.join("avatars"),
+    )
+    .with_supervisor_bots(&config.api, &config.supervisor_bots),
+  );
   // The link reads the provider's declaration at each typing mark and presence change, and drops one whose
   // capability the provider does not declare now.
   let link = ChatReceiverLink::new(config.receiver_url.as_str(), config.receiver_token.as_str())

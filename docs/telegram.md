@@ -16,7 +16,7 @@ dialect its rooms read. Its routes and configuration are `docs/boundary-api.md`;
 | `dialect` | `telegram-html`, below |
 | `shows` | null |
 | `numbering` | `native` for rooms, people and messages: Telegram's own numbers, used as they are |
-| `speakers` | false: a send names no speaker; it goes out as the bot account, or in the owner's account in the owner's voice or the avatar's |
+| `speakers` | true where a supervisor has a bot of its own (「A bot for each supervisor」), false otherwise: a send naming no speaker goes out as the bot account, or in the owner's account in the owner's voice or the avatar's |
 
 ### Modes
 
@@ -254,6 +254,22 @@ Who is writing in a room now and who is reachable now, told to the receiving sid
 - **A whole list** of everyone told of is told once the account has connected and again every ten minutes, so a
   receiving side that restarted, or a room added since, stands on the present; between them each change is told
   as Telegram tells it.
+
+## A bot for each supervisor
+
+- **A supervisor may speak through a bot of its own.** The file `BMO_TELEGRAM_SUPERVISOR_BOTS` names holds one
+  line a supervisor, its name, `=`, and its bot's token, read as each line's key before its first `=` and its value
+  verbatim after it. Where it names any, the declaration's `speakers` is true, so the receiver names the
+  supervisor a send speaks as.
+- **A send naming a supervisor goes out through that supervisor's bot** in the bot's voice, and its message is kept
+  in the ledger as the service's own bot's are, so its echo is known. Where that bot cannot send in the room — it is
+  not in it, or Telegram turns it down — the send goes out through the service's own bot instead. A supervisor with
+  no bot of its own speaks through the service's own bot.
+- **A speaker that names no supervisor is refused** `speaker-not-allowed`, as another account's words are, so the
+  receiver sends them in the service's own voice with the speaker's name before them. A send in the owner's account
+  names no speaker.
+- **Only the service's own bot is read.** A supervisor's bot sends and is never polled: the reader reads the rooms'
+  words, every bot's among them, and a one-to-one with a supervisor's bot is not read.
 
 ## Sends
 

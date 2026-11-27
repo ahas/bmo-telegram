@@ -74,6 +74,11 @@ pub fn message_id(answered: &Answered) -> Option<i64> {
 const REPLY_TARGET_GONE: &str = "message to be replied not found";
 
 impl Speaker {
+  /// The record of what has been seen this speaker keeps.
+  pub(crate) fn seen(&self) -> &Arc<Seen> {
+    &self.seen
+  }
+
   pub fn new(api: BotApi, sending: Sending, seen: Arc<Seen>, lines: Arc<Lines>) -> Self {
     Self {
       api,

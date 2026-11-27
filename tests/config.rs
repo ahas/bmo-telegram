@@ -21,6 +21,7 @@ fn whole() -> Config {
     picture_root: None,
     sticker_set: Some("a-sticker-set".to_owned()),
     avatar_prefix: None,
+    supervisor_bots: Default::default(),
   }
 }
 
@@ -37,4 +38,20 @@ fn only_the_required_values_the_environment_leaves_out_are_named() {
   left_out.data = PathBuf::from("");
 
   assert_eq!(left_out.missing(), ["BMO_OWNER_ID", "BMO_TELEGRAM_TOKEN", "BMO_TELEGRAM_DATA"],);
+}
+
+#[test]
+fn the_supervisors_bots_are_read_one_line_a_supervisor_with_the_token_verbatim() {
+  let dir = tempfile::tempdir().unwrap();
+  let file = dir.path().join("bots");
+
+  std::fs::write(&file, "bmo=111:aa=bb\n# a note=ignored\nkakia-chat = 222:cc\nempty=\n=333:dd\n").unwrap();
+
+  let bots = bmo_telegram::config::supervisor_bots(file.to_str());
+
+  assert_eq!(bots.len(), 2);
+  assert_eq!(bots["bmo"], "111:aa=bb");
+  assert_eq!(bots["kakia-chat"], " 222:cc");
+  assert!(bmo_telegram::config::supervisor_bots(None).is_empty());
+  assert!(bmo_telegram::config::supervisor_bots(Some("/nowhere/at-all")).is_empty());
 }

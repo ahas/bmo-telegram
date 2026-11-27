@@ -53,6 +53,23 @@ pub struct Config {
   pub sticker_set: Option<String>,
   /// The prefix the avatar's words carry where a send names none, kept as written, its trailing space with it.
   pub avatar_prefix: Option<String>,
+  /// Each supervisor's own bot token, by the supervisor's name (docs/telegram.md, 「A bot for each supervisor」).
+  pub supervisor_bots: std::collections::BTreeMap<String, String>,
+}
+
+/// The supervisors' bot tokens a file holds, one line a supervisor: its name before the first `=` and its token
+/// verbatim after it; none where the file is not named or does not read.
+pub fn supervisor_bots(file: Option<&str>) -> std::collections::BTreeMap<String, String> {
+  let Some(text) = file.and_then(|file| std::fs::read_to_string(file).ok()) else {
+    return Default::default();
+  };
+
+  text
+    .lines()
+    .filter_map(|line| line.split_once('='))
+    .map(|(name, token)| (name.trim().to_owned(), token.to_owned()))
+    .filter(|(name, token)| !name.is_empty() && !name.starts_with('#') && !token.trim().is_empty())
+    .collect()
 }
 
 impl Config {
@@ -73,6 +90,7 @@ impl Config {
       avatar_prefix: std::env::var("BMO_TELEGRAM_AVATAR_PREFIX")
         .ok()
         .filter(|prefix| !prefix.trim().is_empty()),
+      supervisor_bots: supervisor_bots(given("BMO_TELEGRAM_SUPERVISOR_BOTS").as_deref()),
     }
   }
 

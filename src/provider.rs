@@ -122,6 +122,8 @@ async fn read_one(reader: &ReaderClient, chat_id: i64, max: usize, since: Option
 pub struct TelegramProvider {
   telegram: Arc<Telegram>,
   speaker: Speaker,
+  // Each supervisor's own bot, by the supervisor's name (docs/telegram.md, 「A bot for each supervisor」).
+  bots: std::collections::BTreeMap<String, Speaker>,
   reader: Option<ReaderClient>,
   reader_health: Mutex<ReaderHealth>,
   standing: Arc<Standing>,
@@ -211,6 +213,7 @@ impl TelegramProvider {
 
     Self {
       speaker: Speaker::new(telegram.api().clone(), sending, seen, telegram.lines().clone()),
+      bots: Default::default(),
       telegram,
       reader,
       reader_health: Mutex::new(ReaderHealth {
@@ -223,6 +226,29 @@ impl TelegramProvider {
       avatars,
       listed: tokio::sync::Mutex::default(),
     }
+  }
+
+  /// The provider whose supervisors named in `tokens` speak through bots of their own, each asking the Bot API at
+  /// `api` and keeping its messages in the service's ledger (docs/telegram.md, 「A bot for each supervisor」).
+  pub fn with_supervisor_bots(
+    mut self,
+    api: &str,
+    tokens: &std::collections::BTreeMap<String, String>,
+  ) -> Self {
+    self.bots = tokens
+      .iter()
+      .map(|(name, token)| {
+        let bot = Speaker::new(
+          crate::bot_api::BotApi::new(api, token),
+          self.speaker.sending.clone(),
+          self.speaker.seen().clone(),
+          self.speaker.lines.clone(),
+        );
+
+        (name.clone(), bot)
+      })
+      .collect();
+    self
   }
 
   /// The reader asked whether the owner's account is connected, and the answer kept for the declaration.
@@ -531,6 +557,10 @@ impl ChatProvider for TelegramProvider {
     &TelegramHtml
   }
 
+  fn speakers(&self) -> bool {
+    !self.bots.is_empty()
+  }
+
   fn numbering(&self) -> ChatNumbering {
     ChatNumbering {
       rooms: ChatNumberSpace::Native,
@@ -716,11 +746,27 @@ impl ChatProvider for TelegramProvider {
   }
 
   async fn send(&self, request: ChatSendRequest) -> Result<ChatSendResult, ChatFailure> {
-    if let Some(speaker) = &request.speaker {
-      return Ok(refused(ChatRefusal::SpeakerNotAllowed {
-        label: self.label().to_owned(),
-        speaker: speaker.clone(),
-      }));
+    // A send naming a supervisor goes through its own bot, or the service's where it has none; any other speaker
+    // is refused, so another account's words go in the service's voice with their name before them
+    // (docs/telegram.md, 「A bot for each supervisor」).
+    let bot_voice = matches!(request.mode, None | Some(ChatVoice::BotAccount));
+    let own_bot = match &request.speaker {
+      None => None,
+      Some(speaker) if bot_voice && !speaker.contains(':') => self.bots.get(speaker),
+      Some(speaker) => {
+        return Ok(refused(ChatRefusal::SpeakerNotAllowed {
+          label: self.label().to_owned(),
+          speaker: speaker.clone(),
+        }));
+      }
+    };
+
+    // A supervisor's bot not in the room, or turned down, gives way to the service's own bot.
+    if let Some(bot) = own_bot
+      && let Ok(ChatSendResult::Sent(sent)) =
+        bot.send(request.room_id, request.reply_to_message_id, &request.send).await
+    {
+      return Ok(ChatSendResult::Sent(sent));
     }
 
     // A person's typing goes only in their own voice: one in the bot's voice for an account is that account's,

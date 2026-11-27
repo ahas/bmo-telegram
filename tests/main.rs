@@ -17,3 +17,4 @@ mod repository;
 mod seam;
 mod sends;
 mod served;
+mod supervisor_bots;

@@ -39,6 +39,8 @@ pub struct Upload {
 #[derive(Debug, Clone)]
 pub struct Asked {
   pub method: String,
+  /// The path segment the call's token stood in, `bot<token>`.
+  pub bot: String,
   pub body: Value,
   pub uploaded: bool,
   pub files: BTreeMap<String, Upload>,
@@ -213,6 +215,7 @@ pub async fn bot_sends(stand_in: Arc<BotSends>) -> String {
 
     async move {
       let method = request.uri().path().rsplit('/').next().unwrap_or_default().to_owned();
+      let bot = request.uri().path().rsplit('/').nth(1).unwrap_or_default().to_owned();
 
       // No update ever comes: a long poll that never ends while the test runs.
       if method == "getUpdates" {
@@ -239,6 +242,7 @@ pub async fn bot_sends(stand_in: Arc<BotSends>) -> String {
 
       stand_in.answer(Asked {
         method,
+        bot,
         body,
         uploaded,
         files,
@@ -280,24 +284,38 @@ pub const ROUTES_TOKEN: &str = "routes-token";
 
 /// The provider over the stand-in, started and ready, its routes served: where they are, and the provider.
 pub async fn provider_served(stand_in: Arc<BotSends>, sending: Sending) -> (String, Arc<TelegramProvider>) {
+  provider_served_with_bots(stand_in, sending, &BTreeMap::new()).await
+}
+
+/// The provider over the stand-in with the supervisors' bots named, each speaking to the same stand-in under its
+/// own token.
+pub async fn provider_served_with_bots(
+  stand_in: Arc<BotSends>,
+  sending: Sending,
+  bots: &BTreeMap<String, String>,
+) -> (String, Arc<TelegramProvider>) {
   let seen = Arc::new(Seen::in_memory());
+  let api = bot_sends(stand_in).await;
   let telegram = Arc::new(Telegram::new(
     TOKEN,
-    &bot_sends(stand_in).await,
+    &api,
     OWNER,
     None,
     seen.clone(),
     Arc::new(FileIds::in_memory()),
     std::path::PathBuf::from("spool"),
   ));
-  let provider = Arc::new(TelegramProvider::new(
-    telegram,
-    sending,
-    None,
-    seen,
-    Arc::default(),
-    std::path::PathBuf::from("avatars"),
-  ));
+  let provider = Arc::new(
+    TelegramProvider::new(
+      telegram,
+      sending,
+      None,
+      seen,
+      Arc::default(),
+      std::path::PathBuf::from("avatars"),
+    )
+    .with_supervisor_bots(&api, bots),
+  );
   let (receiver, _heard) = KeptReceiver::new();
 
   provider.start(receiver).await.expect("the provider starts");
