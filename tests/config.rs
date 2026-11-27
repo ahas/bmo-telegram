@@ -55,3 +55,17 @@ fn the_supervisors_bots_are_read_one_line_a_supervisor_with_the_token_verbatim()
   assert!(bmo_telegram::config::supervisor_bots(None).is_empty());
   assert!(bmo_telegram::config::supervisor_bots(Some("/nowhere/at-all")).is_empty());
 }
+
+#[test]
+fn a_supervisors_bot_may_be_named_by_the_file_its_token_is_saved_in() {
+  let dir = tempfile::tempdir().unwrap();
+  let file = dir.path().join("bots");
+
+  std::fs::write(dir.path().join("kakia-token"), "333:from-a-file\n").unwrap();
+  std::fs::write(&file, "kakia-chat=kakia-token\nnobody=no-such-file\n").unwrap();
+
+  let bots = bmo_telegram::config::supervisor_bots(file.to_str());
+
+  assert_eq!(bots.len(), 1);
+  assert_eq!(bots["kakia-chat"], "333:from-a-file");
+}

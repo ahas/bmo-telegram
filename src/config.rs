@@ -60,16 +60,44 @@ pub struct Config {
 /// The supervisors' bot tokens a file holds, one line a supervisor: its name before the first `=` and its token
 /// verbatim after it; none where the file is not named or does not read.
 pub fn supervisor_bots(file: Option<&str>) -> std::collections::BTreeMap<String, String> {
-  let Some(text) = file.and_then(|file| std::fs::read_to_string(file).ok()) else {
-    return Default::default();
-  };
+  let Some(file) = file else { return Default::default() };
+  let Ok(text) = std::fs::read_to_string(file) else { return Default::default() };
+  let beside = std::path::Path::new(file)
+    .parent()
+    .map(std::path::Path::to_path_buf)
+    .unwrap_or_default();
 
   text
     .lines()
     .filter_map(|line| line.split_once('='))
-    .map(|(name, token)| (name.trim().to_owned(), token.to_owned()))
-    .filter(|(name, token)| !name.is_empty() && !name.starts_with('#') && !token.trim().is_empty())
+    .map(|(name, value)| (name.trim().to_owned(), value))
+    .filter(|(name, _)| !name.is_empty() && !name.starts_with('#'))
+    .filter_map(|(name, value)| token_of(&beside, value).map(|token| (name, token)))
     .collect()
+}
+
+// A bot token as a line gives it: the token itself, or the name of a file holding it alone, beside the bots file
+// where it names no folder; none where neither reads.
+fn token_of(beside: &std::path::Path, value: &str) -> Option<String> {
+  let named = value.trim();
+
+  if named.is_empty() {
+    return None;
+  }
+
+  let looks_like_token = named.split_once(':').is_some_and(|(number, rest)| {
+    !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()) && !rest.is_empty()
+  });
+
+  if looks_like_token {
+    return Some(value.to_owned());
+  }
+
+  let path = beside.join(named);
+  let token = std::fs::read_to_string(path).ok()?;
+  let token = token.trim();
+
+  (!token.is_empty()).then(|| token.to_owned())
 }
 
 impl Config {
