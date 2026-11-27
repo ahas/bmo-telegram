@@ -1901,7 +1901,7 @@
   "info": {
     "description": "The routes a chat provider serves and the receiving side calls, as the chat protocol defines them: the declaration, health, sends, a room, the account owner's room, a message's files fetched again, the dialect's readings and checks, and kept profile pictures. Paths are relative to the base address the caller is configured with, and a service may mount them under a prefix of its own. Bodies are JSON, except a profile picture, which is answered as its own bytes; bytes inside JSON are base64. Times are integers of epoch milliseconds. Every failure, a refusal among them, is answered in the error shape with its status, so a 2xx answer is always the route's success. The sends, a room, the owner and a message's files answer 503 `not-ready` while the provider is not ready. A caller offers a request again only when the connection was refused, so a request that reached a listener is never made twice. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`.",
     "title": "bmo-chat provider routes",
-    "version": "0.1.0-rev.9"
+    "version": "0.0.0"
   },
   "openapi": "3.1.0",
   "paths": {
