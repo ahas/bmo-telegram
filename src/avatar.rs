@@ -2,6 +2,10 @@
 //! account, the one thing telling them from the owner's own, put before every line the avatar sends and read
 //! off every line of the owner's account that comes back with it.
 
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, PoisonError};
+
 use bmo_chat::{ChatVoice, HandedMessage};
 
 use crate::policy::POLICY;
@@ -37,6 +41,9 @@ pub fn without_prefix<'a>(prefix: &str, words: &'a str) -> &'a str {
 pub struct AvatarLines {
   owner_id: i64,
   prefix: String,
+  // Every prefix a send has handed it, each an agent's name tag, as their marks, and the file they are kept in.
+  known: Arc<Mutex<BTreeSet<String>>>,
+  kept_in: Option<PathBuf>,
 }
 
 impl AvatarLines {
@@ -46,7 +53,57 @@ impl AvatarLines {
       .filter(|prefix| !prefix.trim().is_empty())
       .unwrap_or_else(|| POLICY.avatar.prefix.clone());
 
-    Self { owner_id, prefix }
+    Self {
+      owner_id,
+      prefix,
+      known: Arc::default(),
+      kept_in: None,
+    }
+  }
+
+  /// The avatar keeping the prefixes it is handed in `file`, one a line, and reading those kept there before.
+  pub fn kept_in(mut self, file: PathBuf) -> Self {
+    let kept: BTreeSet<String> = std::fs::read_to_string(&file)
+      .unwrap_or_default()
+      .lines()
+      .map(str::to_owned)
+      .filter(|line| !line.trim().is_empty())
+      .collect();
+
+    *self.known.lock().unwrap_or_else(PoisonError::into_inner) = kept;
+    self.kept_in = Some(file);
+    self
+  }
+
+  /// A prefix a send handed it learnt, so a line it went before is read back as the agent's whatever the tag says.
+  pub fn learn(&self, prefix: &str) {
+    let mark = mark(prefix);
+
+    if mark.is_empty() {
+      return;
+    }
+
+    let fresh = self.known.lock().unwrap_or_else(PoisonError::into_inner).insert(mark.to_owned());
+
+    if fresh && let Some(file) = &self.kept_in {
+      use std::io::Write;
+
+      if let Ok(mut out) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
+        let _ = writeln!(out, "{mark}");
+      }
+    }
+  }
+
+  /// The prefix a line's words begin with: the longest of those learnt, else the default's; none where none does.
+  pub fn prefix_of(&self, words: &str) -> Option<String> {
+    let known = self.known.lock().unwrap_or_else(PoisonError::into_inner);
+
+    known
+      .iter()
+      .chain(std::iter::once(&self.prefix))
+      .filter(|prefix| is_avatar_text(prefix, words))
+      .max_by_key(|prefix| mark(prefix).len())
+      .cloned()
   }
 
   /// The prefix the avatar's words carry where a send names none.
@@ -64,18 +121,22 @@ impl AvatarLines {
     };
     let words = message.context.spoken_text.as_deref().unwrap_or(&message.text);
 
-    if message.sender_id != Some(self.owner_id) || !is_avatar_text(&self.prefix, words) {
+    if message.sender_id != Some(self.owner_id) {
       return false;
     }
 
+    let Some(prefix) = self.prefix_of(words) else {
+      return false;
+    };
+
     message.sender_id = Some(identity);
     message.mode = ChatVoice::HumanAvatar;
-    message.text = without_prefix(&self.prefix, &message.text).to_owned();
+    message.text = without_prefix(&prefix, &message.text).to_owned();
     message.context.spoken_text = message
       .context
       .spoken_text
       .as_deref()
-      .map(|spoken| without_prefix(&self.prefix, spoken).to_owned());
+      .map(|spoken| without_prefix(&prefix, spoken).to_owned());
 
     true
   }

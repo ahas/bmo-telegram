@@ -4,6 +4,7 @@
 mod support;
 
 mod acts;
+mod avatar;
 mod config;
 mod file_ids;
 mod file_sends;

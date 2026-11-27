@@ -446,9 +446,9 @@ reads it as the owner's, never as the bot's. A send that names no voice, or `bot
 A send in the `human-avatar` voice is the agent speaking in the owner's account, so every word of it is marked as
 the agent's by the avatar prefix, and the owner's own words, in `human-reader`, never are.
 
-- **The prefix** is the send's own `prefix` where it carries one that is not blank, else
-  `BMO_TELEGRAM_AVATAR_PREFIX` (`docs/boundary-api.md`, 「Configuration」), else the policy's `[avatar] prefix`. A send therefore always has
-  one, and the mode needs nothing beyond the reader to stand.
+- **The prefix** is the send's own `prefix` where it carries one that is not blank, the speaking agent's name
+  tag the receiver hands every send, else the policy's `[avatar] prefix`. A send therefore always has one, and
+  the mode needs nothing beyond the reader to stand.
 - **Every message the send goes out as carries it.** Each part of a divided text begins with it, the text divided
   short enough that the part and the prefix fit one message; each album's caption begins with it, the prefix
   alone where the send has no caption, so a file sent bare is still marked. Words that already begin with the
@@ -472,8 +472,10 @@ the agent's by the avatar prefix, and the owner's own words, in `human-reader`, 
   its words and off the words typed under a file. It holds on every road the owner's account's lines come back
   by: the bot account's reading of a new message or an edit, once the echo note has gone or after a restart, and
   the reader's live reading and history walk. A line an echo note still answers is not handed over at all.
-- **The prefix read back is the deployment's,** `BMO_TELEGRAM_AVATAR_PREFIX`, else the policy's: a send that named
-  a prefix of its own is read back as the agent's only where it named the same one.
+- **The prefixes read back are those the sends named,** each learnt as a send carrying it goes and kept in the
+  provider's data folder, `avatar-prefixes.txt`, one a line, so a tag is recognised after a restart too, beside
+  the policy's own. A line beginning with several is read against the longest, and the whole of it, the agent's
+  name with its emoji, is taken off, so no tag stands in the words a reader of the record sees.
 - **A prefixed line in a room with no `identity` is the owner's own.** No avatar send goes there, so such a line
   is one the owner typed, and it is handed over as his.
 - **An unprefixed line from the owner's number is the owner's own words** wherever it is read.

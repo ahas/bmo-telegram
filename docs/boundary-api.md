@@ -216,7 +216,6 @@ This provider's own:
 | `BMO_TELEGRAM_DATA` | both | the provider's own data folder, inside no checkout; required. It holds the profile pictures and their record, the history walk's progress, the rooms and senders seen, each room's own senders, and the people who wrote to the bot privately, the id each picture and file the bot account handed over crossed with, the ledger of whose numbering each line of a room numbered per account stands under (`docs/telegram.md`, 「The owner's voice」), the lock that keeps the owner's session to one process, and the `spool/` folder each file of a multipart send stands in as it arrives and each file gathered past the Bot API's ceiling stands in until the receiving side took it |
 | `BMO_TELEGRAM_PICTURE_ROOT` | service | the folder a picture or an album item named by a file path may be read from; where unset, only a web address or an inline file is sent |
 | `BMO_TELEGRAM_STICKER_SET` | service | the Telegram sticker set a `sticker` send picks from by its emoji; where unset, a sticker send naming an emoji is refused saying no set is configured |
-| `BMO_TELEGRAM_AVATAR_PREFIX` | service | the prefix the agent's words carry in the `human-avatar` voice where a send names none, and by which a line of the owner's account is read back as the agent's (`docs/telegram.md`, 「The avatar」); where unset or blank, the policy's own prefix |
 
 ## Statements about siblings
 

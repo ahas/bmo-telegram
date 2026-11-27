@@ -141,9 +141,9 @@ impl Telegram {
     }
   }
 
-  /// The bot account whose avatar's words carry `prefix` where it is not blank, rather than the policy's.
-  pub fn with_avatar_prefix(mut self, prefix: Option<String>) -> Self {
-    self.avatar = AvatarLines::new(self.owner_id, prefix);
+  /// The bot account whose avatar keeps the prefixes the sends name in `file`, read back after a restart.
+  pub fn with_avatar_kept_in(mut self, file: std::path::PathBuf) -> Self {
+    self.avatar = AvatarLines::new(self.owner_id, None).kept_in(file);
     self
   }
 

@@ -20,7 +20,6 @@ fn whole() -> Config {
     data: PathBuf::from("/tmp/bmo-telegram-check"),
     picture_root: None,
     sticker_set: Some("a-sticker-set".to_owned()),
-    avatar_prefix: None,
     supervisor_bots: Default::default(),
   }
 }

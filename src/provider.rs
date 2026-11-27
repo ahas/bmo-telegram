@@ -423,11 +423,14 @@ impl TelegramProvider {
   /// The prefix the avatar's words carry (docs/telegram.md, 「The avatar」): the send's own where it is not blank,
   /// else the deployment's, else the policy's.
   pub fn avatar_prefix<'a>(&'a self, request: &'a ChatSendRequest) -> &'a str {
-    request
-      .prefix
-      .as_deref()
-      .filter(|prefix| !prefix.trim().is_empty())
-      .unwrap_or(self.telegram.avatar().prefix())
+    match request.prefix.as_deref().filter(|prefix| !prefix.trim().is_empty()) {
+      // A prefix the send names is learnt, so the line is read back as the agent's whatever its tag says.
+      Some(prefix) => {
+        self.telegram.avatar().learn(prefix);
+        prefix
+      }
+      None => self.telegram.avatar().prefix(),
+    }
   }
 
   // A send in the owner's account, in `voice`, through the reader while it has the account connected; never by

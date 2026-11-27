@@ -88,7 +88,7 @@ async fn serve() -> Result<(), String> {
       Arc::new(FileIds::kept_in(config.data.join("file-ids.jsonl"))),
       config.data.join("spool"),
     )
-    .with_avatar_prefix(config.avatar_prefix)
+    .with_avatar_kept_in(config.data.join("avatar-prefixes.txt"))
     .with_lines(Arc::new(Lines::kept_in(config.data.join("lines.jsonl")))),
   );
   let seam_presence = telegram.clone();
