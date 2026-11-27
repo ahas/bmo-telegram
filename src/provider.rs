@@ -124,6 +124,11 @@ pub struct TelegramProvider {
   speaker: Speaker,
   // Each supervisor's own bot, by the supervisor's name (docs/telegram.md, 「A bot for each supervisor」).
   bots: std::collections::BTreeMap<String, Speaker>,
+  // Each supervisor's bot read for its one-to-ones, by the supervisor's name, and the rooms those one-to-ones are
+  // given (docs/telegram.md, 「A bot for each supervisor」).
+  private_readers: std::collections::BTreeMap<String, Arc<Telegram>>,
+  dm_rooms: Arc<crate::dm_rooms::DmRooms>,
+  private_reading: Mutex<Vec<JoinHandle<()>>>,
   reader: Option<ReaderClient>,
   reader_health: Mutex<ReaderHealth>,
   standing: Arc<Standing>,
@@ -225,6 +230,9 @@ impl TelegramProvider {
     Self {
       speaker: Speaker::new(telegram.api().clone(), sending, seen, telegram.lines().clone()),
       bots: Default::default(),
+      private_readers: Default::default(),
+      dm_rooms: Arc::default(),
+      private_reading: Mutex::default(),
       telegram,
       reader,
       reader_health: Mutex::new(ReaderHealth {
@@ -239,13 +247,37 @@ impl TelegramProvider {
     }
   }
 
+  /// The rooms the supervisors' bots' one-to-ones are given.
+  pub fn dm_rooms(&self) -> &Arc<crate::dm_rooms::DmRooms> {
+    &self.dm_rooms
+  }
+
   /// The provider whose supervisors named in `tokens` speak through bots of their own, each asking the Bot API at
-  /// `api` and keeping its messages in the service's ledger (docs/telegram.md, 「A bot for each supervisor」).
+  /// `api` and keeping its messages in the service's ledger, and each read for its one-to-ones, whose rooms and
+  /// file numbers are kept in the data folder `data` (docs/telegram.md, 「A bot for each supervisor」).
   pub fn with_supervisor_bots(
     mut self,
     api: &str,
     tokens: &std::collections::BTreeMap<String, String>,
+    data: &std::path::Path,
   ) -> Self {
+    self.dm_rooms = Arc::new(crate::dm_rooms::DmRooms::kept_in(data.join("supervisor-dms.jsonl")));
+    self.private_readers = tokens
+      .iter()
+      .map(|(name, token)| {
+        let reader = Telegram::new(
+          token,
+          api,
+          self.telegram.owner_id(),
+          None,
+          self.speaker.seen().clone(),
+          Arc::new(crate::file_ids::FileIds::kept_in(data.join(format!("file-ids.{name}.jsonl")))),
+          data.join("spool"),
+        );
+
+        (name.clone(), Arc::new(reader))
+      })
+      .collect();
     self.bots = tokens
       .iter()
       .map(|(name, token)| {
@@ -495,7 +527,20 @@ impl ChatProvider for TelegramProvider {
     self.refresh_reader().await;
     *self.receiver.lock().unwrap_or_else(PoisonError::into_inner) = Some(receiver.clone());
 
-    let reading = tokio::spawn(self.telegram.clone().read(receiver));
+    let reading = tokio::spawn(self.telegram.clone().read(receiver.clone()));
+    let private: Vec<JoinHandle<()>> = self
+      .private_readers
+      .iter()
+      .map(|(name, reader)| {
+        tokio::spawn(reader.clone().read_private(receiver.clone(), name.clone(), self.dm_rooms.clone()))
+      })
+      .collect();
+
+    for earlier in
+      std::mem::replace(&mut *self.private_reading.lock().unwrap_or_else(PoisonError::into_inner), private)
+    {
+      earlier.abort();
+    }
 
     if let Some(earlier) = self.reading.lock().unwrap_or_else(PoisonError::into_inner).replace(reading) {
       earlier.abort();
@@ -506,6 +551,11 @@ impl ChatProvider for TelegramProvider {
 
   async fn stop(&self) {
     if let Some(reading) = self.reading.lock().unwrap_or_else(PoisonError::into_inner).take() {
+      reading.abort();
+    }
+
+    for reading in std::mem::take(&mut *self.private_reading.lock().unwrap_or_else(PoisonError::into_inner))
+    {
       reading.abort();
     }
   }
@@ -591,6 +641,19 @@ impl ChatProvider for TelegramProvider {
   }
 
   async fn room(&self, room_id: i64) -> Result<Option<ProviderRoom>, ChatFailure> {
+    // A supervisor's one-to-one is a one-to-one with its person whose bot is the supervisor's.
+    if let Some(dm) = self.dm_rooms.of_room(room_id) {
+      return Ok(Some(ProviderRoom {
+        id: room_id,
+        owns: true,
+        identity: self.bots.get(&dm.supervisor).and_then(Speaker::identity),
+        kind: bmo_chat::RoomKind::Group,
+        private_to: Some(dm.person),
+        title: None,
+        modes: Some(vec![ChatVoice::BotAccount]),
+      }));
+    }
+
     if self.telegram.bot_in(room_id).await {
       return Ok(Some(self.telegram.bot_room(room_id, self.active_voices()).await));
     }
@@ -704,6 +767,22 @@ impl ChatProvider for TelegramProvider {
   // in the room, then whoever the bot account can tell is still there. Where neither gave any, the room's members
   // are not held, for the reason of each account that tried.
   async fn members(&self, room_id: i64) -> Result<ChatMembersResult, ChatFailure> {
+    // A supervisor's one-to-one holds its person and the supervisor's bot.
+    if let Some(dm) = self.dm_rooms.of_room(room_id) {
+      let bot = self.bots.get(&dm.supervisor).and_then(Speaker::identity);
+      let members = [Some(dm.person), bot]
+        .into_iter()
+        .flatten()
+        .map(|person| ChatMember {
+          person: Some(person),
+          name: String::new(),
+          status_message: None,
+        })
+        .collect();
+
+      return Ok(ChatMembersResult::Listed(members));
+    }
+
     let mut lists = Vec::new();
     let mut unread = Vec::new();
 
@@ -760,6 +839,16 @@ impl ChatProvider for TelegramProvider {
   }
 
   async fn send(&self, request: ChatSendRequest) -> Result<ChatSendResult, ChatFailure> {
+    // A supervisor's one-to-one is spoken in through that supervisor's bot alone, to the person's private chat,
+    // whatever voice or speaker the send names.
+    if let Some(dm) = self.dm_rooms.of_room(request.room_id) {
+      let Some(bot) = self.bots.get(&dm.supervisor) else {
+        return Ok(refused(POLICY.read_only()));
+      };
+
+      return bot.send(dm.person, request.reply_to_message_id, &request.send).await;
+    }
+
     // A send naming a supervisor goes through its own bot, or the service's where it has none; any other speaker
     // is refused, so another account's words go in the service's voice with their name before them
     // (docs/telegram.md, 「A bot for each supervisor」).

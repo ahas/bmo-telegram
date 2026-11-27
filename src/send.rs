@@ -36,6 +36,13 @@ pub struct Speaker {
   pub(crate) lines: Arc<Lines>,
 }
 
+impl Speaker {
+  /// The bot's own number, read off its token.
+  pub fn identity(&self) -> Option<i64> {
+    self.api.token_identity()
+  }
+}
+
 /// A send that went, as the message it went out as where there is one.
 pub fn sent(message_id: Option<i64>) -> ChatSendResult {
   ChatSendResult::Sent(ChatSent {

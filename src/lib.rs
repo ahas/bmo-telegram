@@ -8,6 +8,7 @@ pub mod avatar;
 pub mod bot_api;
 pub mod compose;
 pub mod config;
+pub mod dm_rooms;
 pub mod echoes;
 pub mod file_ids;
 pub mod files;

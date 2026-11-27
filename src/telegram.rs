@@ -623,6 +623,75 @@ impl Telegram {
   }
 }
 
+impl Telegram {
+  /// A supervisor's bot read for its one-to-ones alone (docs/telegram.md, 「A bot for each supervisor」): the long
+  /// poll of its messages and edits, each in a private chat handed over under the room of its own that one-to-one
+  /// is given, and every other update passed over, since a group's words are the service's own bot's to read.
+  pub async fn read_private(
+    self: Arc<Self>,
+    receiver: Arc<dyn ChatReceiver>,
+    supervisor: String,
+    rooms: Arc<crate::dm_rooms::DmRooms>,
+  ) {
+    let mut offset: Option<i64> = None;
+
+    loop {
+      let mut asked = json!({ "timeout": 30, "allowed_updates": ["message", "edited_message"] });
+
+      if let Some(offset) = offset {
+        asked["offset"] = json!(offset);
+      }
+
+      match self.api.call::<Vec<Update>>("getUpdates", &asked).await {
+        Ok(updates) => {
+          for update in updates {
+            offset = Some(update.update_id + 1);
+
+            let (raw, edited) = match (update.message, update.edited_message) {
+              (Some(message), _) => (message, false),
+              (None, Some(edited)) => (edited, true),
+              (None, None) => continue,
+            };
+            let Some(raw) = private_in_room(raw, &supervisor, &rooms) else { continue };
+            let handled = if edited {
+              self.edited(receiver.clone(), raw).await
+            } else {
+              self.message(receiver.clone(), raw).await
+            };
+
+            if let Err(why) = handled {
+              eprintln!("telegram: {supervisor}'s bot: update {}: {why}", update.update_id);
+            }
+          }
+        }
+        Err(unanswered) => {
+          eprintln!("telegram: {supervisor}'s bot: getUpdates: {}; asking again", unanswered.why);
+          tokio::time::sleep(unanswered.wait).await;
+        }
+      }
+    }
+  }
+}
+
+/// A message of a supervisor's bot's private chat, its chat numbered as the room that one-to-one is given; none for
+/// a message of any other chat.
+pub fn private_in_room(
+  mut raw: Value,
+  supervisor: &str,
+  rooms: &crate::dm_rooms::DmRooms,
+) -> Option<Value> {
+  let chat = raw.get("chat")?;
+
+  if chat.get("type").and_then(Value::as_str) != Some("private") {
+    return None;
+  }
+
+  let person = chat.get("id").and_then(Value::as_i64)?;
+
+  raw["chat"]["id"] = json!(rooms.room_of(supervisor, person));
+  Some(raw)
+}
+
 #[async_trait]
 impl Presence for Telegram {
   async fn bot_in(&self, chat_id: i64) -> bool {

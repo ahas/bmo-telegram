@@ -6,6 +6,7 @@ mod support;
 mod acts;
 mod avatar;
 mod config;
+mod dm_rooms;
 mod file_ids;
 mod file_sends;
 mod gathering;

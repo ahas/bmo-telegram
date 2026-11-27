@@ -314,7 +314,7 @@ pub async fn provider_served_with_bots(
       Arc::default(),
       std::path::PathBuf::from("avatars"),
     )
-    .with_supervisor_bots(&api, bots),
+    .with_supervisor_bots(&api, bots, Box::leak(Box::new(tempfile::tempdir().unwrap())).path()),
   );
   let (receiver, _heard) = KeptReceiver::new();
 

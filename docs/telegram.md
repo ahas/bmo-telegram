@@ -273,8 +273,17 @@ Who is writing in a room now and who is reachable now, told to the receiving sid
 - **A speaker that names no supervisor is refused** `speaker-not-allowed`, as another account's words are, so the
   receiver sends them in the service's own voice with the speaker's name before them. A send in the owner's account
   names no speaker.
-- **Only the service's own bot is read.** A supervisor's bot sends and is never polled: the reader reads the rooms'
-  words, every bot's among them, and a one-to-one with a supervisor's bot is not read.
+- **A supervisor's bot reads its one-to-ones alone.** The rooms' words, every bot's among them, are the service's
+  own bot's and the reader's to read, so a supervisor's bot reads nothing of a group. Each supervisor's bot is
+  long-polled for the messages and edits of its private chats, and each such one-to-one is a room of its own:
+  Telegram numbers a person's private chat with every bot by that person, so a person's one-to-one with the
+  service's bot and with a supervisor's bot would share one number. The provider gives each one-to-one with a
+  supervisor's bot its own room, numbered down from -8100000000000, below every number Telegram gives a chat,
+  and keeps which supervisor and person each stands for in `supervisor-dms.jsonl` in its data folder, so a
+  restart gives it the room it had. Such a room is told to the receiver as a one-to-one with that person whose
+  bot is that supervisor's, its members the person and the bot, so the supervisor answers it as its own; every
+  send to it goes out through that bot to the person's private chat, whatever voice or speaker it names, and a
+  file in it is fetched with that bot's token.
 
 ## Sends
 

@@ -106,7 +106,7 @@ async fn serve() -> Result<(), String> {
       standing.clone(),
       config.data.join("avatars"),
     )
-    .with_supervisor_bots(&config.api, &config.supervisor_bots),
+    .with_supervisor_bots(&config.api, &config.supervisor_bots, &config.data),
   );
   // The link reads the provider's declaration at each typing mark and presence change, and drops one whose
   // capability the provider does not declare now.
