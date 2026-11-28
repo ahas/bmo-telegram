@@ -148,6 +148,15 @@ sender number their messages carry, since the provider numbers people as Telegra
 - **A room of a contact is known before its first message:** `GET /rooms/{roomId}` answers the one-to-one with a
   contact of the account read-only, where neither the bot nor the account's dialog list has it yet.
 
+
+## The app registration
+
+- **The owner's account reads through an app registered with Telegram.** The reader speaks MTProto, which takes an
+  application's id and hash, `BMO_TG_API_ID` and `BMO_TG_API_HASH` (`docs/boundary-api.md`, 「Configuration」), made at
+  https://my.telegram.org. The provider declares that registration, its address and the two values it gives, as
+  its declaration's `registration` (bmo-chat's `docs/contract.md`), so a person setting their Telegram account is told
+  of it first (`policy/telegram.toml`, `registration_url` and `registration_fields`).
+
 ## Reading a room
 
 - **The bot account long-polls the Bot API.** It first asks who it is, asking again until Telegram answers,

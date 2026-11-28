@@ -21,6 +21,8 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
   } = &*POLICY;
   let Platform {
     label,
+    registration_url,
+    registration_fields,
     can,
     gone_descriptions,
     unchanged_description,
@@ -168,6 +170,9 @@ fn every_key_of_the_file_is_read_and_none_is_empty() {
 
   assert!(lines.iter().all(|line| !line.trim().is_empty()), "a line of the policy is empty");
   assert_eq!(label, "Telegram");
+  // The owner's account's app registration, as the reader takes its two values.
+  assert_eq!(registration_url, "https://my.telegram.org");
+  assert_eq!(registration_fields, &["api_id", "api_hash"]);
   // Every capability bmo-chat names.
   assert_eq!(
     can.iter().copied().collect::<std::collections::BTreeSet<_>>(),

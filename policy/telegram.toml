@@ -7,6 +7,11 @@
 [telegram]
 # What the platform is called where a person reads it.
 label = "Telegram"
+# The app registration the owner's account reads through (MTProto), declared so a person is told of it before their
+# account reads (docs/telegram.md, 「The app registration」): where it is made, and the values it gives, which the
+# reader takes as BMO_TG_API_ID and BMO_TG_API_HASH.
+registration_url = "https://my.telegram.org"
+registration_fields = ["api_id", "api_hash"]
 # What the provider can do. Fetching a picture on demand, avatars, history, the list of rooms, the contacts,
 # starting a conversation, and hearing who is typing and who is online are the owner's account's, and stop
 # being true where that mode is not active; a room's members the bot account tells on its own.

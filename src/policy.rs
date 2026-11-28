@@ -33,6 +33,9 @@ pub struct Policy {
 #[serde(deny_unknown_fields)]
 pub struct Platform {
   pub label: String,
+  /// Where the owner's account's app is registered, and the values the registration gives the reader.
+  pub registration_url: String,
+  pub registration_fields: Vec<String>,
   pub can: Vec<ChatCapability>,
   pub gone_descriptions: Vec<String>,
   pub unchanged_description: String,

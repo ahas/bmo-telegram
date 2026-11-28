@@ -625,6 +625,15 @@ impl ChatProvider for TelegramProvider {
     !self.bots.is_empty()
   }
 
+  fn registration(&self) -> Option<bmo_chat::ChatRegistration> {
+    let platform = &crate::policy::POLICY.telegram;
+
+    Some(bmo_chat::ChatRegistration {
+      url: platform.registration_url.clone(),
+      fields: platform.registration_fields.clone(),
+    })
+  }
+
   fn numbering(&self) -> ChatNumbering {
     ChatNumbering {
       rooms: ChatNumberSpace::Native,
